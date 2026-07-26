@@ -1,6 +1,18 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
-var api = builder.AddProject<Projects.VirtualLeadersGuide_Api>("api");
+var sqlServer = builder.AddAzureSqlServer("sqlserver")
+    .RunAsContainer(container => container.WithDataVolume());
+
+var database = sqlServer.AddDatabase("virtualleadersguide");
+
+var api = builder.AddProject<Projects.VirtualLeadersGuide_Api>("api")
+    .WithReference(database)
+    .WaitFor(database);
+
+if (!builder.ExecutionContext.IsPublishMode)
+{
+    api.WithEnvironment("Migrations__ApplyAutomatically", "true");
+}
 
 builder.AddProject<Projects.VirtualLeadersGuide_Web>("web")
     .WithExternalHttpEndpoints()
