@@ -8,4 +8,8 @@
     <UserSecretsId>a8c36518-af46-4b6d-87a8-b128078f725f</UserSecretsId>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\VirtualLeadersGuide.Web\VirtualLeadersGuide.Web.csproj" />
+  </ItemGroup>
+
 </Project>
