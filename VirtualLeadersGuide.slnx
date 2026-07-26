@@ -3,4 +3,7 @@
     <Project Path="src/VirtualLeadersGuide.AppHost/VirtualLeadersGuide.AppHost.csproj" />
     <Project Path="src/VirtualLeadersGuide.ServiceDefaults/VirtualLeadersGuide.ServiceDefaults.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/VirtualLeadersGuide.AppHost.Tests/VirtualLeadersGuide.AppHost.Tests.csproj" />
+  </Folder>
 </Solution>
