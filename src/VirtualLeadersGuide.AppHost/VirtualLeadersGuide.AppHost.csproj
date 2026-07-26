@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\VirtualLeadersGuide.Web\VirtualLeadersGuide.Web.csproj" />
+    <ProjectReference Include="..\VirtualLeadersGuide.Api\VirtualLeadersGuide.Api.csproj" />
   </ItemGroup>
 
 </Project>
