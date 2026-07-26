@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/VirtualLeadersGuide.AppHost/VirtualLeadersGuide.AppHost.csproj" />
+    <Project Path="src/VirtualLeadersGuide.ServiceDefaults/VirtualLeadersGuide.ServiceDefaults.csproj" />
+  </Folder>
+</Solution>
