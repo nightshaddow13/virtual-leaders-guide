@@ -1,3 +1,4 @@
+using JsonApiDotNetCore.Configuration;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
@@ -19,8 +20,14 @@ builder.Services.AddAuthorizationBuilder()
         .RequireAuthenticatedUser()
         .Build());
 
+builder.Services.AddJsonApi<VirtualLeadersGuideDbContext>(options =>
+{
+    options.Namespace = "api";
+});
+
 var app = builder.Build();
 
+app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -31,6 +38,11 @@ if (builder.Configuration.GetValue<bool>("Migrations:ApplyAutomatically"))
         .Database.Migrate();
 }
 
+app.UseJsonApi();
+app.MapControllers();
+
 app.MapDefaultEndpoints();
 
 app.Run();
+
+public partial class Program;
