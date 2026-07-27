@@ -45,7 +45,7 @@ public class InternalApiKeyAuthenticationHandlerShould
     }
 
     [Fact]
-    public async Task SetStatusCode401_ForChallengeAsync()
+    public async Task SetStatusCode401_WhenAuthenticationFails_ForChallengeAsync()
     {
         var (handler, httpContext) = await CreateInitializedHandlerAsync(configuredKey: ConfiguredKey);
 
