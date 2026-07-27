@@ -1,8 +1,11 @@
+using JsonApiDotNetCore.Resources;
+using JsonApiDotNetCore.Resources.Annotations;
+
 namespace VirtualLeadersGuide.Api.Data;
 
-public class SmokeTestEntity
+[Resource]
+public class SmokeTestEntity : Identifiable<int>
 {
-    public int Id { get; set; }
-
+    [Attr]
     public required string Name { get; set; }
 }
