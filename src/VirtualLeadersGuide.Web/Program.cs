@@ -1,3 +1,4 @@
+using VirtualLeadersGuide.Web;
 using VirtualLeadersGuide.Web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -7,6 +8,10 @@ builder.AddServiceDefaults();
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+builder.Services.AddTransient<InternalApiKeyHandler>();
+builder.Services.AddHttpClient("Api", client => client.BaseAddress = new Uri("https+http://api"))
+    .AddHttpMessageHandler<InternalApiKeyHandler>();
 
 var app = builder.Build();
 

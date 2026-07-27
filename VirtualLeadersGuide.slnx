@@ -6,6 +6,7 @@
     <Project Path="src/VirtualLeadersGuide.Web/VirtualLeadersGuide.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/VirtualLeadersGuide.Api.Tests/VirtualLeadersGuide.Api.Tests.csproj" />
     <Project Path="tests/VirtualLeadersGuide.AppHost.Tests/VirtualLeadersGuide.AppHost.Tests.csproj" />
   </Folder>
 </Solution>
