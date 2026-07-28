@@ -1,14 +1,24 @@
 # P1-8a: Provision Azure resources via the Azure Portal
 
 Manual walkthrough for provisioning the resources from [ADR-0005](../adr/0005-azure-hosting-topology.md) by hand
-in the Azure Portal, as an alternative to running `azd provision` against the `AppHost.cs` declarations. Do these
-in order — later steps assume the resource group from step 1 exists.
+in the Azure Portal. Do these in order — later steps assume the resource group from step 1 exists.
 
-Suggested naming: Azure resource names (storage account, ACR, SQL server) must be globally unique, lowercase, and
+The Container Apps Environment (step 2) can only be created this way — `AppHost.cs`/`azd provision` no longer
+declares it, since Aspire would auto-provision an ACR alongside it (see ADR-0005). Azure SQL and Storage (steps
+3–4) can alternatively be provisioned via `azd provision` against the existing `AppHost.cs` declarations if you
+prefer; this walkthrough covers doing all of it by hand instead.
+
+Suggested naming: Azure resource names (storage account, SQL server) must be globally unique, lowercase, and
 in some cases ≤24 characters, so they can't follow the full `VirtualLeadersGuide` project-naming convention from
 [ADR-0010](../adr/0010-virtualleadersguide-project-naming-convention.md) (that ADR is scoped to code, not cloud
 resource names). Examples below use a `vlg` prefix — swap in your own if you want something else, and pick one
 Azure region up front and use it for every resource.
+
+No Azure Container Registry is provisioned — per [ADR-0005](../adr/0005-azure-hosting-topology.md), container
+images are built and pushed to GitHub Container Registry (ghcr.io) by a GitHub Actions workflow in P1-8b, and
+the Container Apps here pull directly from ghcr.io. This also means the Container Apps Environment below is
+created by hand (not via `azd provision`/Aspire's `AddAzureContainerAppEnvironment`, which would auto-provision
+an ACR alongside it) — see the ADR for why.
 
 ## 1. Resource group
 
@@ -17,21 +27,7 @@ Azure region up front and use it for every resource.
 | Resource group | `rg-virtualleadersguide` (or your choice) |
 | Region | Your chosen region (e.g. `East US 2`) — use this same region for every resource below |
 
-## 2. Azure Container Registry (Basic)
-
-Search **Container registries** → **Create**.
-
-| Field | Value |
-| --- | --- |
-| Resource group | from step 1 |
-| Registry name | `vlgacr<unique-suffix>` (globally unique, alphanumeric only) |
-| Location | same region as step 1 |
-| SKU | **Basic** |
-
-Leave **Admin user** disabled on the Access keys/Authentication tab — Container Apps will authenticate via managed
-identity when Api/Web actually get deployed in P1-8b, not the admin account.
-
-## 3. Container Apps environment (Consumption)
+## 2. Container Apps environment (Consumption)
 
 Search **Container Apps Environments** → **Create** (not the "Container Apps" wizard — that one bundles in
 creating a container app you don't want yet).
@@ -51,9 +47,9 @@ don't click **Add workload profile** to add a Dedicated profile, the environment
 Select **Review + create** → **Create**.
 
 *Note: ingress (Api internal-only, Web external) is configured per-Container-App, not on the environment — nothing
-to set here. That happens when the actual Container Apps get created in P1-8b.*
+to set here. That happens when the actual Container Apps get created in P1-8b, pulling images from ghcr.io.*
 
-## 4. Azure SQL Database (General Purpose Serverless, free offer, auto-pause)
+## 3. Azure SQL Database (General Purpose Serverless, free offer, auto-pause)
 
 Search **SQL databases** → **Create**.
 
@@ -92,7 +88,7 @@ bill.
 
 Select **Review + create** → **Create**.
 
-## 5. Storage account (Blob, Hot, LRS)
+## 4. Storage account (Blob, Hot, LRS)
 
 Search **Storage accounts** → **Create**.
 
@@ -125,7 +121,6 @@ Same `az` CLI checks as the `azd`-based path, once you're logged in (`az login`)
 $rg = "rg-virtualleadersguide"
 
 az containerapp env show -g $rg -n vlg-cae --query "properties.workloadProfiles"
-az acr show -n <your-acr-name> -g $rg --query "sku.name"
 az sql db show -g $rg -s <your-sql-server-name> -n virtualleadersguide `
   --query "{sku:currentSku, minCapacity:minCapacity, autoPauseDelay:autoPauseDelay, useFreeLimit:useFreeLimit, freeLimitExhaustionBehavior:freeLimitExhaustionBehavior}"
 az storage account show -n <your-storage-account-name> -g $rg --query "{sku:sku.name, kind:kind, accessTier:accessTier}"

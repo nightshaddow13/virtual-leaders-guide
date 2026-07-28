@@ -5,8 +5,6 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 var internalApiKey = builder.AddParameter("internal-api-key", secret: true);
 
-builder.AddAzureContainerAppEnvironment("cae");
-
 var sqlServer = builder.AddAzureSqlServer("sqlserver")
     .ConfigureInfrastructure(infra =>
     {
