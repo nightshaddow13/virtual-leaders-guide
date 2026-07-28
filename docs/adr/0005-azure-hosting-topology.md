@@ -14,10 +14,17 @@ supports natively. We decided on:
   external registry instead — the API that's meant to do this (`AddContainerRegistry` +
   `.WithContainerRegistry(...)` on the ACA environment) currently crashes Bicep generation
   (dotnet/aspire#14286, open). So the Container Apps Environment and the Container Apps themselves are
-  provisioned outside Aspire's opinionated flow (Azure Portal or `az`/Bicep directly — see
-  `docs/runbooks/p1-8a-azure-portal-provisioning.md`), and deployed via a custom GitHub Actions step (`docker
-  build`/`push` to ghcr.io + `az containerapp update`) instead of `azd deploy`/`aspire deploy`. `AppHost.cs`
-  keeps using Aspire for Azure SQL and Storage, which aren't affected by this bug.
+  provisioned outside Aspire's opinionated flow (`az` CLI — see
+  `docs/runbooks/p1-8a-azure-portal-provisioning.md`), rather than `azd provision`. `AppHost.cs` keeps using
+  Aspire for Azure SQL and Storage, which aren't affected by this bug.
+- **Container Apps are created once, up front (P1-8a), then only ever updated (P1-8b)** — the runbook's
+  `az containerapp create` calls set up `web`/`api` with their final ingress config (external/internal, per
+  ADR-0002) and no `--image`, which defaults to Azure's public quickstart placeholder. P1-8b's GitHub Actions
+  workflow then only ever runs `az containerapp update --image ghcr.io/...` on every deploy — it never touches
+  ingress, so ADR-0002's public/internal split is set once, in an auditable manual step, not re-asserted in
+  workflow YAML on every push. The ghcr.io packages are public (the repo itself already is, so a compiled image
+  adds no meaningful exposure), which also means Container Apps needs no registry credential at all to pull
+  them — public pulls are unauthenticated.
 - **Azure Storage (Blob), Hot LRS** — for map images and other Event assets; negligible cost at this scale.
 - **Path-based URL routing** (`yourdomain.com/e/{slug}`) for each Event's Leaders Guide, on one shared root
   domain, rather than per-event subdomains — subdomains would need wildcard DNS and TLS management for no real
