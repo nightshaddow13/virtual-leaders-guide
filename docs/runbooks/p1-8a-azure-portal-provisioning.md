@@ -1,12 +1,13 @@
 # P1-8a: Provision Azure resources via the Azure Portal
 
-Manual walkthrough for provisioning the resources from [ADR-0005](../adr/0005-azure-hosting-topology.md) by hand
-in the Azure Portal. Do these in order — later steps assume the resource group from step 1 exists.
+Manual walkthrough for provisioning the resources from [ADR-0005](../adr/0005-azure-hosting-topology.md) by hand,
+mostly via the Azure Portal (step 2 uses the `az` CLI instead — see why there). Do these in order — later steps
+assume the resource group from step 1 exists.
 
-The Container Apps Environment (step 2) can only be created this way — `AppHost.cs`/`azd provision` no longer
-declares it, since Aspire would auto-provision an ACR alongside it (see ADR-0005). Azure SQL and Storage (steps
-3–4) can alternatively be provisioned via `azd provision` against the existing `AppHost.cs` declarations if you
-prefer; this walkthrough covers doing all of it by hand instead.
+`AppHost.cs`/`azd provision` no longer declares the Container Apps Environment, since Aspire would auto-provision
+an ACR alongside it (see ADR-0005) — so step 2 below must be done separately either way. Azure SQL and Storage
+(steps 3–4) can alternatively be provisioned via `azd provision` against the existing `AppHost.cs` declarations
+if you prefer; this walkthrough covers doing all of it by hand instead.
 
 Suggested naming: Azure resource names (storage account, SQL server) must be globally unique, lowercase, and
 in some cases ≤24 characters, so they can't follow the full `VirtualLeadersGuide` project-naming convention from
@@ -29,22 +30,26 @@ an ACR alongside it) — see the ADR for why.
 
 ## 2. Container Apps environment (Consumption)
 
-Search **Container Apps Environments** → **Create** (not the "Container Apps" wizard — that one bundles in
-creating a container app you don't want yet).
+The Azure Portal no longer offers a standalone "create environment" flow — the Container Apps Environment
+creation blade is now only reachable from inside the "Create Container App" wizard, which forces you to create a
+container app (and pick an image/registry) at the same time. Since P1-8a shouldn't create any Container Apps yet
+(those come from P1-8b, pulling from ghcr.io), use the `az` CLI instead — it creates the environment standalone,
+with no container app or registry required:
 
-| Field | Value |
-| --- | --- |
-| Resource group | from step 1 |
-| Environment name | `vlg-cae` (or your choice) |
-| Region | same region as step 1 |
-| Zone redundancy | Disabled (unnecessary at this scale) |
+```powershell
+az login   # if you haven't already
 
-On the **Workload profiles** tab: do nothing — leave it empty. Azure Portal now creates every environment as a
-"Workload profiles" environment with a built-in **Consumption** profile that can't be deleted; as long as you
-don't click **Add workload profile** to add a Dedicated profile, the environment behaves as Consumption-only
-(scale-to-zero, no reserved capacity cost) — the same outcome ADR-0005 calls for.
+az containerapp env create `
+  --name vlg-cae `
+  --resource-group rg-virtualleadersguide `
+  --location "East US 2" `
+  --logs-destination none
+```
 
-Select **Review + create** → **Create**.
+Omitting `--enable-workload-profiles` leaves it at its default of `true` — Azure now creates every environment as
+a "Workload profiles" environment with a built-in **Consumption** profile that can't be removed. As long as you
+never add a Dedicated workload profile (`az containerapp env workload-profile add`), the environment behaves as
+Consumption-only (scale-to-zero, no reserved capacity cost) — the same outcome ADR-0005 calls for.
 
 *Note: ingress (Api internal-only, Web external) is configured per-Container-App, not on the environment — nothing
 to set here. That happens when the actual Container Apps get created in P1-8b, pulling images from ghcr.io.*
