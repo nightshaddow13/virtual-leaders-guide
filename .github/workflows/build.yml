@@ -1,0 +1,161 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  IMAGE_OWNER: ${{ github.repository_owner }}
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - run: dotnet restore VirtualLeadersGuide.slnx
+
+      - run: dotnet build VirtualLeadersGuide.slnx --no-restore --configuration Release
+
+      - run: dotnet test VirtualLeadersGuide.slnx --no-build --configuration Release
+
+  build-push-images:
+    needs: build-test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish & push Api image
+        run: >
+          dotnet publish src/VirtualLeadersGuide.Api/VirtualLeadersGuide.Api.csproj
+          --configuration Release
+          -p:PublishProfile=DefaultContainer
+          -p:ContainerRegistry=ghcr.io
+          -p:ContainerImageTag=${{ github.sha }}
+
+      - name: Publish & push Web image
+        run: >
+          dotnet publish src/VirtualLeadersGuide.Web/VirtualLeadersGuide.Web.csproj
+          --configuration Release
+          -p:PublishProfile=DefaultContainer
+          -p:ContainerRegistry=ghcr.io
+          -p:ContainerImageTag=${{ github.sha }}
+
+      - name: Build EF Core migrations bundle
+        # --self-contained: the migration Job's image has no .NET runtime of
+        # its own (see infra/efbundle.Dockerfile) — the bundle embeds one.
+        run: |
+          dotnet tool restore
+          dotnet ef migrations bundle \
+            --project src/VirtualLeadersGuide.Api \
+            --self-contained \
+            --target-runtime linux-x64 \
+            --output efbundle \
+            --configuration Release
+
+      - name: Build & push migrator image
+        run: |
+          docker build -f infra/efbundle.Dockerfile -t ghcr.io/${IMAGE_OWNER}/virtualleadersguide-migrator:${{ github.sha }} .
+          docker push ghcr.io/${IMAGE_OWNER}/virtualleadersguide-migrator:${{ github.sha }}
+
+  deploy:
+    needs: build-push-images
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy migration Job (Bicep)
+        uses: azure/arm-deploy@v2
+        with:
+          resourceGroupName: ${{ vars.AZURE_RESOURCE_GROUP }}
+          template: infra/migration-job.bicep
+          parameters: >
+            containerAppsEnvironmentName=${{ vars.CONTAINER_APPS_ENV }}
+            migrationsIdentityName=${{ vars.MIGRATIONS_IDENTITY_NAME }}
+            migrationImage=ghcr.io/${{ env.IMAGE_OWNER }}/virtualleadersguide-migrator:${{ github.sha }}
+
+      - name: Run migration Job and wait for completion
+        # Migrations must land before the new Api/Web revisions can receive
+        # traffic (ADR-0013 / the issue's ordering requirement) — this step
+        # blocks the workflow until the Job execution finishes, and fails the
+        # run (skipping the app deploy below) if it didn't succeed.
+        run: |
+          set -euo pipefail
+          EXECUTION_NAME=$(az containerapp job start \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name vlg-migrate \
+            --query name -o tsv)
+          echo "Started migration job execution: $EXECUTION_NAME"
+
+          STATUS="Running"
+          while [ "$STATUS" = "Running" ]; do
+            sleep 10
+            STATUS=$(az containerapp job execution list \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --name vlg-migrate \
+              --query "[?name=='$EXECUTION_NAME'].properties.status" -o tsv)
+          done
+
+          echo "Migration job execution finished with status: $STATUS"
+          if [ "$STATUS" != "Succeeded" ]; then
+            echo "::error::Migration job did not succeed (status: $STATUS) — aborting before app deploy."
+            exit 1
+          fi
+
+      - name: Update Api + Web images
+        # Per ADR-0005: vlg-api/vlg-web are created once, by hand, via the
+        # P1-8a runbook, with their final ingress config. This step only ever
+        # updates the running image — it must never touch ingress or other
+        # config, which is set once in that runbook (see p1-8b-azure-deploy-setup.md).
+        run: |
+          az containerapp update --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --name vlg-api \
+            --image ghcr.io/${{ env.IMAGE_OWNER }}/virtualleadersguide-api:${{ github.sha }}
+          az containerapp update --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --name vlg-web \
+            --image ghcr.io/${{ env.IMAGE_OWNER }}/virtualleadersguide-web:${{ github.sha }}
+
+      - name: Verify Container Apps are running
+        run: |
+          az containerapp show --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --name vlg-api --query "properties.runningStatus"
+          az containerapp show --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --name vlg-web --query "properties.runningStatus"

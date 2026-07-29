@@ -427,3 +427,7 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# EF Core migrations bundle build output (built fresh in CI, see infra/efbundle.Dockerfile)
+efbundle
+efbundle.exe
