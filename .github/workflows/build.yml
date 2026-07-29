@@ -39,6 +39,17 @@ jobs:
 
       - run: dotnet build VirtualLeadersGuide.slnx --no-restore --configuration Release
 
+      - name: Pre-pull test containers
+        # VirtualLeadersGuide.AppHost.Tests starts a real SQL Server + Azurite
+        # container (AppHostShould.cs). Pulling happens either way once Aspire
+        # starts them — this just gives it its own visible step instead of
+        # silently eating into the test's per-phase timeout on a cold runner
+        # with no cached images.
+        run: |
+          docker pull mcr.microsoft.com/mssql/server:2022-latest &
+          docker pull mcr.microsoft.com/azure-storage/azurite:3.35.0 &
+          wait
+
       - run: dotnet test VirtualLeadersGuide.slnx --no-build --configuration Release
 
   build-push-images:
