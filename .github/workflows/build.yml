@@ -60,21 +60,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish & push Api image
-        run: >
-          dotnet publish src/VirtualLeadersGuide.Api/VirtualLeadersGuide.Api.csproj
-          --configuration Release
-          -p:PublishProfile=DefaultContainer
-          -p:ContainerRegistry=ghcr.io
-          -p:ContainerImageTag=${{ github.sha }}
-
-      - name: Publish & push Web image
-        run: >
-          dotnet publish src/VirtualLeadersGuide.Web/VirtualLeadersGuide.Web.csproj
-          --configuration Release
-          -p:PublishProfile=DefaultContainer
-          -p:ContainerRegistry=ghcr.io
-          -p:ContainerImageTag=${{ github.sha }}
+      - name: Publish & push Api + Web images
+        run: |
+          for project in Api Web; do
+            dotnet publish "src/VirtualLeadersGuide.$project/VirtualLeadersGuide.$project.csproj" \
+              --configuration Release \
+              -p:PublishProfile=DefaultContainer \
+              -p:ContainerRegistry=ghcr.io \
+              -p:ContainerImageTag=${{ github.sha }}
+          done
 
       - name: Build EF Core migrations bundle
         # --self-contained: the migration Job's image has no .NET runtime of
@@ -115,6 +109,7 @@ jobs:
             containerAppsEnvironmentName=${{ vars.CONTAINER_APPS_ENV }}
             migrationsIdentityName=${{ vars.MIGRATIONS_IDENTITY_NAME }}
             migrationImage=ghcr.io/${{ env.IMAGE_OWNER }}/virtualleadersguide-migrator:${{ github.sha }}
+            jobName=${{ vars.MIGRATION_JOB_NAME }}
 
       - name: Run migration Job and wait for completion
         # Migrations must land before the new Api/Web revisions can receive
@@ -125,7 +120,7 @@ jobs:
           set -euo pipefail
           EXECUTION_NAME=$(az containerapp job start \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --name vlg-migrate \
+            --name "${{ vars.MIGRATION_JOB_NAME }}" \
             --query name -o tsv)
           echo "Started migration job execution: $EXECUTION_NAME"
 
@@ -134,7 +129,7 @@ jobs:
             sleep 10
             STATUS=$(az containerapp job execution list \
               --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-              --name vlg-migrate \
+              --name "${{ vars.MIGRATION_JOB_NAME }}" \
               --query "[?name=='$EXECUTION_NAME'].properties.status" -o tsv)
           done
 
@@ -150,12 +145,14 @@ jobs:
         # updates the running image — it must never touch ingress or other
         # config, which is set once in that runbook (see p1-8b-azure-deploy-setup.md).
         run: |
-          az containerapp update --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --name vlg-api \
-            --image ghcr.io/${{ env.IMAGE_OWNER }}/virtualleadersguide-api:${{ github.sha }}
-          az containerapp update --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --name vlg-web \
-            --image ghcr.io/${{ env.IMAGE_OWNER }}/virtualleadersguide-web:${{ github.sha }}
+          for entry in "${{ vars.API_APP_NAME }}:virtualleadersguide-api" "${{ vars.WEB_APP_NAME }}:virtualleadersguide-web"; do
+            appName="${entry%%:*}"
+            repo="${entry##*:}"
+            az containerapp update --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --name "$appName" \
+              --image "ghcr.io/${{ env.IMAGE_OWNER }}/$repo:${{ github.sha }}"
+          done
 
       - name: Verify Container Apps are running
         run: |
-          az containerapp show --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --name vlg-api --query "properties.runningStatus"
-          az containerapp show --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --name vlg-web --query "properties.runningStatus"
+          az containerapp show --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --name "${{ vars.API_APP_NAME }}" --query "properties.runningStatus"
+          az containerapp show --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --name "${{ vars.WEB_APP_NAME }}" --query "properties.runningStatus"

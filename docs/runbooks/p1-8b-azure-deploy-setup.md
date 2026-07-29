@@ -63,9 +63,14 @@ $internalApiKey = [Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random
 az containerapp secret set -g $rg -n vlg-api --secrets "internal-api-key=$internalApiKey"
 az containerapp secret set -g $rg -n vlg-web --secrets "internal-api-key=$internalApiKey"
 
+# Same Entra-managed-identity connection-string shape as migrationsConnectionString
+# in infra/migration-job.bicep (that one's Bicep-authored, this is a manually-run
+# runbook step, so they can't literally share code).
+$apiConnectionString = "Server=tcp:vlg-sqlserver.database.windows.net,1433;Initial Catalog=virtualleadersguide;Authentication=Active Directory Managed Identity;User Id=$apiIdentityClientId;Encrypt=True;Connect Timeout=30;"
+
 az containerapp update -g $rg -n vlg-api --set-env-vars `
   "InternalApi__Key=secretref:internal-api-key" `
-  "ConnectionStrings__virtualleadersguide=Server=tcp:vlg-sqlserver.database.windows.net,1433;Initial Catalog=virtualleadersguide;Authentication=Active Directory Managed Identity;User Id=$apiIdentityClientId;Encrypt=True;Connect Timeout=30;" `
+  "ConnectionStrings__virtualleadersguide=$apiConnectionString" `
   "ASPNETCORE_ENVIRONMENT=Production" `
   "ASPNETCORE_FORWARDEDHEADERS_ENABLED=true"
 
@@ -140,6 +145,9 @@ secret set directly in step 3.
 | `AZURE_RESOURCE_GROUP` | `rg-virtualleadersguide` |
 | `CONTAINER_APPS_ENV` | `vlg-cae` |
 | `MIGRATIONS_IDENTITY_NAME` | `vlg-migrations-identity` |
+| `MIGRATION_JOB_NAME` | `vlg-migrate` |
+| `API_APP_NAME` | `vlg-api` |
+| `WEB_APP_NAME` | `vlg-web` |
 
 ## 7. GHCR package visibility
 

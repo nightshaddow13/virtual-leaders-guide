@@ -22,7 +22,10 @@ resource migrationsIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@20
 
 // No secret material here: the connection string carries only the identity's
 // clientId (not a credential by itself) — auth happens via the identity
-// attached to this Job below, per ADR-0016.
+// attached to this Job below, per ADR-0016. Same Entra-managed-identity
+// connection-string shape as $apiConnectionString in
+// docs/runbooks/p1-8b-azure-deploy-setup.md step 3 (that one config lives in
+// a manually-run runbook, not Bicep, so it can't share this literally).
 var migrationsConnectionString = 'Server=tcp:${sqlServerFqdn},1433;Initial Catalog=${sqlDatabaseName};Authentication=Active Directory Managed Identity;User Id=${migrationsIdentity.properties.clientId};Encrypt=True;Connect Timeout=60;'
 
 resource migrationJob 'Microsoft.App/jobs@2024-03-01' = {
