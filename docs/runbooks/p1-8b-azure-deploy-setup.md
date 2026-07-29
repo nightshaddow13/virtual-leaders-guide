@@ -11,7 +11,41 @@ Assumes the P1-8a resources already exist (`rg-virtualleadersguide`, `vlg-cae`, 
 ingress config via [the P1-8a runbook's step 3](p1-8a-azure-portal-provisioning.md#3-container-apps-web-api) —
 per ADR-0005, `build.yml`'s deploy job only ever runs `az containerapp update --image`, it never creates the
 apps or touches ingress. This runbook picks up from there: attaching the identities and one-time config
-those `az containerapp create` calls didn't set.
+those `az containerapp create` calls didn't set. **Step 0 below checks this precondition explicitly** —
+`az containerapp identity assign`/`update` in step 3 fail with a bare "does not exist" error if it's skipped,
+which is easy to hit if you jump straight to step 3's commands without having run the P1-8a runbook first.
+
+## 0. Verify `vlg-api`/`vlg-web` exist
+
+```powershell
+$rg = "rg-virtualleadersguide"
+
+az containerapp show -g $rg -n vlg-web --query name -o tsv
+az containerapp show -g $rg -n vlg-api --query name -o tsv
+```
+
+If either errors with `ResourceNotFound`/"does not exist", create them now (this is
+[the P1-8a runbook's step 3](p1-8a-azure-portal-provisioning.md#3-container-apps-web-api), reproduced here so
+this runbook doesn't require jumping documents mid-task — P1-8a's runbook remains the source of truth for this
+step, this is not a second place to edit it):
+
+```powershell
+az containerapp create `
+  --name vlg-web `
+  --resource-group $rg `
+  --environment vlg-cae `
+  --ingress external `
+  --target-port 8080 `
+  --min-replicas 0
+
+az containerapp create `
+  --name vlg-api `
+  --resource-group $rg `
+  --environment vlg-cae `
+  --ingress internal `
+  --target-port 8080 `
+  --min-replicas 0
+```
 
 ## 1. Two user-assigned managed identities
 
@@ -20,7 +54,6 @@ Created upfront, with a stable identity that exists *before* the first deploy �
 than system-assigned.
 
 ```powershell
-$rg = "rg-virtualleadersguide"
 $location = "eastus"
 
 az identity create -g $rg -n vlg-api-identity --location $location
