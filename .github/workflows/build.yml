@@ -124,8 +124,10 @@ jobs:
             migrationImage=ghcr.io/${{ env.IMAGE_OWNER }}/virtualleadersguide-migrator:${{ github.sha }}
             jobName=${{ vars.MIGRATION_JOB_NAME }}
           # arm-deploy fails on any stderr output by default, and Bicep's own
-          # linter writes warnings (e.g. no-hardcoded-env-urls below) to
-          # stderr even on a successful, zero-exit-code deployment.
+          # linter can write warnings to stderr on an otherwise successful,
+          # zero-exit-code deployment (e.g. no-hardcoded-env-urls, which hit
+          # this template until migration-job.bicep's sqlServerFqdn switched
+          # to environment().suffixes.sqlServerHostname).
           failOnStdErr: false
 
       - name: Run migration Job and wait for completion

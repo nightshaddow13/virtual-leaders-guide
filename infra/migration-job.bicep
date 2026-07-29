@@ -9,7 +9,7 @@ param migrationImage string
 
 param location string = resourceGroup().location
 param jobName string = 'vlg-migrate'
-param sqlServerFqdn string = 'vlg-sqlserver.database.windows.net'
+param sqlServerFqdn string = 'vlg-sqlserver${environment().suffixes.sqlServerHostname}'
 param sqlDatabaseName string = 'virtualleadersguide'
 
 resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' existing = {
