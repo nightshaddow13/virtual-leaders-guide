@@ -123,6 +123,12 @@ jobs:
             migrationsIdentityName=${{ vars.MIGRATIONS_IDENTITY_NAME }}
             migrationImage=ghcr.io/${{ env.IMAGE_OWNER }}/virtualleadersguide-migrator:${{ github.sha }}
             jobName=${{ vars.MIGRATION_JOB_NAME }}
+          # arm-deploy fails on any stderr output by default, and Bicep's own
+          # linter can write warnings to stderr on an otherwise successful,
+          # zero-exit-code deployment (e.g. no-hardcoded-env-urls, which hit
+          # this template until migration-job.bicep's sqlServerFqdn switched
+          # to environment().suffixes.sqlServerHostname).
+          failOnStdErr: false
 
       - name: Run migration Job and wait for completion
         # Migrations must land before the new Api/Web revisions can receive
