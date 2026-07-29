@@ -15,6 +15,11 @@
     <PackageReference Include="Aspire.Microsoft.EntityFrameworkCore.SqlServer" Version="13.4.6" />
     <PackageReference Include="JsonApiDotNetCore" Version="5.11.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.10" />
+    <!-- Pinned to match Microsoft.Data.SqlClient.Extensions.Azure's version exactly: EF Core SqlServer
+         10.0.10 otherwise resolves the core package one patch behind (7.0.1), and that skew makes the
+         Active Directory Managed Identity provider fail to load (AmbiguousMatchException from
+         SqlAuthenticationProviderManager's reflection-based provider discovery). -->
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.2" />
     <PackageReference Include="Microsoft.Data.SqlClient.Extensions.Azure" Version="7.0.2" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10">
       <PrivateAssets>all</PrivateAssets>
