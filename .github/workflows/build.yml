@@ -74,10 +74,12 @@ jobs:
       - name: Publish & push Api + Web images
         run: |
           for project in Api Web; do
+            repo="${project,,}"
             dotnet publish "src/VirtualLeadersGuide.$project/VirtualLeadersGuide.$project.csproj" \
               --configuration Release \
               -p:PublishProfile=DefaultContainer \
               -p:ContainerRegistry=ghcr.io \
+              -p:ContainerRepository="${IMAGE_OWNER}/virtualleadersguide-${repo}" \
               -p:ContainerImageTag=${{ github.sha }}
           done
 
