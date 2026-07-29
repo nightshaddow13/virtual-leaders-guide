@@ -129,12 +129,19 @@ GitHub, only as a Container Apps secret on both apps.
 $app = az ad app create --display-name vlg-github-deploy | ConvertFrom-Json
 az ad sp create --id $app.appId
 
-az ad app federated-credential create --id $app.appId --parameters '{
+# Inline '{...}' JSON breaks under PowerShell's native-command quoting rules
+# (az cli's own error points at https://learn.microsoft.com/cli/azure/use-azure-cli-successfully-quoting) —
+# write it to a file and pass @<path> instead, which sidesteps quoting entirely.
+@'
+{
   "name": "github-main",
   "issuer": "https://token.actions.githubusercontent.com",
   "subject": "repo:nightshaddow13/virtual-leaders-guide:ref:refs/heads/main",
   "audiences": ["api://AzureADTokenExchange"]
-}'
+}
+'@ | Set-Content -Path "$env:TEMP\federated-credential.json" -Encoding utf8
+
+az ad app federated-credential create --id $app.appId --parameters "@$env:TEMP\federated-credential.json"
 ```
 
 Note the subject is scoped to `ref:refs/heads/main` — this covers both the `push`-triggered and
