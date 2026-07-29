@@ -136,7 +136,7 @@ az ad sp create --id $app.appId
 {
   "name": "github-main",
   "issuer": "https://token.actions.githubusercontent.com",
-  "subject": "repo:nightshaddow13/virtual-leaders-guide:ref:refs/heads/main",
+  "subject": "repo:nightshaddow13@41086688/virtual-leaders-guide@1312331075:ref:refs/heads/main",
   "audiences": ["api://AzureADTokenExchange"]
 }
 '@ | Set-Content -Path "$env:TEMP\federated-credential.json" -Encoding utf8
@@ -144,7 +144,15 @@ az ad sp create --id $app.appId
 az ad app federated-credential create --id $app.appId --parameters "@$env:TEMP\federated-credential.json"
 ```
 
-Note the subject is scoped to `ref:refs/heads/main` — this covers both the `push`-triggered and
+The subject uses GitHub's [immutable subject claim](https://github.blog/changelog/2026-04-23-immutable-subject-claims-for-github-actions-oidc-tokens/)
+format (`owner@ownerId/repo@repoId`, not the plain `owner/repo`) — this repo issues that format for its Actions
+OIDC tokens, and a plain-name subject gets rejected with `AADSTS700213: No matching federated identity record
+found`. Confirm the actual claim a workflow run presents from the `azure/login` step's own log output (it prints
+`subject claim - ...` before attempting the exchange) rather than assuming this doc's IDs still match — if GitHub
+ever changes the owner/repo IDs backing this repo (e.g. a transfer, not just a rename — renames keep the same
+IDs), update this federated credential's `subject` to match.
+
+Note the subject is also scoped to `ref:refs/heads/main` — this covers both the `push`-triggered and
 `workflow_dispatch`-triggered runs of `build.yml`, since both execute against `main`, but will **not** trust a
 deploy triggered from any other branch or a pull request.
 
