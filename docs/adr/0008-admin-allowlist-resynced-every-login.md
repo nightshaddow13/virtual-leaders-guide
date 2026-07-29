@@ -2,8 +2,9 @@
 
 No prior ADR or CONTEXT.md entry addresses how the very first Admin is created, since Admin status lives only
 in our own database (ADR-0006) and Entra ID has no role to check for it. We decided a config-driven list of
-emails is re-checked on every Entra sign-in — the database's Admin flag is synced to match the list each time,
-so adding an email promotes on next login and removing one demotes on next login.
+emails is re-checked on every Entra sign-in — the signed-in user's platform-wide `UserRole` row (the
+Admin grant, per ADR-0017 — a `UserRole` with `EventId` null) is synced to match the list each time, so
+adding an email promotes on next login and removing one demotes on next login.
 
 This matches ADR-0006's "checked by app code on every request" philosophy rather than treating first login as
 a one-time bootstrap ceremony, and keeps a misconfiguration always recoverable by editing config and signing
