@@ -4,7 +4,11 @@ namespace VirtualLeadersGuide.AppHost.Tests;
 
 public class AppHostShould
 {
-    private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30);
+    // 30s wasn't enough on a GitHub-hosted CI runner: a cold VM has no cached
+    // mssql/azurite images, so the pull alone can eat most of that before SQL
+    // Server's first-boot init (~40s observed locally even with a warm image
+    // cache) even starts. 90s leaves headroom for both, per phase.
+    private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(90);
 
     // NOTE: AppHost.cs currently registers zero resources (Web/Api/SQL land in
     // P1-3/P1-4/P1-5). Because there is no named resource yet, this test cannot
