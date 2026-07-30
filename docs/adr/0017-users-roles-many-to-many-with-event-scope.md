@@ -1,3 +1,7 @@
+---
+status: EntraObjectId field amended by ADR-0019 (local ASP.NET Core Identity uses a different linking field) — table shape and roles model below unchanged
+---
+
 # Users and Roles are many-to-many, scoped to an Event on the join row
 
 ADR-0006 established that Admin/Director authorization data lives in our own database, but left the actual

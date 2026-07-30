@@ -1,3 +1,7 @@
+---
+status: superseded by ADR-0020 (app-sent invite email, not copy-link)
+---
+
 # Director invites are a copyable sign-in link, not a sent email
 
 An Admin needs to grant Event access to someone who has never signed in before — ADR-0017's User table
