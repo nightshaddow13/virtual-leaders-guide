@@ -69,10 +69,9 @@ _Avoid_: Organizer, Admin (these are for the platform-level or generic role — 
 event-scoped)
 
 **Invite**:
-A Role grant an Admin creates for someone by email before that person has ever signed in. The app sends an
-invitation email itself (via Azure Communication Services) containing a password-setup link — no copyable
-link is shown for the Admin to relay. Resolves into an active grant the moment that person sets their
-password and their pending User row activates.
+A Role grant an Admin creates for someone by email before that person has ever signed in, delivered via an
+app-sent email (Azure Communication Services) with a password-setup link — not a copyable link for the
+Admin to relay. Resolves into an active grant the moment that person sets their password.
 _Avoid_: Invitation link, copy-link invite
 
 **Leaders Guide**:
