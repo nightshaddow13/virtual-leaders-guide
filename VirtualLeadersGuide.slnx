@@ -2,16 +2,11 @@
   <Folder Name="/src/">
     <Project Path="src/VirtualLeadersGuide.Api/VirtualLeadersGuide.Api.csproj" />
     <Project Path="src/VirtualLeadersGuide.AppHost/VirtualLeadersGuide.AppHost.csproj" />
-    <Project Path="src/VirtualLeadersGuide.Identity.Contracts/VirtualLeadersGuide.Identity.Contracts.csproj" />
     <Project Path="src/VirtualLeadersGuide.ServiceDefaults/VirtualLeadersGuide.ServiceDefaults.csproj" />
     <Project Path="src/VirtualLeadersGuide.Web/VirtualLeadersGuide.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/VirtualLeadersGuide.Api.Tests/VirtualLeadersGuide.Api.Tests.csproj" />
     <Project Path="tests/VirtualLeadersGuide.AppHost.Tests/VirtualLeadersGuide.AppHost.Tests.csproj" />
-    <Project Path="tests/VirtualLeadersGuide.Web.Tests/VirtualLeadersGuide.Web.Tests.csproj" />
-  </Folder>
-  <Folder Name="/tools/">
-    <Project Path="tools/VirtualLeadersGuide.Tools.SeedUser/VirtualLeadersGuide.Tools.SeedUser.csproj" />
   </Folder>
 </Solution>

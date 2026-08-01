@@ -6,9 +6,3 @@ handful of info pages.
 
 See [`CONTEXT.md`](./CONTEXT.md) for the domain glossary and [`docs/adr/`](./docs/adr/) for architecture
 decisions. Application code lives under `src/`.
-
-## Getting started
-
-New to the repo? See
-[`docs/runbooks/local-dev-first-time-setup.md`](./docs/runbooks/local-dev-first-time-setup.md) for running
-the app locally for the first time and creating your first account.

@@ -27,7 +27,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\VirtualLeadersGuide.Api\VirtualLeadersGuide.Api.csproj" />
-    <ProjectReference Include="..\..\src\VirtualLeadersGuide.Identity.Contracts\VirtualLeadersGuide.Identity.Contracts.csproj" />
   </ItemGroup>
 
 </Project>
