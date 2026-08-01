@@ -118,7 +118,10 @@ az containerapp update -g $rg -n vlg-web --set-env-vars `
 
 `vlg-web`'s `services__api__https__0` wires Aspire's client-side service discovery
 (`Program.cs`: `https+http://api`) to Api's internal FQDN by hand — there's no AppHost in the deployed
-environment to supply it. No connection string or identity on `vlg-web` — it never talks to SQL directly.
+environment to supply it. `vlg-web` still has no *managed identity* and never talks to SQL directly — see
+[P2-1](p2-1-acs-email-provisioning.md) and [P2-2](p2-2-blob-dataprotection-keys.md) for the two
+connection-string-shaped secrets (ACS Email, Blob Storage) it does hold, both following this same
+Container-Apps-secret pattern rather than the managed-identity one ADR-0016 uses for `vlg-api`↔SQL.
 
 Keep the generated `$internalApiKey` value somewhere retrievable (e.g. a password manager) — it's not stored in
 GitHub, only as a Container Apps secret on both apps.
