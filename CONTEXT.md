@@ -41,15 +41,19 @@ anyone with the passcode gets the same access.
 _Avoid_: AccessCode, SiteCode
 
 **User**:
-A person with a row in our own database, keyed by email. Created either on their first Entra sign-in, or
-earlier by an Admin's Invite — a User can exist, and hold Roles, before they've ever signed in. Distinct
-from their Entra identity, which a User's row links to only once they've signed in at least once.
+A person with a row in our own database, keyed by email. Created either on their first sign-in, or earlier
+by an Admin's Invite — a User can exist, and hold Roles, before they've ever completed account setup.
+Distinct from their Credential, which a User's row links to only once they've set a password.
 _Avoid_: Account, Identity
+
+**Credential**:
+The password-based sign-in record ASP.NET Core Identity owns for a User, created only once that person sets
+a password. A User referenced by an Invite has no Credential yet — completing account setup creates one.
+_Avoid_: Account, ApplicationUser, Login
 
 **Role**:
 A grant a User holds — either platform-wide (Admin) or scoped to a specific Event (Director, and future
-Event-scoped roles). One User may hold several Roles at once, scoped to different Events. Role/assignment
-data lives in our own database, not in Entra ID (Entra is identity only).
+Event-scoped roles). One User may hold several Roles at once, scoped to different Events.
 _Avoid_: Permission, Group
 
 **Admin**:
@@ -65,10 +69,10 @@ _Avoid_: Organizer, Admin (these are for the platform-level or generic role — 
 event-scoped)
 
 **Invite**:
-A Role grant an Admin creates for someone by email before that person has ever signed in, paired with a
-copyable sign-in link the Admin sends however they already communicate with Directors (no email is sent by
-the app itself). Resolves into an active grant the moment that person completes their first Entra sign-in.
-_Avoid_: Invitation email
+A Role grant an Admin creates for someone by email before that person has ever signed in, delivered via an
+app-sent email (Azure Communication Services) with a password-setup link — not a copyable link for the
+Admin to relay. Resolves into an active grant the moment that person sets their password.
+_Avoid_: Invitation link, copy-link invite
 
 **Leaders Guide**:
 The public-facing destination for an Event — what a visitor reaches after entering the Passcode. Contains the

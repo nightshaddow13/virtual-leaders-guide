@@ -18,10 +18,14 @@ public class AppHostShould
     // as a follow-up in P1-9 (#28), which will extend this test to call
     // app.ResourceNotifications.WaitForResourceHealthyAsync(<resource name>, ...)
     // once P1-3/P1-4 register a real resource.
-    // internal-api-key (P1-7) has no default value (fail-closed, see ADR-0015) so every AppHost testing
-    // builder must supply it explicitly - real environments get it from user-secrets or a Container Apps
-    // secret, but tests need their own throwaway value.
-    private static readonly string[] TestArgs = ["Parameters:internal-api-key=test-only-value"];
+    // internal-api-key (P1-7, ADR-0015) and acs-connection-string (P2-1) both have no default value
+    // (fail-closed) so every AppHost testing builder must supply them explicitly - real environments get them
+    // from user-secrets or a Container Apps secret, but tests need their own throwaway values.
+    private static readonly string[] TestArgs =
+    [
+        "Parameters:internal-api-key=test-only-value",
+        "Parameters:acs-connection-string=test-only-value"
+    ];
 
     [Fact]
     public async Task BuildAndStartSuccessfully_WhenNoResourcesAreRegistered_ForStartAsync()
