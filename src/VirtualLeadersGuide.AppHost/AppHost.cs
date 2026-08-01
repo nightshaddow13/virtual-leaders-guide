@@ -38,7 +38,8 @@ var storage = builder.AddAzureStorage("storage")
     })
     .RunAsEmulator(azurite => azurite.WithDataVolume());
 
-storage.AddBlobs("blobs");
+var blobs = storage.AddBlobs("blobs");
+var dataProtectionKeysContainer = storage.AddBlobContainer("dataprotection-keys");
 
 var api = builder.AddProject<Projects.VirtualLeadersGuide_Api>("api")
     .WithReference(database)
@@ -53,6 +54,9 @@ if (!builder.ExecutionContext.IsPublishMode)
 builder.AddProject<Projects.VirtualLeadersGuide_Web>("web")
     .WithExternalHttpEndpoints()
     .WithReference(api)
+    .WithReference(blobs)
+    .WaitFor(blobs)
+    .WaitFor(dataProtectionKeysContainer)
     .WithEnvironment("InternalApi__Key", internalApiKey)
     .WithEnvironment("Email__ConnectionString", acsConnectionString);
 

@@ -1,0 +1,15 @@
+@* Trimmed from the scaffold: dropped Email (needs ConfirmEmailChange, cut), External logins (ADR-0019
+   removed the only provider), Two-factor authentication and Passkeys (both cut - see ADR-0022, issue #54).
+   See IdentityRedirectManager.cs's header comment. *@
+
+<ul class="nav nav-pills flex-column">
+    <li class="nav-item">
+        <NavLink class="nav-link" href="Account/Manage" Match="NavLinkMatch.All">Profile</NavLink>
+    </li>
+    <li class="nav-item">
+        <NavLink class="nav-link" href="Account/Manage/ChangePassword">Password</NavLink>
+    </li>
+    <li class="nav-item">
+        <NavLink class="nav-link" href="Account/Manage/PersonalData">Personal data</NavLink>
+    </li>
+</ul>

@@ -1,0 +1,35 @@
+@page "/dashboard"
+@attribute [Authorize]
+@using System.Security.Claims
+
+@inject NavigationManager NavigationManager
+
+<PageTitle>Dashboard</PageTitle>
+
+<h1>Dashboard</h1>
+<p>Placeholder - P2-9 builds the real Admin/Director dashboard here.</p>
+
+@code {
+    // Nobody holds a role claim yet - P2-3 (#12) hasn't landed the Role/UserRole schema, and P2-5 (#14)
+    // hasn't landed the claim-minting that would put a role claim on this cookie in the first place. So
+    // every signed-in user redirects to NoAccess today; this check is written to hold once P2-5 starts
+    // stamping ClaimTypes.Role claims, with no rework needed here. See the P2-2 plan's Scope section.
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthenticationStateTask is null)
+        {
+            return;
+        }
+
+        AuthenticationState state = await AuthenticationStateTask;
+        bool hasAnyRole = state.User.Claims.Any(c => c.Type == ClaimTypes.Role);
+
+        if (!hasAnyRole)
+        {
+            NavigationManager.NavigateTo("Account/NoAccess");
+        }
+    }
+}
