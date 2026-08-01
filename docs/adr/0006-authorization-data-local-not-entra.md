@@ -1,3 +1,7 @@
+---
+status: identity-provider clause amended by ADR-0019 (local ASP.NET Core Identity, not Entra ID) — authorization-in-our-database clause below unchanged
+---
+
 # Admin/Director authorization data lives in our own database, not Entra ID
 
 The platform has two roles: Admin (platform-level, can create Events and edit any of them) and Director
