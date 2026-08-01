@@ -4,6 +4,7 @@ using Azure.Provisioning.Storage;
 var builder = DistributedApplication.CreateBuilder(args);
 
 var internalApiKey = builder.AddParameter("internal-api-key", secret: true);
+var acsConnectionString = builder.AddParameter("acs-connection-string", secret: true);
 
 var sqlServer = builder.AddAzureSqlServer("sqlserver")
     .ConfigureInfrastructure(infra =>
@@ -52,6 +53,7 @@ if (!builder.ExecutionContext.IsPublishMode)
 builder.AddProject<Projects.VirtualLeadersGuide_Web>("web")
     .WithExternalHttpEndpoints()
     .WithReference(api)
-    .WithEnvironment("InternalApi__Key", internalApiKey);
+    .WithEnvironment("InternalApi__Key", internalApiKey)
+    .WithEnvironment("Email__ConnectionString", acsConnectionString);
 
 builder.Build().Run();
