@@ -22,6 +22,11 @@ public sealed class IdentityUserDto
 
     public bool EmailConfirmed { get; set; }
 
+    // Not an IdentityUser column - carried here so Web's ApplicationUser round-trips it through the same
+    // CRUD-by-user endpoints as every other property (see ADR-0024). Unset by anything in this ticket;
+    // P2-12 (#43)/account-setup is the first place expected to write it.
+    public string? DisplayName { get; set; }
+
     public string? PasswordHash { get; set; }
 
     public string? SecurityStamp { get; set; }

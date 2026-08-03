@@ -1,5 +1,5 @@
 ---
-status: EntraObjectId field amended by ADR-0019 (local ASP.NET Core Identity uses a different linking field) — table shape and roles model below unchanged
+status: EntraObjectId field amended by ADR-0019 (local ASP.NET Core Identity uses a different linking field); User/Credential table collapsed onto ApplicationUser by ADR-0024 (Role/UserRole shape below unchanged)
 ---
 
 # Users and Roles are many-to-many, scoped to an Event on the join row

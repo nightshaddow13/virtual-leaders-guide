@@ -61,7 +61,7 @@ always prompted for interactively, masked - it's never a command-line argument, 
 history. Run `--help` for the full option list.
 
 Sign in at `/Account/Login` (e.g. `https://localhost:7186/Account/Login`) with that email and the password
-you typed. Since nobody has a Role yet (P2-3/P2-4 aren't built), you'll land on `/Account/NoAccess` right
+you typed. Since nobody has a Role yet (P2-4 isn't built), you'll land on `/Account/NoAccess` right
 after signing in - that's expected, not a bug.
 
 ## Verification
