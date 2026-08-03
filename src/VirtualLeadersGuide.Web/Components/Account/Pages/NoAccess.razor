@@ -3,9 +3,9 @@
 @* The #11 acceptance criteria's "you don't have access yet" page. Reachable two ways: directly from
    Dashboard.razor's inline role check, and as CookieAuthenticationOptions.AccessDeniedPath's target
    (configured in Program.cs) - nothing today declares an [Authorize(Roles=...)] policy that would redirect
-   here on its own (roles aren't real until P2-3/P2-5), but this page becomes that automatic target with no
-   rework once one exists. See the P2-2 plan's Scope section for why this replaces the scaffold's separate
-   AccessDenied page. *@
+   here on its own (the Role/UserRole schema exists per P2-3/#12, but no claim-minting yet - P2-5), but this
+   page becomes that automatic target with no rework once one exists. See the P2-2 plan's Scope section for
+   why this replaces the scaffold's separate AccessDenied page. *@
 
 <PageTitle>No access yet</PageTitle>
 

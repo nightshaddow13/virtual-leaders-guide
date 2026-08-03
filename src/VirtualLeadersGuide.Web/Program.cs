@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using VirtualLeadersGuide.Web;
+using VirtualLeadersGuide.Web.Authorization;
 using VirtualLeadersGuide.Web.Components;
 using VirtualLeadersGuide.Web.Components.Account;
 using VirtualLeadersGuide.Web.Identity;
@@ -34,6 +35,9 @@ builder.Services.AddIdentityCore<ApplicationUser>(options => options.SignIn.Requ
     .AddDefaultTokenProviders();
 
 builder.Services.AddScoped<IEmailSender<ApplicationUser>, AcsEmailSender>();
+
+// Unconsumed until P2-4 (#13)/P2-5 (#14) - registered now so those tickets are pure consumers (P2-3, #12).
+builder.Services.AddScoped<ApiRoleGrantClient>();
 
 // --- Data Protection keys persisted to Blob Storage (P2-2, #11 plan section 7) ---
 // vlg-web runs at min-replicas 0 (ADR-0005), so the default in-memory key ring is regenerated on every cold

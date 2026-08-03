@@ -284,6 +284,7 @@ public sealed class ApiUserStore(IHttpClientFactory httpClientFactory, IdentityE
         Email = user.Email,
         NormalizedEmail = user.NormalizedEmail,
         EmailConfirmed = user.EmailConfirmed,
+        DisplayName = user.DisplayName,
         PasswordHash = user.PasswordHash,
         SecurityStamp = user.SecurityStamp,
         ConcurrencyStamp = user.ConcurrencyStamp
@@ -304,6 +305,7 @@ public sealed class ApiUserStore(IHttpClientFactory httpClientFactory, IdentityE
         Email = dto.Email,
         NormalizedEmail = dto.NormalizedEmail,
         EmailConfirmed = dto.EmailConfirmed,
+        DisplayName = dto.DisplayName,
         PasswordHash = dto.PasswordHash,
         SecurityStamp = dto.SecurityStamp,
         ConcurrencyStamp = dto.ConcurrencyStamp,

@@ -41,15 +41,11 @@ anyone with the passcode gets the same access.
 _Avoid_: AccessCode, SiteCode
 
 **User**:
-A person with a row in our own database, keyed by email. Created either on their first sign-in, or earlier
-by an Admin's Invite — a User can exist, and hold Roles, before they've ever completed account setup.
-Distinct from their Credential, which a User's row links to only once they've set a password.
-_Avoid_: Account, Identity
-
-**Credential**:
-The password-based sign-in record ASP.NET Core Identity owns for a User, created only once that person sets
-a password. A User referenced by an Invite has no Credential yet — completing account setup creates one.
-_Avoid_: Account, ApplicationUser, Login
+A person with a row in ASP.NET Core Identity's own table (`ApplicationUser`/`AspNetUsers`), keyed by email.
+Created either on their first sign-in, or earlier by an Admin's Invite — a User can exist, and hold Roles,
+before they've ever set a password (their row's `PasswordHash` is null until then; informally, "Credential"
+refers to that password-related state on the same row, not a separate one — see ADR-0024).
+_Avoid_: Account, Identity, Credential (as a separate concept — it's columns on this row, not another row)
 
 **Role**:
 A grant a User holds — either platform-wide (Admin) or scoped to a specific Event (Director, and future

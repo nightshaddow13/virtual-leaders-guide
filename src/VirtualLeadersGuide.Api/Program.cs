@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using VirtualLeadersGuide.Api;
+using VirtualLeadersGuide.Api.Authorization;
 using VirtualLeadersGuide.Api.Data;
 using VirtualLeadersGuide.Api.Identity;
 
@@ -42,6 +43,7 @@ if (builder.Configuration.GetValue<bool>("Migrations:ApplyAutomatically"))
 app.UseJsonApi();
 app.MapControllers();
 app.MapInternalIdentityEndpoints();
+app.MapInternalAuthorizationEndpoints();
 
 app.MapDefaultEndpoints();
 
