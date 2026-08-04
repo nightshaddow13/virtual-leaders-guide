@@ -32,12 +32,22 @@ builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
 builder.Services.AddIdentityCore<ApplicationUser>(options => options.SignIn.RequireConfirmedAccount = false)
     .AddUserStore<ApiUserStore>() // not AddEntityFrameworkStores - see ADR-0022
     .AddSignInManager()
-    .AddDefaultTokenProviders();
+    .AddDefaultTokenProviders()
+    // Stamps ClaimTypes.Role claims onto the sign-in cookie from P2-3's grants (P2-5, #14) - see
+    // ApplicationUserClaimsPrincipalFactory.
+    .AddClaimsPrincipalFactory<ApplicationUserClaimsPrincipalFactory>();
 
 builder.Services.AddScoped<IEmailSender<ApplicationUser>, AcsEmailSender>();
 
 // Unconsumed until P2-4 (#13)/P2-5 (#14) - registered now so those tickets are pure consumers (P2-3, #12).
 builder.Services.AddScoped<ApiRoleGrantClient>();
+
+// Mints/caches the internal JWT (P2-5, #14, ADR-0007) and attaches it to outbound Api calls. Scoped, not
+// singleton: in Blazor Server that's one instance per circuit, which is the caching unit ADR-0007 specifies.
+builder.Services.AddScoped<InternalJwtProvider>();
+// Unconsumed until P2-6/P2-7 - the seam future JSON:API resource calls will go through, once P2-5's bearer
+// token needs attaching to something. See InternalApiClient's remarks for why this isn't a DelegatingHandler.
+builder.Services.AddScoped<InternalApiClient>();
 
 // --- Data Protection keys persisted to Blob Storage (P2-2, #11 plan section 7) ---
 // vlg-web runs at min-replicas 0 (ADR-0005), so the default in-memory key ring is regenerated on every cold

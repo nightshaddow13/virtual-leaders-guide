@@ -4,6 +4,11 @@ using VirtualLeadersGuide.Identity.Contracts;
 
 namespace VirtualLeadersGuide.Api.Tests;
 
+// Every case here drives _client, created via CreateAuthenticatedClient() (X-Internal-Key only, no bearer
+// token) - deliberately, since /internal/authorization/* stays off the RequireInternalUser policy (P2-5,
+// #14): it's the endpoint that produces a JWT's claims in the first place, so requiring one would be
+// circular. That every case below still succeeds pins the amendment in
+// docs/adr/0015-internal-key-validated-via-authentication-handler.md.
 public class InternalAuthorizationEndpointsShould : IAsyncLifetime
 {
     private ApiWebApplicationFactory _factory = null!;

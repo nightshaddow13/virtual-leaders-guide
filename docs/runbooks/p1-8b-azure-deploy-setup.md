@@ -96,6 +96,12 @@ $internalApiKey = [Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random
 az containerapp secret set -g $rg -n vlg-api --secrets "internal-api-key=$internalApiKey"
 az containerapp secret set -g $rg -n vlg-web --secrets "internal-api-key=$internalApiKey"
 
+# Signs/validates the internal JWT Web mints to forward a signed-in user's identity to Api (P2-5, #14,
+# ADR-0007) - a separate secret from internal-api-key above, generated and stored the same way.
+$internalJwtKey = [Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
+az containerapp secret set -g $rg -n vlg-api --secrets "internal-jwt-key=$internalJwtKey"
+az containerapp secret set -g $rg -n vlg-web --secrets "internal-jwt-key=$internalJwtKey"
+
 # Same Entra-managed-identity connection-string shape as migrationsConnectionString
 # in infra/migration-job.bicep (that one's Bicep-authored, this is a manually-run
 # runbook step, so they can't literally share code).
@@ -103,6 +109,7 @@ $apiConnectionString = "Server=tcp:vlg-sqlserver.database.windows.net,1433;Initi
 
 az containerapp update -g $rg -n vlg-api --set-env-vars `
   "InternalApi__Key=secretref:internal-api-key" `
+  "InternalJwt__SigningKey=secretref:internal-jwt-key" `
   "ConnectionStrings__virtualleadersguide=$apiConnectionString" `
   "ASPNETCORE_ENVIRONMENT=Production" `
   "ASPNETCORE_FORWARDEDHEADERS_ENABLED=true"
@@ -111,6 +118,7 @@ $apiInternalFqdn = az containerapp show -g $rg -n vlg-api --query "properties.co
 
 az containerapp update -g $rg -n vlg-web --set-env-vars `
   "InternalApi__Key=secretref:internal-api-key" `
+  "InternalJwt__SigningKey=secretref:internal-jwt-key" `
   "ASPNETCORE_ENVIRONMENT=Production" `
   "ASPNETCORE_FORWARDEDHEADERS_ENABLED=true" `
   "services__api__https__0=https://$apiInternalFqdn"
