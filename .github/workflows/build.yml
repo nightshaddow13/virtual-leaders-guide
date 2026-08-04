@@ -50,7 +50,11 @@ jobs:
           docker pull mcr.microsoft.com/azure-storage/azurite:3.35.0 &
           wait
 
-      - run: dotnet test VirtualLeadersGuide.slnx --no-build --configuration Release
+      - name: Run tests (excluding E2E)
+        # VirtualLeadersGuide.E2E.Tests (P2.1-1, #59) needs Playwright's browsers installed and a trusted dev
+        # cert, neither of which this job sets up yet - keeping it out of the default run here is a stopgap;
+        # P2.1-6 (#64) owns properly excluding/running it as its own CI concern.
+        run: dotnet test VirtualLeadersGuide.slnx --no-build --configuration Release --filter "FullyQualifiedName!~VirtualLeadersGuide.E2E.Tests"
 
   build-push-images:
     needs: build-test
