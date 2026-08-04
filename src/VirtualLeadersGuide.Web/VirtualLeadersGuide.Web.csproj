@@ -17,6 +17,9 @@
     <PackageReference Include="Aspire.Azure.Storage.Blobs" Version="13.4.6" />
     <PackageReference Include="Azure.Communication.Email" Version="1.1.0" />
     <PackageReference Include="Azure.Extensions.AspNetCore.DataProtection.Blobs" Version="1.5.3" />
+    <!-- Mints the internal JWT (P2-5, #14) with the same token-handling stack
+         Microsoft.AspNetCore.Authentication.JwtBearer uses on the Api side to validate it. -->
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.19.2" />
   </ItemGroup>
 
 </Project>

@@ -6,13 +6,18 @@ SQL Server container and an Azurite container locally, per ADR-0001/ADR-0014).
 
 ## 1. Required user-secrets
 
-`AppHost.cs` declares two secret parameters with no default value - fail-closed, same philosophy as
+`AppHost.cs` declares three secret parameters with no default value - fail-closed, same philosophy as
 `internal-api-key` (ADR-0015). The AppHost will not start without them.
 
 ```powershell
 # Shared secret between Web and Api - any string works locally, it just has to match on both sides, which
 # AppHost.cs already guarantees by injecting the same parameter into both.
 dotnet user-secrets set "Parameters:internal-api-key" "local-dev-key" --project src/VirtualLeadersGuide.AppHost
+
+# Signs/validates the internal JWT Web mints to forward a signed-in user's identity to Api (P2-5, #14,
+# ADR-0007) - a separate secret from internal-api-key above, since the two answer different trust questions.
+# Any string works locally; it just has to match on both sides, same as internal-api-key.
+dotnet user-secrets set "Parameters:internal-jwt-key" "local-dev-jwt-key" --project src/VirtualLeadersGuide.AppHost
 ```
 
 For `acs-connection-string` (Azure Communication Services Email, [P2-1](p2-1-acs-email-provisioning.md)):
@@ -61,13 +66,29 @@ always prompted for interactively, masked - it's never a command-line argument, 
 history. Run `--help` for the full option list.
 
 Sign in at `/Account/Login` (e.g. `https://localhost:7186/Account/Login`) with that email and the password
-you typed. Since nobody has a Role yet (P2-4 isn't built), you'll land on `/Account/NoAccess` right
-after signing in - that's expected, not a bug.
+you typed. Since nobody holds a Role grant yet (P2-4's config-driven allowlist auto-promotion isn't built,
+#13), you'll land on `/Account/NoAccess` right after signing in - that's expected, not a bug.
+
+### Optional: grant yourself Admin to see past NoAccess
+
+P2-4 isn't built, but P2-3's grant endpoint is - useful for exercising `/dashboard` locally before P2-4 lands.
+Find your seeded user's id (e.g. via the SQL Server container), then:
+
+```powershell
+curl -X POST http://localhost:5058/internal/authorization/users/<your-user-id>/grants `
+  -H "X-Internal-Key: local-dev-key" -H "Content-Type: application/json" `
+  -d '{"roleId": 1}'
+```
+
+`roleId: 1` is `Admin` (see `RoleIds` in `VirtualLeadersGuide.Identity.Contracts`). Sign out and back in
+afterward - role claims are stamped onto the cookie at sign-in (P2-5, #14), not refreshed for an already-open
+session.
 
 ## Verification
 
 - Sign-in succeeds and the NavMenu shows your email.
-- Visiting `/dashboard` redirects to `/Account/NoAccess` with a working sign-out link.
+- Visiting `/dashboard` redirects to `/Account/NoAccess` with a working sign-out link - unless you granted
+  yourself a Role above, in which case `/dashboard` renders its placeholder page instead.
 - Signing out returns the NavMenu to "Sign in".
 - Restarting just the `web` resource from the Aspire dashboard keeps you signed in - if it doesn't, the
   Data Protection key ring isn't persisting correctly (see [P2-2's Blob Storage

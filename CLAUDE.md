@@ -11,3 +11,7 @@ Default label vocabulary (needs-triage, needs-info, ready-for-agent, ready-for-h
 ### Domain docs
 
 Single-context layout (CONTEXT.md + docs/adr/ at repo root). See `docs/agents/domain.md`.
+
+### Coding standards
+
+XML doc comment (`///`) conventions, including the interface/`<inheritdoc/>` rule. See `docs/agents/coding-standards.md`.

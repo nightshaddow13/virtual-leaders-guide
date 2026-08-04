@@ -10,10 +10,8 @@
 <p>Placeholder - P2-9 builds the real Admin/Director dashboard here.</p>
 
 @code {
-    // Nobody holds a role claim yet - the Role/UserRole schema exists (P2-3, #12), but P2-5 (#14) hasn't
-    // landed the claim-minting that would put a role claim on this cookie. So every signed-in user
-    // redirects to NoAccess today; this check is written to hold once P2-5 starts stamping ClaimTypes.Role
-    // claims, with no rework needed here. See the P2-2 plan's Scope section.
+    // A signed-in user's ClaimTypes.Role claims come from ApplicationUserClaimsPrincipalFactory (P2-5, #14),
+    // stamped at sign-in from P2-3's UserRole grants. A user holding no grant still redirects to NoAccess.
     [CascadingParameter]
     private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
 

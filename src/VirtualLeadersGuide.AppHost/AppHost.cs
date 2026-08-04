@@ -4,6 +4,9 @@ using Azure.Provisioning.Storage;
 var builder = DistributedApplication.CreateBuilder(args);
 
 var internalApiKey = builder.AddParameter("internal-api-key", secret: true);
+// Signs/validates the internal JWT (P2-5, #14; ADR-0007) - separate from internal-api-key since the two
+// answer different trust questions and should rotate independently.
+var internalJwtKey = builder.AddParameter("internal-jwt-key", secret: true);
 var acsConnectionString = builder.AddParameter("acs-connection-string", secret: true);
 
 var sqlServer = builder.AddAzureSqlServer("sqlserver")
@@ -44,7 +47,8 @@ var dataProtectionKeysContainer = storage.AddBlobContainer("dataprotection-keys"
 var api = builder.AddProject<Projects.VirtualLeadersGuide_Api>("api")
     .WithReference(database)
     .WaitFor(database)
-    .WithEnvironment("InternalApi__Key", internalApiKey);
+    .WithEnvironment("InternalApi__Key", internalApiKey)
+    .WithEnvironment("InternalJwt__SigningKey", internalJwtKey);
 
 if (!builder.ExecutionContext.IsPublishMode)
 {
@@ -58,6 +62,7 @@ builder.AddProject<Projects.VirtualLeadersGuide_Web>("web")
     .WaitFor(blobs)
     .WaitFor(dataProtectionKeysContainer)
     .WithEnvironment("InternalApi__Key", internalApiKey)
+    .WithEnvironment("InternalJwt__SigningKey", internalJwtKey)
     .WithEnvironment("Email__ConnectionString", acsConnectionString);
 
 builder.Build().Run();

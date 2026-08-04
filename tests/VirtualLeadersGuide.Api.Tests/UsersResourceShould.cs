@@ -22,7 +22,9 @@ public class UsersResourceShould : IAsyncLifetime
     {
         _factory = new ApiWebApplicationFactory();
         await _factory.InitializeDatabaseAsync();
-        _client = _factory.CreateAuthenticatedClient();
+        // /api/* now requires a valid internal JWT in addition to X-Internal-Key (P2-5, #14) -
+        // CreateAuthenticatedClient() alone would 401 here.
+        _client = _factory.CreateUserClient();
     }
 
     public Task DisposeAsync()
