@@ -8,8 +8,6 @@ namespace VirtualLeadersGuide.E2E.Tests;
 [Collection(nameof(AspireE2ECollection))]
 public class NavMenuShould : PageTest
 {
-    private const string KnownPassword = "P@ssw0rd123!";
-
     private readonly AspireE2EFixture _fixture;
 
     public NavMenuShould(AspireE2EFixture fixture)
@@ -21,11 +19,9 @@ public class NavMenuShould : PageTest
     public async Task ShowSignInLink_WhenSignOutFormIsSubmitted_ForNavMenu()
     {
         string email = $"e2e-sign-out-{Guid.NewGuid():n}@example.test";
-        await _fixture.IdentityApi.CreateUserAsync(email, KnownPassword, CancellationToken.None);
+        await _fixture.IdentityApi.CreateUserAsync(email, TestCredentials.KnownPassword, CancellationToken.None);
 
-        var loginPage = new LoginPage(Page);
-        await loginPage.GotoAsync(_fixture.WebBaseUrl);
-        await loginPage.SubmitAsync(email, KnownPassword);
+        await new LoginPage(Page).SignInAsync(_fixture.WebBaseUrl, email, TestCredentials.KnownPassword);
 
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Sign out" }).ClickAsync();
 

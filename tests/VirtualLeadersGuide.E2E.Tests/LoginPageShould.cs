@@ -16,8 +16,6 @@ namespace VirtualLeadersGuide.E2E.Tests;
 [Collection(nameof(AspireE2ECollection))]
 public class LoginPageShould : PageTest
 {
-    private const string KnownPassword = "P@ssw0rd123!";
-
     private readonly AspireE2EFixture _fixture;
 
     public LoginPageShould(AspireE2EFixture fixture)
@@ -40,15 +38,14 @@ public class LoginPageShould : PageTest
     public async Task RedirectToTheReturnUrl_WhenCredentialsAreValid_ForLoginSubmit()
     {
         string email = $"e2e-valid-login-{Guid.NewGuid():n}@example.test";
-        await _fixture.IdentityApi.CreateUserAsync(email, KnownPassword, CancellationToken.None);
+        await _fixture.IdentityApi.CreateUserAsync(email, TestCredentials.KnownPassword, CancellationToken.None);
 
         // Account/Manage rather than /dashboard: it's [Authorize]-only (no role check), so landing there
         // proves ReturnUrl was honored on its own - a /dashboard target would immediately redirect again
         // (every fresh account holds no role yet), conflating this assertion with
         // DashboardAuthorizationShould's own no-role coverage.
-        var loginPage = new LoginPage(Page);
-        await loginPage.GotoAsync(_fixture.WebBaseUrl, returnUrl: "/Account/Manage");
-        await loginPage.SubmitAsync(email, KnownPassword);
+        await new LoginPage(Page).SignInAsync(
+            _fixture.WebBaseUrl, email, TestCredentials.KnownPassword, returnUrl: "/Account/Manage");
 
         await Expect(Page).ToHaveURLAsync(new Uri(_fixture.WebBaseUrl, "Account/Manage").ToString());
     }
@@ -57,11 +54,9 @@ public class LoginPageShould : PageTest
     public async Task ShowInvalidLoginError_WhenPasswordIsWrong_ForLoginSubmit()
     {
         string email = $"e2e-wrong-password-{Guid.NewGuid():n}@example.test";
-        await _fixture.IdentityApi.CreateUserAsync(email, KnownPassword, CancellationToken.None);
+        await _fixture.IdentityApi.CreateUserAsync(email, TestCredentials.KnownPassword, CancellationToken.None);
 
-        var loginPage = new LoginPage(Page);
-        await loginPage.GotoAsync(_fixture.WebBaseUrl);
-        await loginPage.SubmitAsync(email, "wrong-password");
+        await new LoginPage(Page).SignInAsync(_fixture.WebBaseUrl, email, "wrong-password");
 
         await Expect(Page.GetByText("Error: Invalid login attempt.")).ToBeVisibleAsync();
     }
@@ -70,14 +65,12 @@ public class LoginPageShould : PageTest
     public async Task RedirectToLockout_WhenAccountIsLockedOut_ForLoginSubmit()
     {
         string email = $"e2e-locked-out-{Guid.NewGuid():n}@example.test";
-        IdentityUserDto user =
-            await _fixture.IdentityApi.CreateUserAsync(email, KnownPassword, CancellationToken.None);
+        IdentityUserDto user = await _fixture.IdentityApi.CreateUserAsync(
+            email, TestCredentials.KnownPassword, CancellationToken.None);
         await _fixture.IdentityApi.LockOutAsync(
             user, DateTimeOffset.UtcNow.AddMinutes(30), CancellationToken.None);
 
-        var loginPage = new LoginPage(Page);
-        await loginPage.GotoAsync(_fixture.WebBaseUrl);
-        await loginPage.SubmitAsync(email, KnownPassword);
+        await new LoginPage(Page).SignInAsync(_fixture.WebBaseUrl, email, TestCredentials.KnownPassword);
 
         await Expect(Page).ToHaveURLAsync(new Uri(_fixture.WebBaseUrl, "Account/Lockout").ToString());
     }

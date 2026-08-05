@@ -10,8 +10,6 @@ namespace VirtualLeadersGuide.E2E.Tests;
 [Collection(nameof(AspireE2ECollection))]
 public class DashboardAuthorizationShould : PageTest
 {
-    private const string KnownPassword = "P@ssw0rd123!";
-
     private readonly AspireE2EFixture _fixture;
 
     public DashboardAuthorizationShould(AspireE2EFixture fixture)
@@ -34,11 +32,9 @@ public class DashboardAuthorizationShould : PageTest
     public async Task RedirectToNoAccess_WhenTheSignedInUserHoldsNoRoleClaim_ForDashboard()
     {
         string email = $"e2e-no-role-{Guid.NewGuid():n}@example.test";
-        await _fixture.IdentityApi.CreateUserAsync(email, KnownPassword, CancellationToken.None);
+        await _fixture.IdentityApi.CreateUserAsync(email, TestCredentials.KnownPassword, CancellationToken.None);
 
-        var loginPage = new LoginPage(Page);
-        await loginPage.GotoAsync(_fixture.WebBaseUrl);
-        await loginPage.SubmitAsync(email, KnownPassword);
+        await new LoginPage(Page).SignInAsync(_fixture.WebBaseUrl, email, TestCredentials.KnownPassword);
 
         await Page.GotoAsync(new Uri(_fixture.WebBaseUrl, "dashboard").ToString());
 
@@ -53,11 +49,10 @@ public class DashboardAuthorizationShould : PageTest
         // Admin during this same sign-in (ApplicationUserClaimsPrincipalFactory awaits the sync before the
         // cookie is written), so no separate grant-creation step is needed.
         await _fixture.IdentityApi.CreateUserAsync(
-            _fixture.AdminAllowlistedEmail, KnownPassword, CancellationToken.None);
+            _fixture.AdminAllowlistedEmail, TestCredentials.KnownPassword, CancellationToken.None);
 
-        var loginPage = new LoginPage(Page);
-        await loginPage.GotoAsync(_fixture.WebBaseUrl);
-        await loginPage.SubmitAsync(_fixture.AdminAllowlistedEmail, KnownPassword);
+        await new LoginPage(Page).SignInAsync(
+            _fixture.WebBaseUrl, _fixture.AdminAllowlistedEmail, TestCredentials.KnownPassword);
 
         await Page.GotoAsync(new Uri(_fixture.WebBaseUrl, "dashboard").ToString());
 

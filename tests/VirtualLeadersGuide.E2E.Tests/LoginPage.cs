@@ -9,12 +9,21 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// </summary>
 public sealed class LoginPage(IPage page)
 {
-    /// <summary>Navigates to <c>Account/Login</c>, optionally with a <c>ReturnUrl</c> query parameter.</summary>
+    /// <summary>Navigates to <c>Account/Login</c>, fills in the given credentials, and submits the form.</summary>
     /// <param name="webBaseUrl">The <c>web</c> resource's base URL (<see cref="AspireE2EFixture.WebBaseUrl"/>).</param>
+    /// <param name="email">The email to submit.</param>
+    /// <param name="password">The password to submit.</param>
     /// <param name="returnUrl">
-    /// A relative return URL to append as <c>?ReturnUrl=...</c>, or <see langword="null"/> to omit it.
+    /// A relative return URL to append to the Login page's <c>?ReturnUrl=...</c> query parameter before
+    /// navigating, or <see langword="null"/> to omit it.
     /// </param>
-    public async Task GotoAsync(Uri webBaseUrl, string? returnUrl = null)
+    public async Task SignInAsync(Uri webBaseUrl, string email, string password, string? returnUrl = null)
+    {
+        await GotoAsync(webBaseUrl, returnUrl);
+        await SubmitAsync(email, password);
+    }
+
+    private async Task GotoAsync(Uri webBaseUrl, string? returnUrl)
     {
         var loginUri = new Uri(webBaseUrl, "Account/Login");
         string target = returnUrl is null
@@ -24,8 +33,7 @@ public sealed class LoginPage(IPage page)
         await page.GotoAsync(target);
     }
 
-    /// <summary>Fills in and submits the Login form with the given credentials.</summary>
-    public async Task SubmitAsync(string email, string password)
+    private async Task SubmitAsync(string email, string password)
     {
         await page.Locator("#Input\\.Email").FillAsync(email);
         await page.Locator("#Input\\.Password").FillAsync(password);
