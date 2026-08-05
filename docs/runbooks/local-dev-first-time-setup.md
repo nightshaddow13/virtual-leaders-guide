@@ -31,6 +31,14 @@ For `acs-connection-string` (Azure Communication Services Email, [P2-1](p2-1-acs
 dotnet user-secrets set "Parameters:acs-connection-string" "<real-or-placeholder-value>" --project src/VirtualLeadersGuide.AppHost
 ```
 
+Also set your own email as the Admin allowlist (P2-4, #13; ADR-0008) - unlike the three secrets above, this
+one isn't fail-closed (an unset/empty value just means "no Admins yet"), but skipping it means your seeded
+account in step 3 lands on `/Account/NoAccess` instead of the dashboard:
+
+```powershell
+dotnet user-secrets set "Parameters:admin-allowlist" "you@example.com" --project src/VirtualLeadersGuide.AppHost
+```
+
 No `sqlserver-password` step needed - Aspire generates one automatically the first time `AddAzureSqlServer`
 runs.
 
@@ -47,12 +55,11 @@ assigned ports - `api` and `web` default to the ports in their own `launchSettin
 
 ## 3. Create your first account
 
-There is no Register page, and no seeding code ships with the *app* - deliberately: bootstrapping "how does
-a fresh environment get its first Admin" is P2-4's job (#13), not something P2-2 (#11) invents a second
-answer for. `tools/VirtualLeadersGuide.Tools.SeedUser` is a small checked-in dev tool (kept structurally
-separate from `src/` - see [ADR-0023](../adr/0023-developer-tooling-lives-in-top-level-tools-folder.md))
-that POSTs one account directly to Api's internal identity endpoint with a real ASP.NET Core Identity
-password hash, so it can actually sign in afterward.
+There is no Register page. `tools/VirtualLeadersGuide.Tools.SeedUser` is a small checked-in dev tool (kept
+structurally separate from `src/` - see
+[ADR-0023](../adr/0023-developer-tooling-lives-in-top-level-tools-folder.md)) that POSTs one account directly
+to Api's internal identity endpoint with a real ASP.NET Core Identity password hash, so it can actually sign
+in afterward.
 
 Run it while the AppHost is up, using the `internal-api-key` value from step 1:
 
@@ -66,29 +73,15 @@ always prompted for interactively, masked - it's never a command-line argument, 
 history. Run `--help` for the full option list.
 
 Sign in at `/Account/Login` (e.g. `https://localhost:7186/Account/Login`) with that email and the password
-you typed. Since nobody holds a Role grant yet (P2-4's config-driven allowlist auto-promotion isn't built,
-#13), you'll land on `/Account/NoAccess` right after signing in - that's expected, not a bug.
-
-### Optional: grant yourself Admin to see past NoAccess
-
-P2-4 isn't built, but P2-3's grant endpoint is - useful for exercising `/dashboard` locally before P2-4 lands.
-Find your seeded user's id (e.g. via the SQL Server container), then:
-
-```powershell
-curl -X POST http://localhost:5058/internal/authorization/users/<your-user-id>/grants `
-  -H "X-Internal-Key: local-dev-key" -H "Content-Type: application/json" `
-  -d '{"roleId": 1}'
-```
-
-`roleId: 1` is `Admin` (see `RoleIds` in `VirtualLeadersGuide.Identity.Contracts`). Sign out and back in
-afterward - role claims are stamped onto the cookie at sign-in (P2-5, #14), not refreshed for an already-open
-session.
+you typed. If that email matches the Admin allowlist you set in step 1, you're promoted to Admin on this very
+sign-in (P2-4, #13; ADR-0008) and land on `/dashboard`. If you skipped that step, or seeded a different email,
+you'll land on `/Account/NoAccess` instead - set/update the allowlist to your seeded email and sign in again.
 
 ## Verification
 
 - Sign-in succeeds and the NavMenu shows your email.
-- Visiting `/dashboard` redirects to `/Account/NoAccess` with a working sign-out link - unless you granted
-  yourself a Role above, in which case `/dashboard` renders its placeholder page instead.
+- With your seeded email on the Admin allowlist, `/dashboard` renders its placeholder page. Otherwise it
+  redirects to `/Account/NoAccess` with a working sign-out link.
 - Signing out returns the NavMenu to "Sign in".
 - Restarting just the `web` resource from the Aspire dashboard keeps you signed in - if it doesn't, the
   Data Protection key ring isn't persisting correctly (see [P2-2's Blob Storage

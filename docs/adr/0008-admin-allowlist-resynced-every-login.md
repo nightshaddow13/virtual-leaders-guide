@@ -1,3 +1,7 @@
+---
+status: sign-in mechanism amended by ADR-0019 (local ASP.NET Core Identity, not Entra ID) — re-sync-every-login decision below unchanged
+---
+
 # Admin config allowlist is re-synced on every login, not just seeded once
 
 No prior ADR or CONTEXT.md entry addresses how the very first Admin is created, since Admin status lives only

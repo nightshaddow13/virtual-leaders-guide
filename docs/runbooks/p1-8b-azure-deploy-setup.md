@@ -121,7 +121,8 @@ az containerapp update -g $rg -n vlg-web --set-env-vars `
   "InternalJwt__SigningKey=secretref:internal-jwt-key" `
   "ASPNETCORE_ENVIRONMENT=Production" `
   "ASPNETCORE_FORWARDEDHEADERS_ENABLED=true" `
-  "services__api__https__0=https://$apiInternalFqdn"
+  "services__api__https__0=https://$apiInternalFqdn" `
+  "AdminAllowlist__Emails=you@example.com"
 ```
 
 `vlg-web`'s `services__api__https__0` wires Aspire's client-side service discovery
@@ -130,6 +131,10 @@ environment to supply it. `vlg-web` still has no *managed identity* and never ta
 [P2-1](p2-1-acs-email-provisioning.md) and [P2-2](p2-2-blob-dataprotection-keys.md) for the two
 connection-string-shaped secrets (ACS Email, Blob Storage) it does hold, both following this same
 Container-Apps-secret pattern rather than the managed-identity one ADR-0016 uses for `vlg-api`↔SQL.
+
+`AdminAllowlist__Emails` (P2-4, #13; ADR-0008) is a plain env var, not a `secretref` — a list of emails isn't
+a credential. It's a `;`-delimited list (`"a@x.com;b@y.com"`); re-run this `az containerapp update` with an
+updated value to add/remove an Admin, then have that person sign in again to pick up the change.
 
 Keep the generated `$internalApiKey` value somewhere retrievable (e.g. a password manager) — it's not stored in
 GitHub, only as a Container Apps secret on both apps.

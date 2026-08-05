@@ -57,6 +57,12 @@ A platform-wide Role: can create, edit, and delete any Event's content, regardle
 a superset of what a Director can do.
 _Avoid_: Owner, SuperUser
 
+**Admin allowlist**:
+A config-driven list of emails, re-synced on every sign-in (ADR-0008): a listed email's User is promoted to
+Admin on their next login, an unlisted email's User is demoted on theirs. Config is authoritative, not the
+database — emptying the list demotes every Admin, with no special-casing to protect a "last Admin."
+_Avoid_: Whitelist, seed list, bootstrap list (this isn't a one-time seed — it's re-checked every login)
+
 **Director**:
 A Role granting read and edit access (not create or delete) to one or more specific Events — not a
 platform-wide Role. An Event can have multiple Directors, and one Director can be granted access to multiple
