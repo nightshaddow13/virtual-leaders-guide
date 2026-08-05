@@ -35,8 +35,10 @@ public sealed class AspireE2EFixture : IAsyncLifetime
     // internal-api-key and internal-jwt-key (P2-5, ADR-0007) and acs-connection-string (P2-1) all have no
     // default value (fail-closed, see AppHostShould.cs), so every AppHost testing builder must supply them
     // explicitly. Unlike AppHostShould.cs, this fixture actually waits for api/web to become healthy, so
-    // omitting internal-jwt-key here would leave both resources unable to start.
-    private static readonly string[] TestArgs =
+    // omitting internal-jwt-key here would leave both resources unable to start. admin-allowlist is built
+    // per-instance in InitializeAsync instead (see AdminAllowlistedEmail) - it needs a value generated at
+    // runtime, unlike the other three fixed test-only values here.
+    private static readonly string[] FixedTestArgs =
     [
         $"Parameters:internal-api-key={InternalApiKey}",
         $"Parameters:internal-jwt-key={InternalJwtKey}",
@@ -45,6 +47,7 @@ public sealed class AspireE2EFixture : IAsyncLifetime
 
     private DistributedApplication _app = null!;
     private HttpClient _probeClient = null!;
+    private HttpClient _identityApiHttpClient = null!;
 
     /// <summary>
     /// The <c>web</c> resource's HTTPS base URL, populated once <see cref="InitializeAsync"/> has proven both
@@ -54,15 +57,34 @@ public sealed class AspireE2EFixture : IAsyncLifetime
     /// </summary>
     public Uri WebBaseUrl { get; private set; } = null!;
 
+    /// <summary>
+    /// Seeds and mutates local-Identity accounts directly against <c>api</c>, for tests that need a real
+    /// account in place before driving the rendered Login form.
+    /// </summary>
+    public IdentityApiClient IdentityApi { get; private set; } = null!;
+
+    /// <summary>
+    /// A single email, generated fresh for this run and passed to the AppHost's <c>admin-allowlist</c>
+    /// parameter (P2-4, #13; ADR-0008), for the one test that needs to sign in as an allowlisted Admin.
+    /// </summary>
+    /// <remarks>
+    /// Run-scoped rather than a fixed literal: the SQL container's data volume persists across runs (see this
+    /// fixture's own <see cref="BuildFailureMessage"/>), so a fixed email would 409 on <c>CreateUserAsync</c>
+    /// the second time this suite runs against the same volume.
+    /// </remarks>
+    public string AdminAllowlistedEmail { get; } = $"e2e-admin-{Guid.NewGuid():n}@example.test";
+
     /// <inheritdoc/>
     public async Task InitializeAsync()
     {
         CancellationToken cancellationToken = CancellationToken.None;
 
+        string[] testArgs = [.. FixedTestArgs, $"Parameters:admin-allowlist={AdminAllowlistedEmail}"];
+
         try
         {
             var appHost = await DistributedApplicationTestingBuilder
-                .CreateAsync<Projects.VirtualLeadersGuide_AppHost>(TestArgs, cancellationToken);
+                .CreateAsync<Projects.VirtualLeadersGuide_AppHost>(testArgs, cancellationToken);
 
             _app = await appHost.BuildAsync(cancellationToken).WaitAsync(DefaultTimeout, cancellationToken);
             await _app.StartAsync(cancellationToken).WaitAsync(DefaultTimeout, cancellationToken);
@@ -86,6 +108,12 @@ public sealed class AspireE2EFixture : IAsyncLifetime
 
             await WaitForApiReadyAsync(cancellationToken).WaitAsync(DefaultTimeout, cancellationToken);
             await WaitForWebReadyAsync(cancellationToken).WaitAsync(DefaultTimeout, cancellationToken);
+
+            // Built only once api has proven it's actually serving requests (the probe just above) - tests
+            // that seed a user before their first navigation would otherwise race api's own startup.
+            _identityApiHttpClient = new HttpClient { BaseAddress = _app.GetEndpoint("api", "http") };
+            _identityApiHttpClient.DefaultRequestHeaders.Add(InternalApiKeyHeaderName, InternalApiKey);
+            IdentityApi = new IdentityApiClient(_identityApiHttpClient);
         }
         catch (TimeoutException ex)
         {
@@ -102,6 +130,7 @@ public sealed class AspireE2EFixture : IAsyncLifetime
     public async Task DisposeAsync()
     {
         _probeClient?.Dispose();
+        _identityApiHttpClient?.Dispose();
 
         if (_app is not null)
         {
