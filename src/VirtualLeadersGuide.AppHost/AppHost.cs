@@ -8,6 +8,10 @@ var internalApiKey = builder.AddParameter("internal-api-key", secret: true);
 // answer different trust questions and should rotate independently.
 var internalJwtKey = builder.AddParameter("internal-jwt-key", secret: true);
 var acsConnectionString = builder.AddParameter("acs-connection-string", secret: true);
+// Not a secret - a list of emails, not a credential (P2-4, #13; ADR-0008). Empty fallback so a developer who
+// hasn't set this yet still gets a clean `dotnet run` (no Admins) instead of a startup failure.
+var adminAllowlist = builder.AddParameter(
+    "admin-allowlist", () => builder.Configuration["Parameters:admin-allowlist"] ?? string.Empty);
 
 var sqlServer = builder.AddAzureSqlServer("sqlserver")
     .ConfigureInfrastructure(infra =>
@@ -63,6 +67,7 @@ builder.AddProject<Projects.VirtualLeadersGuide_Web>("web")
     .WaitFor(dataProtectionKeysContainer)
     .WithEnvironment("InternalApi__Key", internalApiKey)
     .WithEnvironment("InternalJwt__SigningKey", internalJwtKey)
-    .WithEnvironment("Email__ConnectionString", acsConnectionString);
+    .WithEnvironment("Email__ConnectionString", acsConnectionString)
+    .WithEnvironment("AdminAllowlist__Emails", adminAllowlist);
 
 builder.Build().Run();

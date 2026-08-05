@@ -22,9 +22,13 @@ public class ApplicationUserClaimsPrincipalFactoryShould
             new() { Id = Guid.NewGuid(), RoleId = RoleIds.Admin, RoleName = RoleNames.Admin, EventId = null },
             new() { Id = Guid.NewGuid(), RoleId = RoleIds.Director, RoleName = RoleNames.Director, EventId = Guid.NewGuid() }
         ];
-        var user = new ApplicationUser { Id = "user-1", UserName = "user@example.com" };
+        // Email is on the allowlist and already holds the Admin grant above, so the allowlist sync is a
+        // no-op here - this test is purely about claim stamping, not the sync itself (see
+        // AdminAllowlistSynchronizerShould for that).
+        const string email = "admin@example.com";
+        var user = new ApplicationUser { Id = "user-1", UserName = email, Email = email };
 
-        ClaimsPrincipal principal = await CreatePrincipalAsync(user, grants);
+        ClaimsPrincipal principal = await CreatePrincipalAsync(user, grants, allowlist: email);
 
         List<string> roleClaims = principal.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList();
         Assert.Equal(2, roleClaims.Count);
@@ -55,18 +59,52 @@ public class ApplicationUserClaimsPrincipalFactoryShould
         Assert.Empty(principal.FindAll(ClaimTypes.Role));
     }
 
-    private static async Task<ClaimsPrincipal> CreatePrincipalAsync(
-        ApplicationUser user, IReadOnlyList<RoleGrantDto>? grants)
+    [Fact]
+    public async Task StampTheAdminRoleClaim_WhenTheAllowlistPromotesTheUserDuringThisSignIn_ForCreateAsync()
     {
-        StubHttpMessageHandler handler = grants is null
+        // Proves the ordering guarantee AdminAllowlistSynchronizer's placement rests on: a user promoted by
+        // the allowlist gets the Admin claim on THIS sign-in's cookie, not the next one.
+        const string email = "new-admin@example.com";
+        var user = new ApplicationUser { Id = "user-1", UserName = email, Email = email };
+
+        ClaimsPrincipal principal = await CreatePrincipalAsync(user, new FakeAuthorizationApiHandler(), allowlist: email);
+
+        Assert.Contains(RoleNames.Admin, principal.FindAll(ClaimTypes.Role).Select(c => c.Value));
+    }
+
+    [Fact]
+    public async Task OmitTheAdminRoleClaim_WhenTheAllowlistDemotesTheUserDuringThisSignIn_ForCreateAsync()
+    {
+        const string email = "former-admin@example.com";
+        var user = new ApplicationUser { Id = "user-1", UserName = email, Email = email };
+        var handler = new FakeAuthorizationApiHandler();
+        handler.SeedAdminGrant(user.Id);
+
+        ClaimsPrincipal principal = await CreatePrincipalAsync(user, handler, allowlist: string.Empty);
+
+        Assert.Empty(principal.FindAll(ClaimTypes.Role));
+    }
+
+    private static async Task<ClaimsPrincipal> CreatePrincipalAsync(
+        ApplicationUser user, IReadOnlyList<RoleGrantDto>? grants, string allowlist = "")
+    {
+        HttpMessageHandler handler = grants is null
             ? StubHttpMessageHandler.RespondingWith(HttpStatusCode.NotFound)
             : StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, grants);
 
+        return await CreatePrincipalAsync(user, handler, allowlist);
+    }
+
+    private static async Task<ClaimsPrincipal> CreatePrincipalAsync(
+        ApplicationUser user, HttpMessageHandler handler, string allowlist)
+    {
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddHttpClient("Api", client => client.BaseAddress = new Uri("https://api.internal/"))
             .ConfigurePrimaryHttpMessageHandler(() => handler);
         services.AddScoped<ApiRoleGrantClient>();
+        services.Configure<AdminAllowlistOptions>(o => o.Emails = allowlist);
+        services.AddScoped<AdminAllowlistSynchronizer>();
         services.AddIdentityCore<ApplicationUser>()
             .AddUserStore<ApiUserStore>()
             .AddClaimsPrincipalFactory<ApplicationUserClaimsPrincipalFactory>();

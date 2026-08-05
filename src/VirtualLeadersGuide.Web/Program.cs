@@ -39,8 +39,13 @@ builder.Services.AddIdentityCore<ApplicationUser>(options => options.SignIn.Requ
 
 builder.Services.AddScoped<IEmailSender<ApplicationUser>, AcsEmailSender>();
 
-// Unconsumed until P2-4 (#13)/P2-5 (#14) - registered now so those tickets are pure consumers (P2-3, #12).
 builder.Services.AddScoped<ApiRoleGrantClient>();
+
+// Promotes/demotes the platform-wide Admin grant to match the config-driven allowlist on every sign-in
+// (P2-4, #13; ADR-0008) - consumed by ApplicationUserClaimsPrincipalFactory above.
+builder.Services.Configure<AdminAllowlistOptions>(
+    builder.Configuration.GetSection(AdminAllowlistOptions.SectionName));
+builder.Services.AddScoped<AdminAllowlistSynchronizer>();
 
 // Mints/caches the internal JWT (P2-5, #14, ADR-0007) and attaches it to outbound Api calls. Scoped, not
 // singleton: in Blazor Server that's one instance per circuit, which is the caching unit ADR-0007 specifies.

@@ -23,25 +23,27 @@ namespace VirtualLeadersGuide.Web.Identity;
 public sealed class ApplicationUserClaimsPrincipalFactory(
     UserManager<ApplicationUser> userManager,
     IOptions<IdentityOptions> optionsAccessor,
-    ApiRoleGrantClient roleGrantClient)
+    AdminAllowlistSynchronizer allowlistSynchronizer)
     : UserClaimsPrincipalFactory<ApplicationUser>(userManager, optionsAccessor)
 {
     /// <inheritdoc/>
     /// <remarks>
     /// Adds one <see cref="ClaimTypes.Role"/> claim per grant returned by
-    /// <see cref="ApiRoleGrantClient.GetGrantsAsync"/>, on top of the base claims. A <see langword="null"/>
-    /// result (the user's row no longer exists on <c>Api</c>) adds no role claims rather than throwing - the
-    /// existing security-stamp revalidation signs such a user out on its own within
+    /// <see cref="AdminAllowlistSynchronizer.SyncAsync"/> - which promotes/demotes the platform-wide Admin
+    /// grant to match the Admin allowlist (ADR-0008) before returning the up-to-date grant list, so this same
+    /// sign-in already reflects any allowlist change. A <see langword="null"/> result (the user's row no
+    /// longer exists on <c>Api</c>) adds no role claims rather than throwing - the existing security-stamp
+    /// revalidation signs such a user out on its own within
     /// <see cref="Components.Account.IdentityRevalidatingAuthenticationStateProvider"/>'s next cycle. A
-    /// genuine <c>Api</c> outage still surfaces as <see cref="AuthorizationDataUnavailableException"/>,
-    /// which <see cref="ApiRoleGrantClient.GetGrantsAsync"/> throws rather than this method swallowing it.
+    /// genuine <c>Api</c> outage still surfaces as <see cref="AuthorizationDataUnavailableException"/>, which
+    /// <see cref="AdminAllowlistSynchronizer.SyncAsync"/> throws rather than this method swallowing it.
     /// </remarks>
     protected override async Task<ClaimsIdentity> GenerateClaimsAsync(ApplicationUser user)
     {
         ClaimsIdentity identity = await base.GenerateClaimsAsync(user);
 
         IReadOnlyList<RoleGrantDto>? grants =
-            await roleGrantClient.GetGrantsAsync(user.Id, CancellationToken.None);
+            await allowlistSynchronizer.SyncAsync(user, CancellationToken.None);
 
         if (grants is not null)
         {
