@@ -1,7 +1,5 @@
 using System.Net;
 using System.Net.Http.Json;
-using Microsoft.Extensions.DependencyInjection;
-using VirtualLeadersGuide.Api.Data;
 using VirtualLeadersGuide.Identity.Contracts;
 
 namespace VirtualLeadersGuide.Api.Tests;
@@ -36,8 +34,8 @@ public class InternalAuthorizationEndpointsShould : IAsyncLifetime
         // P2-6, #15: UserRoles.EventId is now a real FK - a request naming an EventId with no matching Events
         // row would fail (see EventSchemaShould's cascade-delete coverage for the FK itself), so this test's
         // fixture needs real Events, not just any Guid.
-        Guid eventAId = await CreateEventAsync();
-        Guid eventBId = await CreateEventAsync();
+        Guid eventAId = (await _factory.CreateEventAsync()).Id;
+        Guid eventBId = (await _factory.CreateEventAsync()).Id;
 
         RoleGrantDto adminGrant = await CreateGrantAsync(userId, RoleIds.Admin, eventId: null);
         Assert.Equal(RoleNames.Admin, adminGrant.RoleName);
@@ -149,20 +147,6 @@ public class InternalAuthorizationEndpointsShould : IAsyncLifetime
         HttpResponseMessage response = await _client.PostAsJsonAsync(InternalIdentityRoutes.ForUsers(), dto);
         response.EnsureSuccessStatusCode();
         return dto.Id;
-    }
-
-    private async Task<Guid> CreateEventAsync()
-    {
-        using IServiceScope scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
-        var id = Guid.NewGuid();
-
-        db.Events.Add(new Event
-        {
-            Id = id, Name = $"Event {id}", Slug = $"event-{id}", Passcode = PasscodeGenerator.Generate()
-        });
-        await db.SaveChangesAsync();
-        return id;
     }
 
     private async Task<RoleGrantDto> CreateGrantAsync(string userId, int roleId, Guid? eventId)

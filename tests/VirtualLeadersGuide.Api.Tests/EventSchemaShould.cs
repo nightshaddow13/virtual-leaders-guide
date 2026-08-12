@@ -29,7 +29,8 @@ public class EventSchemaShould : IAsyncLifetime
         using IServiceScope scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
 
-        db.Events.AddRange(NewEvent("Fall Retreat", "fall-retreat"), NewEvent("Spring Retreat", "spring-retreat"));
+        db.Events.AddRange(
+            Event.Create("Fall Retreat", "fall-retreat"), Event.Create("Spring Retreat", "spring-retreat"));
         await db.SaveChangesAsync();
 
         Assert.Equal(2, await db.Events.CountAsync());
@@ -41,10 +42,10 @@ public class EventSchemaShould : IAsyncLifetime
         using IServiceScope scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
 
-        db.Events.Add(NewEvent("Fall Retreat", "fall-retreat"));
+        db.Events.Add(Event.Create("Fall Retreat", "fall-retreat"));
         await db.SaveChangesAsync();
 
-        db.Events.Add(NewEvent("Fall Retreat", "fall-retreat-2"));
+        db.Events.Add(Event.Create("Fall Retreat", "fall-retreat-2"));
 
         await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
     }
@@ -55,10 +56,10 @@ public class EventSchemaShould : IAsyncLifetime
         using IServiceScope scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
 
-        db.Events.Add(NewEvent("Fall Retreat", "retreat"));
+        db.Events.Add(Event.Create("Fall Retreat", "retreat"));
         await db.SaveChangesAsync();
 
-        db.Events.Add(NewEvent("Spring Retreat", "retreat"));
+        db.Events.Add(Event.Create("Spring Retreat", "retreat"));
 
         await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
     }
@@ -71,7 +72,7 @@ public class EventSchemaShould : IAsyncLifetime
 
         // The Name setter trims, so this reaches SaveChanges as an all-whitespace string, which
         // CK_Events_Name_NotEmpty must reject rather than a trimmed-to-empty string sneaking through.
-        db.Events.Add(NewEvent("   ", "blank-name"));
+        db.Events.Add(Event.Create("   ", "blank-name"));
 
         await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
     }
@@ -89,7 +90,7 @@ public class EventSchemaShould : IAsyncLifetime
 
         // Event.Slug's setter lowercases but doesn't reject bad characters/hyphen placement - the DB
         // constraint (CK_Events_Slug_Format) is the actual backstop under test here.
-        db.Events.Add(NewEvent("Some Event", invalidSlug));
+        db.Events.Add(Event.Create("Some Event", invalidSlug));
 
         await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
     }
@@ -99,7 +100,7 @@ public class EventSchemaShould : IAsyncLifetime
     {
         using IServiceScope scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
-        var @event = NewEvent("Fall Retreat", "fall-retreat");
+        var @event = Event.Create("Fall Retreat", "fall-retreat");
         db.Events.Add(@event);
         ApplicationUser director = await AddUserAsync(db);
         db.DomainUserRoles.Add(
@@ -117,7 +118,7 @@ public class EventSchemaShould : IAsyncLifetime
     {
         using IServiceScope scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
-        var @event = NewEvent("Fall Retreat", "fall-retreat");
+        var @event = Event.Create("Fall Retreat", "fall-retreat");
         db.Events.Add(@event);
         ApplicationUser admin = await AddUserAsync(db);
         db.DomainUserRoles.Add(new UserRole { Id = Guid.NewGuid(), UserId = admin.Id, RoleId = RoleIds.Admin });
@@ -128,14 +129,6 @@ public class EventSchemaShould : IAsyncLifetime
 
         Assert.True(await db.DomainUserRoles.AnyAsync(g => g.UserId == admin.Id && g.EventId == null));
     }
-
-    private static Event NewEvent(string name, string slug) => new()
-    {
-        Id = Guid.NewGuid(),
-        Name = name,
-        Slug = slug,
-        Passcode = PasscodeGenerator.Generate()
-    };
 
     private static async Task<ApplicationUser> AddUserAsync(VirtualLeadersGuideDbContext db)
     {

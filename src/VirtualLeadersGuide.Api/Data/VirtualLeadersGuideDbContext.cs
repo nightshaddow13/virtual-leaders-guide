@@ -25,6 +25,7 @@ public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDb
     public DbSet<UserRole> DomainUserRoles => Set<UserRole>();
 
     // No "Domain" prefix needed - nothing on IdentityDbContext<ApplicationUser> already uses "Events".
+    /// <summary>Every <see cref="Event"/> row.</summary>
     public DbSet<Event> Events => Set<Event>();
 
     protected override void OnModelCreating(ModelBuilder builder)
@@ -140,10 +141,8 @@ public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDb
     // a missing key elsewhere in this project.
     private DataProtectionStringConverter BuildPasscodeConverter()
     {
-        IServiceProvider? appServices = this.GetService<IDbContextOptions>()
-            .Extensions.OfType<CoreOptionsExtension>().FirstOrDefault()?.ApplicationServiceProvider;
-
-        if (appServices?.GetService(typeof(IDataProtectionProvider)) is not IDataProtectionProvider provider)
+        if (GetApplicationServiceProvider()?.GetService(typeof(IDataProtectionProvider))
+            is not IDataProtectionProvider provider)
         {
             throw new InvalidOperationException(
                 "Event.Passcode requires an IDataProtectionProvider - the host must call AddDataProtection() " +
@@ -152,4 +151,13 @@ public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDb
 
         return new DataProtectionStringConverter(provider.CreateProtector("VirtualLeadersGuide.Event.Passcode"));
     }
+
+    // Isolated behind its own method rather than inlined into BuildPasscodeConverter - this reach into EF
+    // Core's internal CoreOptionsExtension is inherently a bit fragile (see BuildPasscodeConverter's comment
+    // for why a pooled context forces this route instead of constructor injection), so keeping it to one
+    // named, documented spot means a future EF Core version that changes this internal path only needs
+    // updating here.
+    private IServiceProvider? GetApplicationServiceProvider() =>
+        this.GetService<IDbContextOptions>().Extensions.OfType<CoreOptionsExtension>()
+            .FirstOrDefault()?.ApplicationServiceProvider;
 }

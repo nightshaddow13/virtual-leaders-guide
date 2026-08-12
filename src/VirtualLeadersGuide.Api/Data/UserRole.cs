@@ -24,5 +24,6 @@ public class UserRole
 
     public Guid? EventId { get; set; }
 
+    /// <summary>The Event this grant is scoped to, or <see langword="null"/> for a platform-wide grant.</summary>
     public Event? Event { get; set; }
 }

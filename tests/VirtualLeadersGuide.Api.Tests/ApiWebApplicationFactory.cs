@@ -102,6 +102,24 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>
+    /// Creates and persists a new <see cref="Event"/> via <see cref="Event.Create"/> - for tests (P2-6, #15)
+    /// that need a real row satisfying <c>UserRoles.EventId</c>'s foreign key, rather than just an in-memory
+    /// object. Uses a fresh Guid-suffixed default Name (and the Slug <see cref="Event.Create"/> derives from
+    /// it) when <paramref name="name"/> is omitted, so repeated calls within one test don't collide on the
+    /// Name/Slug unique indexes.
+    /// </summary>
+    public async Task<Event> CreateEventAsync(string? name = null)
+    {
+        using IServiceScope scope = Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        Event @event = Event.Create(name ?? $"Event {Guid.NewGuid()}");
+
+        dbContext.Events.Add(@event);
+        await dbContext.SaveChangesAsync();
+        return @event;
+    }
+
+    /// <summary>
     /// An <see cref="HttpClient"/> carrying only <c>X-Internal-Key</c> - what a genuine <c>/internal/*</c>
     /// caller sends (ADR-0022/0024), and what the JSON:API resource surface used to accept alone before this
     /// ticket. Use <see cref="CreateUserClient"/> for <c>/api/*</c> calls now that they additionally require

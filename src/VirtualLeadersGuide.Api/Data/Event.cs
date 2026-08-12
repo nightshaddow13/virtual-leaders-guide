@@ -54,4 +54,27 @@ public class Event
 
     /// <summary>The Director (and future Event-scoped role) grants scoped to this Event.</summary>
     public ICollection<UserRole> RoleGrants { get; set; } = new List<UserRole>();
+
+    /// <summary>
+    /// Creates a new <see cref="Event"/> with a fresh <see cref="Id"/>, <paramref name="name"/>, a
+    /// <see cref="Slug"/> auto-derived from <paramref name="name"/> via <see cref="Slug.From"/> when
+    /// <paramref name="slug"/> is omitted (the AC this ticket, P2-6/#15, is named for), and a freshly
+    /// generated <see cref="Passcode"/>.
+    /// </summary>
+    /// <param name="name">The Event's display label.</param>
+    /// <param name="slug">
+    /// An explicit Slug to use instead of the one derived from <paramref name="name"/> - omit to get the
+    /// auto-derived starting value the acceptance criteria describes. Callers editing an existing Event's Slug
+    /// afterward just assign <see cref="Slug"/> directly rather than calling this factory again.
+    /// </param>
+    public static Event Create(string name, string? slug = null) => new()
+    {
+        Id = Guid.NewGuid(),
+        Name = name,
+        // Fully qualified - "Slug" unqualified inside this class body resolves to the instance property
+        // above, not the Slug static class, even in this static method (simple-name lookup favors the
+        // enclosing type's own members over other types in scope).
+        Slug = slug ?? VirtualLeadersGuide.Api.Data.Slug.From(name),
+        Passcode = PasscodeGenerator.Generate()
+    };
 }
