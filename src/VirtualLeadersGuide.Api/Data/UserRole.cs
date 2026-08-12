@@ -5,8 +5,10 @@ namespace VirtualLeadersGuide.Api.Data;
 // roles). UserId is ApplicationUser.Id (string) - there is no separate domain User row; ADR-0024
 // supersedes ADR-0017's three-table design once ADR-0019 brought credentials in-house.
 //
-// EventId is deliberately an unenforced Guid? with no navigation/FK: Event doesn't exist yet (P2-6, #15).
-// P2-6 must give Event a Guid primary key to match this column - see the comment left on that issue.
+// EventId is now a real FK against Event.Id (P2-6, #15) with a cascade delete (VirtualLeadersGuideDbContext) -
+// provisional, since no ticket builds Event deletion yet (only archiving is planned near-term); whoever
+// eventually builds it should revisit this behavior rather than assume it was a considered choice for that
+// feature specifically.
 // Like Role, not a JsonApiDotNetCore resource yet - P2-8 (#17) is what turns this into one.
 public class UserRole
 {
@@ -21,4 +23,6 @@ public class UserRole
     public Role? Role { get; set; }
 
     public Guid? EventId { get; set; }
+
+    public Event? Event { get; set; }
 }

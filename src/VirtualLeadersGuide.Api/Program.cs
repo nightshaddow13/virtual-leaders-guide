@@ -1,8 +1,10 @@
 using System.Security.Claims;
 using System.Text;
+using Azure.Storage.Blobs;
 using JsonApiDotNetCore.Configuration;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using VirtualLeadersGuide.Api;
@@ -16,6 +18,20 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 
 builder.AddSqlServerDbContext<VirtualLeadersGuideDbContext>("virtualleadersguide");
+
+// --- Data Protection keys persisted to Blob Storage (P2-6, #15; ADR-0026) ---
+// Event.Passcode is encrypted at this layer (VirtualLeadersGuideDbContext's Event configuration), so Api
+// needs its own Data Protection key ring - isolated from Web's (separate application name, separate blob key
+// file in the same container), so neither app can decrypt data the other one protected. Same blob-persistence
+// reasoning as Web's own key ring (P2-2, #11; docs/runbooks/p2-2-blob-dataprotection-keys.md): min-replicas 0
+// (ADR-0005) means an in-memory key ring would silently make every stored Passcode undecryptable on restart.
+builder.AddAzureBlobServiceClient("blobs");
+builder.Services.AddDataProtection()
+    .SetApplicationName("VirtualLeadersGuide.Api")
+    .PersistKeysToAzureBlobStorage(services =>
+        services.GetRequiredService<BlobServiceClient>()
+            .GetBlobContainerClient("dataprotection-keys")
+            .GetBlobClient("api-keys.xml"));
 
 builder.Services.AddAuthentication(InternalApiKeyDefaults.AuthenticationScheme)
     .AddScheme<InternalApiKeyAuthenticationOptions, InternalApiKeyAuthenticationHandler>(

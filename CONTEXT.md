@@ -37,7 +37,9 @@ _Avoid_: ContentPage
 **Passcode**:
 A single shared secret for an Event (one value at a time, editable by an Admin/Director — no rotation history),
 entered by a visitor to unlock read access to that event's Leaders Guide. Not tied to an individual identity —
-anyone with the passcode gets the same access.
+anyone with the passcode gets the same access. Auto-generated (two common words, e.g. `TigerLantern`) the
+moment an Event is created, so every Event has a working Passcode immediately — never blank, unlike waiting on
+an Admin to set one.
 _Avoid_: AccessCode, SiteCode
 
 **User**:

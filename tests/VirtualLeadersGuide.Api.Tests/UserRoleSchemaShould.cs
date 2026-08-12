@@ -41,10 +41,12 @@ public class UserRoleSchemaShould : IAsyncLifetime
         using IServiceScope scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
         ApplicationUser user = await AddUserAsync(db);
+        Event eventA = await AddEventAsync(db);
+        Event eventB = await AddEventAsync(db);
 
         db.DomainUserRoles.AddRange(
-            new UserRole { Id = Guid.NewGuid(), UserId = user.Id, RoleId = RoleIds.Director, EventId = Guid.NewGuid() },
-            new UserRole { Id = Guid.NewGuid(), UserId = user.Id, RoleId = RoleIds.Director, EventId = Guid.NewGuid() });
+            new UserRole { Id = Guid.NewGuid(), UserId = user.Id, RoleId = RoleIds.Director, EventId = eventA.Id },
+            new UserRole { Id = Guid.NewGuid(), UserId = user.Id, RoleId = RoleIds.Director, EventId = eventB.Id });
 
         await db.SaveChangesAsync();
 
@@ -58,7 +60,8 @@ public class UserRoleSchemaShould : IAsyncLifetime
         var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
         ApplicationUser userA = await AddUserAsync(db);
         ApplicationUser userB = await AddUserAsync(db);
-        var eventId = Guid.NewGuid();
+        Event @event = await AddEventAsync(db);
+        var eventId = @event.Id;
 
         db.DomainUserRoles.AddRange(
             new UserRole { Id = Guid.NewGuid(), UserId = userA.Id, RoleId = RoleIds.Director, EventId = eventId },
@@ -89,10 +92,11 @@ public class UserRoleSchemaShould : IAsyncLifetime
         using IServiceScope scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
         ApplicationUser user = await AddUserAsync(db);
+        Event @event = await AddEventAsync(db);
 
         db.DomainUserRoles.AddRange(
             new UserRole { Id = Guid.NewGuid(), UserId = user.Id, RoleId = RoleIds.Director, EventId = null },
-            new UserRole { Id = Guid.NewGuid(), UserId = user.Id, RoleId = RoleIds.Director, EventId = Guid.NewGuid() });
+            new UserRole { Id = Guid.NewGuid(), UserId = user.Id, RoleId = RoleIds.Director, EventId = @event.Id });
 
         await db.SaveChangesAsync();
 
@@ -120,7 +124,8 @@ public class UserRoleSchemaShould : IAsyncLifetime
         using IServiceScope scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
         ApplicationUser user = await AddUserAsync(db);
-        var eventId = Guid.NewGuid();
+        Event @event = await AddEventAsync(db);
+        var eventId = @event.Id;
 
         db.DomainUserRoles.Add(
             new UserRole { Id = Guid.NewGuid(), UserId = user.Id, RoleId = RoleIds.Director, EventId = eventId });
@@ -161,5 +166,20 @@ public class UserRoleSchemaShould : IAsyncLifetime
         db.Users.Add(user);
         await db.SaveChangesAsync();
         return user;
+    }
+
+    // P2-6, #15: UserRoles.EventId is now a real FK - EventId must reference an actual Events row, not just
+    // any Guid, so every test here that scopes a grant to an Event needs one to exist first.
+    private static async Task<Event> AddEventAsync(VirtualLeadersGuideDbContext db)
+    {
+        var id = Guid.NewGuid();
+        var @event = new Event
+        {
+            Id = id, Name = $"Event {id}", Slug = $"event-{id}", Passcode = PasscodeGenerator.Generate()
+        };
+
+        db.Events.Add(@event);
+        await db.SaveChangesAsync();
+        return @event;
     }
 }

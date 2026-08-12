@@ -13,10 +13,17 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- P2-6, #15: Event.Passcode's Data Protection key ring (ADR-0026) persists to the same Blob Storage
+         account Web already uses (docs/runbooks/p2-2-blob-dataprotection-keys.md), under its own key file. -->
+    <PackageReference Include="Aspire.Azure.Storage.Blobs" Version="13.4.6" />
     <PackageReference Include="Aspire.Microsoft.EntityFrameworkCore.SqlServer" Version="13.4.6" />
+    <PackageReference Include="Azure.Extensions.AspNetCore.DataProtection.Blobs" Version="1.5.3" />
     <PackageReference Include="JsonApiDotNetCore" Version="5.11.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.10" />
+    <!-- P2-6, #15: generates Event.Passcode as a memorable two-word phrase (ADR-0027) rather than an opaque
+         random token, using the real EFF Large Wordlist. -->
+    <PackageReference Include="PasswordGenerator" Version="3.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.10" />
     <!-- Pinned to match Microsoft.Data.SqlClient.Extensions.Azure's version exactly: EF Core SqlServer
          10.0.10 otherwise resolves the core package one patch behind (7.0.1), and that skew makes the
