@@ -3,6 +3,9 @@ using System.Text;
 
 namespace VirtualLeadersGuide.Api.Data;
 
+// Named SlugDerivation, not Slug - a static class named exactly "Slug" collided with Event.Slug (the
+// property) badly enough to force fully-qualified references and an explanatory comment at every call site
+// (see Event.Create). Renaming the type instead of working around the collision at each use.
 /// <summary>
 /// Derives a URL-safe starting value for <see cref="Event.Slug"/> from an Event's <see cref="Event.Name"/>
 /// (CONTEXT.md's Slug entry - "auto-derived from Name but editable"). A pure string transform: it never
@@ -10,7 +13,7 @@ namespace VirtualLeadersGuide.Api.Data;
 /// collision when the second save trips the unique index - resolved by the Admin editing the Slug by hand,
 /// not by this helper silently appending a suffix on their behalf (a route the Admin never chose).
 /// </summary>
-public static class Slug
+public static class SlugDerivation
 {
     // Matches Event.Slug's column length (VirtualLeadersGuideDbContext) - truncating here rather than letting
     // an oversized candidate reach the database and fail the CHECK constraint / column length there instead.
@@ -20,10 +23,14 @@ public static class Slug
     /// Converts <paramref name="name"/> into a lowercase, hyphen-separated, URL-safe candidate Slug:
     /// diacritics are stripped (<c>"Café"</c> → <c>"cafe"</c>), runs of non-alphanumeric characters collapse
     /// to a single hyphen, leading/trailing hyphens are trimmed, and the result is truncated to fit the
-    /// <see cref="Event.Slug"/> column. Returns <see cref="string.Empty"/> when nothing survives (e.g.
+    /// <see cref="Event.Slug"/> column.
+    /// </summary>
+    /// <param name="name">The Event Name to derive a candidate Slug from.</param>
+    /// <returns>
+    /// The derived candidate Slug, or <see cref="string.Empty"/> when nothing survives (e.g.
     /// <paramref name="name"/> is entirely punctuation/whitespace) - the caller decides what to do with that;
     /// this helper doesn't invent a fallback value.
-    /// </summary>
+    /// </returns>
     public static string From(string name)
     {
         string decomposed = name.Normalize(NormalizationForm.FormD);

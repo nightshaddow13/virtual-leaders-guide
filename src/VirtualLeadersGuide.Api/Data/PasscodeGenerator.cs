@@ -11,8 +11,8 @@ namespace VirtualLeadersGuide.Api.Data;
 // Not a property initializer on Event.Passcode - EF Core constructs an Event via `new Event()` every time it
 // materializes a row from a query, before overwriting properties with the persisted values. A property
 // initializer here would silently burn a cryptographically-random passphrase generation on every single row
-// read, for a value immediately discarded. Callers (P2-7's Event-creation path) must call Generate()
-// explicitly instead, same pattern as Slug.From.
+// read, for a value immediately discarded. Callers (Event.Create) must call Generate() explicitly instead,
+// same pattern as SlugDerivation.From.
 /// <summary>
 /// Generates a fresh <see cref="Event.Passcode"/> value: two Title-cased words from the EFF Large Wordlist
 /// concatenated with no separator (e.g. <c>TigerLantern</c>) - memorable enough for a visitor to read off a
@@ -21,6 +21,7 @@ namespace VirtualLeadersGuide.Api.Data;
 public static class PasscodeGenerator
 {
     /// <summary>Generates a new random two-word Passcode.</summary>
+    /// <returns>A freshly generated, two-word Passcode value (e.g. <c>TigerLantern</c>).</returns>
     public static string Generate()
     {
         IPasswordGenerator generator = Password.ForPassphrase(

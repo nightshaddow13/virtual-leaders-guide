@@ -104,10 +104,13 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
     /// <summary>
     /// Creates and persists a new <see cref="Event"/> via <see cref="Event.Create"/> - for tests (P2-6, #15)
     /// that need a real row satisfying <c>UserRoles.EventId</c>'s foreign key, rather than just an in-memory
-    /// object. Uses a fresh Guid-suffixed default Name (and the Slug <see cref="Event.Create"/> derives from
-    /// it) when <paramref name="name"/> is omitted, so repeated calls within one test don't collide on the
-    /// Name/Slug unique indexes.
+    /// object.
     /// </summary>
+    /// <param name="name">
+    /// The Event's Name. Omit to get a fresh Guid-suffixed default (and the Slug <see cref="Event.Create"/>
+    /// derives from it), so repeated calls within one test don't collide on the Name/Slug unique indexes.
+    /// </param>
+    /// <returns>The newly persisted <see cref="Event"/>.</returns>
     public async Task<Event> CreateEventAsync(string? name = null)
     {
         using IServiceScope scope = Services.CreateScope();

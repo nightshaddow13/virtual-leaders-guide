@@ -92,14 +92,14 @@ public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDb
                 // has to actually parse there too).
                 table.HasCheckConstraint("CK_Events_Name_NotEmpty", "TRIM(Name) <> ''");
 
-                // Backstops Slug's URL-safety beyond what Slug.From's callers might produce or an Admin might
-                // hand-type: lowercase alphanumerics with single internal hyphens only, no leading/trailing
-                // hyphen, non-empty. Built from LIKE with only '%' wildcards plus a REPLACE-chain, not a
-                // bracket character class (SQL Server's LIKE '[^a-z0-9-]' isn't recognized as a character
-                // class by SQLite's LIKE at all - and SQLite's GLOB equivalent isn't recognized by SQL Server -
-                // so neither engine's native syntax is usable here). Verbose, but every piece is standard SQL
-                // both engines execute identically. (Slug's own setter already forces lowercase, so this only
-                // ever needs to guard characters/hyphen placement, not case.)
+                // Backstops Slug's URL-safety beyond what SlugDerivation.From's callers might produce or an
+                // Admin might hand-type: lowercase alphanumerics with single internal hyphens only, no
+                // leading/trailing hyphen, non-empty. Built from LIKE with only '%' wildcards plus a
+                // REPLACE-chain, not a bracket character class (SQL Server's LIKE '[^a-z0-9-]' isn't recognized
+                // as a character class by SQLite's LIKE at all - and SQLite's GLOB equivalent isn't recognized
+                // by SQL Server - so neither engine's native syntax is usable here). Verbose, but every piece is
+                // standard SQL both engines execute identically. (Slug's own setter already forces lowercase,
+                // so this only ever needs to guard characters/hyphen placement, not case.)
                 table.HasCheckConstraint("CK_Events_Slug_Format", BuildSlugFormatCheckSql());
             });
 

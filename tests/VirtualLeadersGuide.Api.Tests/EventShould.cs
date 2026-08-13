@@ -5,7 +5,7 @@ namespace VirtualLeadersGuide.Api.Tests;
 // Unit-level coverage of Event.Create in isolation (no DbContext/DB involved) - complements EventSchemaShould,
 // which exercises Event against the real EF model/constraints. This is what actually proves P2-6's (#15) first
 // AC bullet - "a URL-safe Slug is auto-derived from the Name as a starting value" - since nothing else in this
-// ticket calls Slug.From at Event-construction time.
+// ticket calls SlugDerivation.From at Event-construction time.
 public class EventShould
 {
     [Fact]

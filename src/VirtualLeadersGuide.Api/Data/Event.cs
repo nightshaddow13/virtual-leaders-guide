@@ -33,10 +33,10 @@ public class Event
 
     /// <summary>
     /// The URL-safe route key for this Event's public Leaders Guide (<c>yourdomain.com/e/{slug}</c>,
-    /// ADR-0005). Auto-derived from <see cref="Name"/> via <see cref="Slug.From"/> as a starting value, but
-    /// editable afterward (CONTEXT.md's Slug entry). Always lowercase - the setter normalizes on assignment
-    /// (not just on save) so route resolution stays unambiguous regardless of how it was typed, and so the
-    /// in-memory value never disagrees with what's persisted. The database charset CHECK constraint
+    /// ADR-0005). Auto-derived from <see cref="Name"/> via <see cref="SlugDerivation.From"/> as a starting
+    /// value, but editable afterward (CONTEXT.md's Slug entry). Always lowercase - the setter normalizes on
+    /// assignment (not just on save) so route resolution stays unambiguous regardless of how it was typed, and
+    /// so the in-memory value never disagrees with what's persisted. The database charset CHECK constraint
     /// (<see cref="VirtualLeadersGuideDbContext"/>) is the backstop for anything that writes this column
     /// outside this setter.
     /// </summary>
@@ -57,7 +57,7 @@ public class Event
 
     /// <summary>
     /// Creates a new <see cref="Event"/> with a fresh <see cref="Id"/>, <paramref name="name"/>, a
-    /// <see cref="Slug"/> auto-derived from <paramref name="name"/> via <see cref="Slug.From"/> when
+    /// <see cref="Slug"/> auto-derived from <paramref name="name"/> via <see cref="SlugDerivation.From"/> when
     /// <paramref name="slug"/> is omitted (the AC this ticket, P2-6/#15, is named for), and a freshly
     /// generated <see cref="Passcode"/>.
     /// </summary>
@@ -67,14 +67,12 @@ public class Event
     /// auto-derived starting value the acceptance criteria describes. Callers editing an existing Event's Slug
     /// afterward just assign <see cref="Slug"/> directly rather than calling this factory again.
     /// </param>
+    /// <returns>The newly constructed, not-yet-persisted <see cref="Event"/>.</returns>
     public static Event Create(string name, string? slug = null) => new()
     {
         Id = Guid.NewGuid(),
         Name = name,
-        // Fully qualified - "Slug" unqualified inside this class body resolves to the instance property
-        // above, not the Slug static class, even in this static method (simple-name lookup favors the
-        // enclosing type's own members over other types in scope).
-        Slug = slug ?? VirtualLeadersGuide.Api.Data.Slug.From(name),
+        Slug = slug ?? SlugDerivation.From(name),
         Passcode = PasscodeGenerator.Generate()
     };
 }

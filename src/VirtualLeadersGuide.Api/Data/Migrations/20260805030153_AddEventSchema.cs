@@ -39,18 +39,17 @@ namespace VirtualLeadersGuide.Api.Data.Migrations
                 column: "Slug",
                 unique: true);
 
-            // Events did not exist before this migration, so UserRoles.EventId - a pre-existing, previously
-            // unenforced column (P2-3, #12) - cannot possibly hold a value that matches a real Events row yet.
-            // Null out any non-null EventId before the FK below, rather than let AddForeignKey fail outright
-            // on a database where that column was ever populated (P2-8, #17, is the only ticket that could
-            // have written to it, and hasn't shipped as of this migration - so this is a no-op today, but
-            // guards the "no data loss on an existing database" acceptance criterion against that assumption
-            // ever turning out to be wrong, e.g. via a manual seed script). This can't be recovered any other
-            // way: no Events row exists yet for an orphaned EventId to be backfilled against.
-            migrationBuilder.Sql(
-                "UPDATE [UserRoles] SET [EventId] = NULL WHERE [EventId] IS NOT NULL " +
-                "AND NOT EXISTS (SELECT 1 FROM [Events] WHERE [Events].[Id] = [UserRoles].[EventId]);");
-
+            // No pre-emptive cleanup of UserRoles.EventId before this FK - an earlier version of this
+            // migration nulled out any non-null EventId with no matching Events row first, reasoning that
+            // AddForeignKey would otherwise fail outright on a database where that column was ever populated.
+            // That's backwards for "no data loss on an existing database" (AC5): AddForeignKey failing IS the
+            // safe outcome - the migration aborts, nothing is touched, and a human investigates. Silently
+            // nulling real column values to force the FK to succeed is the actual data-loss path, and doing it
+            // unconditionally (as the removed step did) would have discarded a value on every single row that
+            // had one, not just genuinely-orphaned ones. UserRoles.EventId is a pre-existing, previously
+            // unenforced column (P2-3, #12); nothing in this codebase writes to it yet (P2-8, #17, the only
+            // ticket that could, hasn't shipped), so AddForeignKey applying cleanly is the expected case - if
+            // that assumption is ever wrong, the loud failure below is exactly what should happen.
             migrationBuilder.AddForeignKey(
                 name: "FK_UserRoles_Events_EventId",
                 table: "UserRoles",

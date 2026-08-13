@@ -21,6 +21,10 @@ namespace VirtualLeadersGuide.Api.Data;
 public sealed class DataProtectionStringConverter : ValueConverter<string, string>
 {
     /// <summary>Creates the converter using an already-purposed <see cref="IDataProtector"/>.</summary>
+    /// <param name="protector">
+    /// The already-purposed protector to encrypt/decrypt this column's values with (see
+    /// <see cref="IDataProtectionProvider.CreateProtector(string)"/> at the call site for how it was purposed).
+    /// </param>
     public DataProtectionStringConverter(IDataProtector protector)
         : base(plaintext => protector.Protect(plaintext), ciphertext => protector.Unprotect(ciphertext))
     {

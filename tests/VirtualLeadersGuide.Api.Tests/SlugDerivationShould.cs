@@ -2,7 +2,7 @@ using VirtualLeadersGuide.Api.Data;
 
 namespace VirtualLeadersGuide.Api.Tests;
 
-public class SlugShould
+public class SlugDerivationShould
 {
     [Theory]
     [InlineData("Fall Retreat", "fall-retreat")]
@@ -15,7 +15,7 @@ public class SlugShould
     [InlineData("already-a-slug", "already-a-slug")]
     public void ProduceExpectedSlug_WhenGivenAName_ForFrom(string name, string expected)
     {
-        Assert.Equal(expected, Slug.From(name));
+        Assert.Equal(expected, SlugDerivation.From(name));
     }
 
     [Theory]
@@ -24,7 +24,7 @@ public class SlugShould
     [InlineData("!!!")]
     public void ReturnEmptyString_WhenNothingSurvives_ForFrom(string name)
     {
-        Assert.Equal(string.Empty, Slug.From(name));
+        Assert.Equal(string.Empty, SlugDerivation.From(name));
     }
 
     [Fact]
@@ -32,7 +32,7 @@ public class SlugShould
     {
         string longName = string.Join(' ', Enumerable.Repeat("word", 50));
 
-        string slug = Slug.From(longName);
+        string slug = SlugDerivation.From(longName);
 
         Assert.True(slug.Length <= 100);
         Assert.NotEqual('-', slug[^1]);
