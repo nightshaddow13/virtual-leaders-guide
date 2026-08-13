@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
@@ -28,6 +29,30 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
     public const string InternalJwtKey = "test-internal-jwt-signing-key-at-least-32-bytes-long";
 
     private readonly SqliteConnection _connection = new("DataSource=:memory:");
+
+    // P2-6, #15: Event.Passcode's converter needs a real IDataProtectionProvider to be registered
+    // (VirtualLeadersGuideDbContext.BuildPasscodeConverter fails closed otherwise) - redirected to a local
+    // temp directory below so nothing ever reaches real Blob Storage.
+    private readonly string _dataProtectionKeysDirectory =
+        Path.Combine(Path.GetTempPath(), "vlg-api-tests-keys-" + Guid.NewGuid());
+
+    // Program.cs's top-level statements call AddAzureBlobServiceClient("blobs") unconditionally, before
+    // ConfigureWebHost's ConfigureAppConfiguration hook below gets a chance to apply (same ordering
+    // constraint SignInShould/DashboardShould hit in Web.Tests) - an environment variable is read by
+    // WebApplication.CreateBuilder's own default configuration sources from the very first line, sidestepping
+    // that ordering question entirely. Set once in a static constructor rather than per-instance: unlike
+    // Web.Tests' per-test set/reset (which swaps in different fakes per scenario), this value never changes
+    // across Api.Tests, so there's nothing to race and no assembly-level parallelization opt-out needed. The
+    // value itself is never dialed - Data Protection persistence is redirected to a local temp directory
+    // above before anything touches it.
+    static ApiWebApplicationFactory()
+    {
+        Environment.SetEnvironmentVariable(
+            "ConnectionStrings__blobs",
+            "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;" +
+            "AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;" +
+            "BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;");
+    }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -61,6 +86,10 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
 
             services.AddDbContext<VirtualLeadersGuideDbContext>(options =>
                 options.UseSqlite(_connection));
+
+            // Replaces Program.cs's blob-backed Data Protection registration with a file-system one, same
+            // shape as SignInShould/DashboardShould in Web.Tests.
+            services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(_dataProtectionKeysDirectory));
         });
     }
 
@@ -70,6 +99,27 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
         using IServiceScope scope = Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
         await dbContext.Database.EnsureCreatedAsync();
+    }
+
+    /// <summary>
+    /// Creates and persists a new <see cref="Event"/> via <see cref="Event.Create"/> - for tests (P2-6, #15)
+    /// that need a real row satisfying <c>UserRoles.EventId</c>'s foreign key, rather than just an in-memory
+    /// object.
+    /// </summary>
+    /// <param name="name">
+    /// The Event's Name. Omit to get a fresh Guid-suffixed default (and the Slug <see cref="Event.Create"/>
+    /// derives from it), so repeated calls within one test don't collide on the Name/Slug unique indexes.
+    /// </param>
+    /// <returns>The newly persisted <see cref="Event"/>.</returns>
+    public async Task<Event> CreateEventAsync(string? name = null)
+    {
+        using IServiceScope scope = Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        Event @event = Event.Create(name ?? $"Event {Guid.NewGuid()}");
+
+        dbContext.Events.Add(@event);
+        await dbContext.SaveChangesAsync();
+        return @event;
     }
 
     /// <summary>
@@ -142,6 +192,11 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
         if (disposing)
         {
             _connection.Dispose();
+
+            if (Directory.Exists(_dataProtectionKeysDirectory))
+            {
+                Directory.Delete(_dataProtectionKeysDirectory, recursive: true);
+            }
         }
 
         base.Dispose(disposing);

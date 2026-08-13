@@ -47,7 +47,25 @@ az containerapp update -g $rg -n vlg-web --set-env-vars `
 ```
 
 Same shape as `internal-api-key` and `acs-connection-string`: a Container Apps secret, never committed to
-source control. `vlg-api` never touches Blob Storage, so it doesn't receive this secret or env var.
+source control.
+
+**Update (P2-6, #15; [ADR-0026](../adr/0026-api-owns-passcode-encryption-with-its-own-key-ring.md)): this no
+longer applies to `vlg-web` alone.** `vlg-api` now also needs Blob Storage - `Event.Passcode` is encrypted at
+the Api layer, with its own Data Protection key ring (`api-keys.xml`, isolated from Web's `keys.xml`) in this
+same `dataprotection-keys` container. Repeat this step for `vlg-api`:
+
+```powershell
+az containerapp secret set -g $rg -n vlg-api --secrets "storage-connection-string=$storageConnectionString"
+
+az containerapp update -g $rg -n vlg-api --set-env-vars `
+  "ConnectionStrings__blobs=secretref:storage-connection-string"
+```
+
+**This is not optional polish - deployed `vlg-api` will fail to start without it.** `Event.Passcode`'s EF Core
+converter throws if no `IDataProtectionProvider` is registered (fail-closed, so a Passcode is never silently
+written as plaintext), and `AddDataProtection()` in `Program.cs` needs a working blob connection string to
+persist its key ring. This corrects this runbook's earlier note above that `vlg-api` never touches Blob
+Storage - that was true before P2-6 and no longer is.
 
 ## Why a connection string, not a managed identity
 
@@ -70,3 +88,7 @@ Then, once `vlg-web` is running the P2-2 image: sign in, restart the `vlg-web` r
 redeploy), and confirm the session survives instead of being signed out - that's the actual failure mode this
 runbook exists to prevent. `keys.xml` should appear in the `dataprotection-keys` container after the first
 request that needs to protect or unprotect data (the cookie-signing key, at minimum).
+
+Once `vlg-api` is also running its P2-6 image with the secret above: creating or reading an Event should
+succeed rather than the request failing with an unhandled `InvalidOperationException`, and `api-keys.xml`
+should appear in the same container alongside `keys.xml` after the first Event is created.

@@ -51,6 +51,10 @@ var dataProtectionKeysContainer = storage.AddBlobContainer("dataprotection-keys"
 var api = builder.AddProject<Projects.VirtualLeadersGuide_Api>("api")
     .WithReference(database)
     .WaitFor(database)
+    // P2-6, #15; ADR-0026: Event.Passcode's own Data Protection key ring, isolated from Web's.
+    .WithReference(blobs)
+    .WaitFor(blobs)
+    .WaitFor(dataProtectionKeysContainer)
     .WithEnvironment("InternalApi__Key", internalApiKey)
     .WithEnvironment("InternalJwt__SigningKey", internalJwtKey);
 

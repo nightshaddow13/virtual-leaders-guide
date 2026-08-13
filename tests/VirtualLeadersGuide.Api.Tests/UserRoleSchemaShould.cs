@@ -41,10 +41,12 @@ public class UserRoleSchemaShould : IAsyncLifetime
         using IServiceScope scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
         ApplicationUser user = await AddUserAsync(db);
+        Event eventA = await _factory.CreateEventAsync();
+        Event eventB = await _factory.CreateEventAsync();
 
         db.DomainUserRoles.AddRange(
-            new UserRole { Id = Guid.NewGuid(), UserId = user.Id, RoleId = RoleIds.Director, EventId = Guid.NewGuid() },
-            new UserRole { Id = Guid.NewGuid(), UserId = user.Id, RoleId = RoleIds.Director, EventId = Guid.NewGuid() });
+            new UserRole { Id = Guid.NewGuid(), UserId = user.Id, RoleId = RoleIds.Director, EventId = eventA.Id },
+            new UserRole { Id = Guid.NewGuid(), UserId = user.Id, RoleId = RoleIds.Director, EventId = eventB.Id });
 
         await db.SaveChangesAsync();
 
@@ -58,7 +60,8 @@ public class UserRoleSchemaShould : IAsyncLifetime
         var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
         ApplicationUser userA = await AddUserAsync(db);
         ApplicationUser userB = await AddUserAsync(db);
-        var eventId = Guid.NewGuid();
+        Event @event = await _factory.CreateEventAsync();
+        var eventId = @event.Id;
 
         db.DomainUserRoles.AddRange(
             new UserRole { Id = Guid.NewGuid(), UserId = userA.Id, RoleId = RoleIds.Director, EventId = eventId },
@@ -89,10 +92,11 @@ public class UserRoleSchemaShould : IAsyncLifetime
         using IServiceScope scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
         ApplicationUser user = await AddUserAsync(db);
+        Event @event = await _factory.CreateEventAsync();
 
         db.DomainUserRoles.AddRange(
             new UserRole { Id = Guid.NewGuid(), UserId = user.Id, RoleId = RoleIds.Director, EventId = null },
-            new UserRole { Id = Guid.NewGuid(), UserId = user.Id, RoleId = RoleIds.Director, EventId = Guid.NewGuid() });
+            new UserRole { Id = Guid.NewGuid(), UserId = user.Id, RoleId = RoleIds.Director, EventId = @event.Id });
 
         await db.SaveChangesAsync();
 
@@ -120,7 +124,8 @@ public class UserRoleSchemaShould : IAsyncLifetime
         using IServiceScope scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
         ApplicationUser user = await AddUserAsync(db);
-        var eventId = Guid.NewGuid();
+        Event @event = await _factory.CreateEventAsync();
+        var eventId = @event.Id;
 
         db.DomainUserRoles.Add(
             new UserRole { Id = Guid.NewGuid(), UserId = user.Id, RoleId = RoleIds.Director, EventId = eventId });

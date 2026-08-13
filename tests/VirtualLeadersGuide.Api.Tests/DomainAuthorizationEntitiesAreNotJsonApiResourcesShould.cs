@@ -3,10 +3,10 @@ using System.Net.Http.Headers;
 
 namespace VirtualLeadersGuide.Api.Tests;
 
-// Role and UserRole (VirtualLeadersGuide.Api.Data) are plain POCOs, not Identifiable<T>, so neither is
+// Role, UserRole, and Event (VirtualLeadersGuide.Api.Data) are plain POCOs, not Identifiable<T>, so none are
 // reachable as a JSON:API resource yet - see VirtualLeadersGuideDbContext's comment. userRoles is expected
-// to flip once P2-8 (#17) deliberately turns UserRole into a resource; roles has no ticket planning to
-// expose it at all.
+// to flip once P2-8 (#17) deliberately turns UserRole into a resource; events is expected to flip once P2-7
+// (#16) does the same for Event; roles has no ticket planning to expose it at all.
 public class DomainAuthorizationEntitiesAreNotJsonApiResourcesShould : IAsyncLifetime
 {
     private const string JsonApiMediaType = "application/vnd.api+json";
@@ -30,6 +30,7 @@ public class DomainAuthorizationEntitiesAreNotJsonApiResourcesShould : IAsyncLif
     [Theory]
     [InlineData("/api/roles")]
     [InlineData("/api/userRoles")]
+    [InlineData("/api/events")]
     public async Task ReturnNotFound_WhenRequestingADomainAuthorizationTableAsAJsonApiResource_ForGetCollection(
         string requestUri)
     {

@@ -31,8 +31,11 @@ public class InternalAuthorizationEndpointsShould : IAsyncLifetime
     public async Task SucceedWithMatchingData_WhenGrantingAndListingAcrossPlatformWideAndEventScopedGrants_ForFullLifecycle()
     {
         string userId = await CreateUserAsync();
-        var eventAId = Guid.NewGuid();
-        var eventBId = Guid.NewGuid();
+        // P2-6, #15: UserRoles.EventId is now a real FK - a request naming an EventId with no matching Events
+        // row would fail (see EventSchemaShould's cascade-delete coverage for the FK itself), so this test's
+        // fixture needs real Events, not just any Guid.
+        Guid eventAId = (await _factory.CreateEventAsync()).Id;
+        Guid eventBId = (await _factory.CreateEventAsync()).Id;
 
         RoleGrantDto adminGrant = await CreateGrantAsync(userId, RoleIds.Admin, eventId: null);
         Assert.Equal(RoleNames.Admin, adminGrant.RoleName);
