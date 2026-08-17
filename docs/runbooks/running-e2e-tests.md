@@ -36,14 +36,16 @@ directly instead of their workarounds - see each section.
 
 ## 3. Install Playwright's browsers (first time only)
 
+Every command in this runbook, including these, is written to run from the **repo root** - no `cd`
+needed anywhere.
+
 Without `pwsh`, Playwright's own generated `playwright.ps1` script doesn't run - it loads a `net10.0`
 assembly, which Windows PowerShell 5.1 (.NET Framework) can't do. Use the package's own bundled Node
 driver instead, which needs nothing beyond what the `Microsoft.Playwright.Xunit` package already
 restored:
 
 ```powershell
-cd tests/VirtualLeadersGuide.E2E.Tests/bin/Debug/net10.0
-.\.playwright\node\win32_x64\node.exe .playwright\package\cli.js install chromium
+tests/VirtualLeadersGuide.E2E.Tests/bin/Debug/net10.0/.playwright/node/win32_x64/node.exe tests/VirtualLeadersGuide.E2E.Tests/bin/Debug/net10.0/.playwright/package/cli.js install chromium
 ```
 
 With `pwsh` installed (Section 2), the standard command works instead:
@@ -56,6 +58,11 @@ Either way, this downloads Chromium, its headless-shell variant, and ffmpeg (nee
 see Section 5) into `%LOCALAPPDATA%\ms-playwright`. Re-run it if a `dotnet test` run starts failing every
 test with `Executable doesn't exist at ...chrome-headless-shell.exe` - the cache can end up stale or
 partially populated (e.g. after a package upgrade) without any other symptom.
+
+If you'd rather work from `bin/Debug/net10.0` directly (e.g. `cd tests/VirtualLeadersGuide.E2E.Tests/bin/Debug/net10.0`
+first), every path below and in Section 6 needs the same prefix stripped off - `playwright.ps1` and
+`.playwright\...` instead of the full `tests/...` path, and trace paths become `../../../../../artifacts/e2e/...`
+(five levels back up to the repo root).
 
 ## 4. Run the suite
 
