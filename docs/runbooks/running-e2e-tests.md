@@ -61,8 +61,8 @@ partially populated (e.g. after a package upgrade) without any other symptom.
 
 If you'd rather work from `bin/Debug/net10.0` directly (e.g. `cd tests/VirtualLeadersGuide.E2E.Tests/bin/Debug/net10.0`
 first), every path below and in Section 6 needs the same prefix stripped off - `playwright.ps1` and
-`.playwright\...` instead of the full `tests/...` path, and trace paths become `../../../../../artifacts/e2e/...`
-(five levels back up to the repo root).
+`.playwright\...` instead of the full `tests/...` path, and `artifacts/e2e` (Section 6's search root)
+becomes `../../../../../artifacts/e2e` (five levels back up to the repo root).
 
 ## 4. Run the suite
 
@@ -104,10 +104,12 @@ network log, and the console log for that one test run.
 
 Without `pwsh`, drag it onto **[trace.playwright.dev](https://trace.playwright.dev)** instead - runs
 entirely in the browser, nothing uploaded. With `pwsh` installed (Section 2), the local viewer works
-too:
+too. Rather than typing out a `<run timestamp>/<Class>.<Method>` path by hand, find the most recent
+trace automatically:
 
 ```powershell
-pwsh tests/VirtualLeadersGuide.E2E.Tests/bin/Debug/net10.0/playwright.ps1 show-trace artifacts/e2e/<run timestamp>/<Class>.<Method>/trace.zip
+$trace = Get-ChildItem artifacts/e2e -Filter trace.zip -Recurse | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+pwsh tests/VirtualLeadersGuide.E2E.Tests/bin/Debug/net10.0/playwright.ps1 show-trace $trace.FullName
 ```
 
 ## 7. Allure reporting
