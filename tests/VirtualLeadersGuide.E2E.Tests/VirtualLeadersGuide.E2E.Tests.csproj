@@ -6,6 +6,14 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+
+    <!--
+      Where E2ETestBase writes failure artifacts (trace.zip/screenshot.png/video.webm/page.html), fixed at
+      build time rather than walked up from AppContext.BaseDirectory at runtime (P2.1-3, #61's own Dev
+      Notes reject the latter). Resolved once here so it's a single MSBuild expression instead of a
+      hand-rolled ".." chain repeated wherever the path is needed.
+    -->
+    <E2EArtifactRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\artifacts\e2e'))</E2EArtifactRoot>
   </PropertyGroup>
 
   <ItemGroup>
@@ -15,6 +23,11 @@
     <PackageReference Include="Microsoft.Playwright.Xunit" Version="1.61.0" />
     <PackageReference Include="xunit" Version="2.9.3"/>
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <!-- Surfaced to E2ETestBase via Assembly.GetCustomAttributes<AssemblyMetadataAttribute>() at runtime. -->
+  <ItemGroup>
+    <AssemblyMetadata Include="E2EArtifactRoot" Value="$(E2EArtifactRoot)" />
   </ItemGroup>
 
   <ItemGroup>
