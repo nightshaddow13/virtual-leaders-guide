@@ -20,24 +20,44 @@ Playwright's browsers also need to be installed once per machine (see below) - u
 above, nothing in the suite itself detects a missing browser install cleanly; it just fails every test
 with `Executable doesn't exist at ...`.
 
-## 2. Install Playwright's browsers (first time only)
+## 2. Optional: install PowerShell 7 (`pwsh`)
 
-There's no `pwsh` (PowerShell 7) dependency here, even though Playwright's own generated
-`playwright.ps1` script assumes one - that script loads a `net10.0` assembly, which Windows PowerShell
-5.1 (.NET Framework) can't do. Use the package's own bundled Node driver instead, which needs nothing
-beyond what the `Microsoft.Playwright.Xunit` package already restored:
+Nothing else in this runbook requires it - Section 3's browser install and Section 6's trace viewing
+both work without it, via workarounds that don't. Install it anyway if you'd rather use Playwright's own
+generated `playwright.ps1` script (`install`, `show-trace`, `codegen`, ...) instead:
+
+```powershell
+winget install --id Microsoft.PowerShell --source winget
+```
+
+Restart your terminal afterward so `pwsh` is picked up on `PATH` (`pwsh -Version` to confirm). Once
+installed, Section 3's browser install and Section 6's trace viewing can both use `playwright.ps1`
+directly instead of their workarounds - see each section.
+
+## 3. Install Playwright's browsers (first time only)
+
+Without `pwsh`, Playwright's own generated `playwright.ps1` script doesn't run - it loads a `net10.0`
+assembly, which Windows PowerShell 5.1 (.NET Framework) can't do. Use the package's own bundled Node
+driver instead, which needs nothing beyond what the `Microsoft.Playwright.Xunit` package already
+restored:
 
 ```powershell
 cd tests/VirtualLeadersGuide.E2E.Tests/bin/Debug/net10.0
 .\.playwright\node\win32_x64\node.exe .playwright\package\cli.js install chromium
 ```
 
-This downloads Chromium, its headless-shell variant, and ffmpeg (needed for video capture - see
-Section 4) into `%LOCALAPPDATA%\ms-playwright`. Re-run it if a `dotnet test` run starts failing every
+With `pwsh` installed (Section 2), the standard command works instead:
+
+```powershell
+pwsh tests/VirtualLeadersGuide.E2E.Tests/bin/Debug/net10.0/playwright.ps1 install chromium
+```
+
+Either way, this downloads Chromium, its headless-shell variant, and ffmpeg (needed for video capture -
+see Section 5) into `%LOCALAPPDATA%\ms-playwright`. Re-run it if a `dotnet test` run starts failing every
 test with `Executable doesn't exist at ...chrome-headless-shell.exe` - the cache can end up stale or
 partially populated (e.g. after a package upgrade) without any other symptom.
 
-## 3. Run the suite
+## 4. Run the suite
 
 ```powershell
 dotnet test tests/VirtualLeadersGuide.E2E.Tests
@@ -47,7 +67,7 @@ Expect this to take a couple of minutes - `AspireE2EFixture` boots the whole sta
 run (container pulls on a cold cache add more). Every test shares that one boot via
 `AspireE2ECollection`, so they run sequentially, not in parallel.
 
-## 4. Where failure artifacts land
+## 5. Where failure artifacts land
 
 Every failed test leaves `trace.zip`, `screenshot.png`, `video.webm`, and `page.html` under:
 
@@ -70,16 +90,20 @@ folder, if something about capturing a specific file didn't go to plan:
 
 [Windows long-path support]: https://learn.microsoft.com/windows/win32/fileio/maximum-file-path-limitation
 
-## 5. Viewing a trace
+## 6. Viewing a trace
 
 `trace.zip` is a Playwright trace: a time-travel view of every action, a screenshot filmstrip, the
 network log, and the console log for that one test run.
 
-Drag it onto **[trace.playwright.dev](https://trace.playwright.dev)** - runs entirely in the browser,
-nothing uploaded. This is the primary path on this machine, since `pwsh bin/Debug/net10.0/playwright.ps1
-show-trace` (the usual local alternative) isn't runnable without PowerShell 7 installed.
+Without `pwsh`, drag it onto **[trace.playwright.dev](https://trace.playwright.dev)** instead - runs
+entirely in the browser, nothing uploaded. With `pwsh` installed (Section 2), the local viewer works
+too:
 
-## 6. Allure reporting
+```powershell
+pwsh tests/VirtualLeadersGuide.E2E.Tests/bin/Debug/net10.0/playwright.ps1 show-trace artifacts/e2e/<run timestamp>/<Class>.<Method>/trace.zip
+```
+
+## 7. Allure reporting
 
 Not currently wired up - `Allure.Xunit`'s reporter doesn't activate under `dotnet test` in this
 environment (tracked as [#71](https://github.com/nightshaddow13/virtual-leaders-guide/issues/71), with
