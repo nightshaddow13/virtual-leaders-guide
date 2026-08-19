@@ -5,12 +5,14 @@ using VirtualLeadersGuide.Identity.Contracts;
 
 namespace VirtualLeadersGuide.Api.Tests;
 
-// EF-model-level coverage of P2-3's (#12) acceptance criteria and ADR-0017's filtered-unique-index
-// requirement, exercised directly against the DbContext rather than through HTTP - see
-// InternalAuthorizationEndpointsShould for the endpoint-level equivalent. ADR-0014: EnsureCreatedAsync
-// builds this schema from the current EF model on SQLite, not by replaying the real SQL Server migration,
-// so this is also what proves the filtered indexes (SQL Server-flavored HasFilter syntax) actually apply
-// under SQLite too.
+/// <remarks>
+/// EF-model-level coverage of P2-3's (#12) acceptance criteria and ADR-0017's filtered-unique-index
+/// requirement, exercised directly against the DbContext rather than through HTTP - see
+/// <c>InternalAuthorizationEndpointsShould</c> for the endpoint-level equivalent. ADR-0014:
+/// <c>EnsureCreatedAsync</c> builds this schema from the current EF model on SQLite, not by replaying the
+/// real SQL Server migration, so this is also what proves the filtered indexes (SQL Server-flavored
+/// <c>HasFilter</c> syntax) actually apply under SQLite too.
+/// </remarks>
 public class UserRoleSchemaShould : IAsyncLifetime
 {
     private ApiWebApplicationFactory _factory = null!;

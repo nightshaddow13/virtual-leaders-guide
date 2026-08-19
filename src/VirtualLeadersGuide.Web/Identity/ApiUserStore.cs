@@ -5,13 +5,14 @@ using VirtualLeadersGuide.Identity.Contracts;
 
 namespace VirtualLeadersGuide.Web.Identity;
 
-// IUserStore<ApplicationUser> implemented as thin HTTP calls to Api's internal identity endpoints, rather
-// than a local IdentityDbContext - see ADR-0022 for why. Only FindById/FindByName/FindByEmail, Create,
-// Update, and Delete actually cross the wire; every other interface here (IUserPasswordStore,
-// IUserEmailStore, IUserSecurityStampStore, IUserLockoutStore, IUserPhoneNumberStore) is pure get/set on
-// the in-memory ApplicationUser instance a FindBy*/CreateAsync call already produced - that's the whole
-// reason one CRUD-by-user endpoint set on Api can back all of them. Deliberately does NOT implement
-// IUserTwoFactorStore - see ADR-0022's Consequences and issue #54.
+/// <summary>
+/// Web's <see cref="IUserStore{TUser}"/> implementation, forwarding to Api's internal identity endpoints
+/// over HTTP instead of a local <c>IdentityDbContext</c>.
+/// </summary>
+/// <remarks>
+/// See ADR-0022 for why, including the deliberate omission of <see cref="IUserTwoFactorStore{TUser}"/>
+/// (tracked separately, issue #54).
+/// </remarks>
 public sealed class ApiUserStore(IHttpClientFactory httpClientFactory, IdentityErrorDescriber? describer = null) :
     IUserStore<ApplicationUser>,
     IUserPasswordStore<ApplicationUser>,
@@ -22,13 +23,14 @@ public sealed class ApiUserStore(IHttpClientFactory httpClientFactory, IdentityE
 {
     private readonly IdentityErrorDescriber _describer = describer ?? new IdentityErrorDescriber();
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// No <see cref="HttpClient"/> is held onto — one is requested from <see cref="IHttpClientFactory"/> per
+    /// call, so there is nothing here to dispose.
+    /// </remarks>
     public void Dispose()
     {
-        // No HttpClient is held onto - one is requested from IHttpClientFactory per call - so there is
-        // nothing here to dispose.
     }
-
-    // ---- IUserStore: the only methods that actually reach Api ----
 
     public async Task<ApplicationUser?> FindByIdAsync(string userId, CancellationToken cancellationToken) =>
         await FindUserAsync(InternalIdentityRoutes.ForUserById(userId), cancellationToken);
@@ -54,6 +56,12 @@ public sealed class ApiUserStore(IHttpClientFactory httpClientFactory, IdentityE
         return IdentityResult.Success;
     }
 
+    /// <remarks>
+    /// See ADR-0022's Consequences for why concurrency is preserved. Mirrors the stock EF Core Identity
+    /// <c>UserStore</c>'s <c>UpdateAsync</c>: mutates <paramref name="user"/>'s
+    /// <see cref="ApplicationUser.ConcurrencyStamp"/> in place so a subsequent update in the same
+    /// request/circuit uses the current stamp instead of immediately conflicting with itself.
+    /// </remarks>
     public async Task<IdentityResult> UpdateAsync(ApplicationUser user, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(
@@ -70,10 +78,6 @@ public sealed class ApiUserStore(IHttpClientFactory httpClientFactory, IdentityE
 
         EnsureExpectedStatus(response, HttpStatusCode.OK);
 
-        // Api generated a fresh ConcurrencyStamp when it wrote the row - reflect it back onto the caller's
-        // instance, matching the stock EF Core Identity UserStore's behavior (its UpdateAsync mutates
-        // user.ConcurrencyStamp in place before saving), so a subsequent update in the same request/circuit
-        // uses the current stamp rather than immediately conflicting with itself.
         IdentityUserDto? updated = await response.Content.ReadFromJsonAsync<IdentityUserDto>(cancellationToken);
         if (updated is not null)
         {
@@ -115,8 +119,6 @@ public sealed class ApiUserStore(IHttpClientFactory httpClientFactory, IdentityE
         return Task.CompletedTask;
     }
 
-    // ---- IUserPasswordStore: in-memory only ----
-
     public Task SetPasswordHashAsync(ApplicationUser user, string? passwordHash, CancellationToken cancellationToken)
     {
         user.PasswordHash = passwordHash;
@@ -128,8 +130,6 @@ public sealed class ApiUserStore(IHttpClientFactory httpClientFactory, IdentityE
 
     public Task<bool> HasPasswordAsync(ApplicationUser user, CancellationToken cancellationToken) =>
         Task.FromResult(!string.IsNullOrEmpty(user.PasswordHash));
-
-    // ---- IUserEmailStore: FindByEmailAsync reaches Api; everything else is in-memory ----
 
     public Task SetEmailAsync(ApplicationUser user, string? email, CancellationToken cancellationToken)
     {
@@ -162,8 +162,6 @@ public sealed class ApiUserStore(IHttpClientFactory httpClientFactory, IdentityE
         return Task.CompletedTask;
     }
 
-    // ---- IUserSecurityStampStore: in-memory only ----
-
     public Task SetSecurityStampAsync(ApplicationUser user, string stamp, CancellationToken cancellationToken)
     {
         user.SecurityStamp = stamp;
@@ -172,8 +170,6 @@ public sealed class ApiUserStore(IHttpClientFactory httpClientFactory, IdentityE
 
     public Task<string?> GetSecurityStampAsync(ApplicationUser user, CancellationToken cancellationToken) =>
         Task.FromResult(user.SecurityStamp);
-
-    // ---- IUserLockoutStore: in-memory only ----
 
     public Task<DateTimeOffset?> GetLockoutEndDateAsync(ApplicationUser user, CancellationToken cancellationToken) =>
         Task.FromResult(user.LockoutEnd);
@@ -209,8 +205,6 @@ public sealed class ApiUserStore(IHttpClientFactory httpClientFactory, IdentityE
         return Task.CompletedTask;
     }
 
-    // ---- IUserPhoneNumberStore: in-memory only ----
-
     public Task SetPhoneNumberAsync(ApplicationUser user, string? phoneNumber, CancellationToken cancellationToken)
     {
         user.PhoneNumber = phoneNumber;
@@ -230,8 +224,6 @@ public sealed class ApiUserStore(IHttpClientFactory httpClientFactory, IdentityE
         return Task.CompletedTask;
     }
 
-    // ---- HTTP plumbing ----
-
     private async Task<ApplicationUser?> FindUserAsync(string relativeUrl, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, relativeUrl);
@@ -247,6 +239,7 @@ public sealed class ApiUserStore(IHttpClientFactory httpClientFactory, IdentityE
         return dto is null ? null : FromDto(dto);
     }
 
+    /// <remarks>Wraps transport failures — see <see cref="IdentityStoreUnavailableException"/> for why.</remarks>
     private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         HttpClient client = httpClientFactory.CreateClient("Api");
@@ -257,11 +250,6 @@ public sealed class ApiUserStore(IHttpClientFactory httpClientFactory, IdentityE
         }
         catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
         {
-            // Retries/circuit-breaking already happened inside the "Api" HttpClient's standard resilience
-            // handler (see ServiceDefaults/Extensions.cs) - reaching here means those were exhausted, or
-            // Api is genuinely unreachable. Wrapped rather than left as a bare transport exception, and
-            // deliberately not caught anywhere upstream that would turn it into a null/"not found" result -
-            // see IdentityStoreUnavailableException.
             throw new IdentityStoreUnavailableException("The identity store (Api) is unreachable.", ex);
         }
     }

@@ -10,13 +10,16 @@ using VirtualLeadersGuide.Web.Identity;
 
 namespace VirtualLeadersGuide.Web.Tests;
 
-// Exercises real DI wiring - AddIdentityCore<ApplicationUser>().AddUserStore<ApiUserStore>() plus
-// SignInManager - against a fake in-memory "Api" backend, proving our own wiring cooperates correctly with
-// the framework. Drives SignInManager directly against a synthetic HttpContext rather than posting the
-// actual rendered Login.razor form: the form's wire format (antiforgery token, Blazor's named-form hidden
-// fields) is framework-templated markup this ticket didn't write, so testing it would mostly be testing
-// Blazor itself. What this ticket owns - ApiUserStore correctly backing UserManager/SignInManager end to
-// end - is exactly what this test exercises.
+/// <remarks>
+/// Exercises real DI wiring - <c>AddIdentityCore&lt;ApplicationUser&gt;().AddUserStore&lt;ApiUserStore&gt;()</c>
+/// plus <c>SignInManager</c> - against a fake in-memory "Api" backend, proving our own wiring cooperates
+/// correctly with the framework. Drives <c>SignInManager</c> directly against a synthetic
+/// <see cref="DefaultHttpContext"/> rather than posting the actual rendered <c>Login.razor</c> form: the
+/// form's wire format (antiforgery token, Blazor's named-form hidden fields) is framework-templated markup
+/// this ticket didn't write, so testing it would mostly be testing Blazor itself. What this ticket owns -
+/// <c>ApiUserStore</c> correctly backing <c>UserManager</c>/<c>SignInManager</c> end to end - is exactly
+/// what this test exercises.
+/// </remarks>
 public class SignInShould : IAsyncLifetime
 {
     private const string KnownEmail = "director@example.com";
@@ -27,6 +30,22 @@ public class SignInShould : IAsyncLifetime
     private readonly string _dataProtectionKeysDirectory =
         Path.Combine(Path.GetTempPath(), "vlg-web-tests-keys-" + Guid.NewGuid());
 
+    /// <remarks>
+    /// <c>Program.cs</c> unconditionally registers <c>ConnectionStrings:blobs</c>
+    /// (<c>AddAzureBlobServiceClient</c>) as part of top-level statement execution, before
+    /// <see cref="WebApplicationFactory{TEntryPoint}"/>'s <c>ConfigureAppConfiguration</c> hook for
+    /// deferred/minimal-hosting apps has a chance to apply - an environment variable is read by
+    /// <c>WebApplication.CreateBuilder</c>'s own default configuration sources from the very first line, so
+    /// it sidesteps that ordering question entirely (set below). The value itself is never actually dialed:
+    /// Data Protection persistence is redirected to <see cref="_dataProtectionKeysDirectory"/> before
+    /// anything touches it. This process-wide environment variable is why the assembly disables test
+    /// parallelization (<c>AssemblyInfo.cs</c>) - <see cref="DashboardShould"/> sets the same variable. The
+    /// fake transport swapped in for the <c>"Api"</c> named <see cref="HttpClient"/>
+    /// leaves <c>InternalApiKeyHandler</c> running (harmlessly) - it just delegates to
+    /// <see cref="FakeIdentityApiHandler"/> instead of a real network call. <c>_factory.Services</c> is
+    /// touched below to force the host to build now, while the env var is still set, rather than lazily on
+    /// first use - see <see cref="DisposeAsync"/>.
+    /// </remarks>
     public Task InitializeAsync()
     {
         _fakeApi = new FakeIdentityApiHandler();
@@ -47,12 +66,6 @@ public class SignInShould : IAsyncLifetime
             LockoutEnabled = true
         });
 
-        // Program.cs unconditionally registers ConnectionStrings:blobs (AddAzureBlobServiceClient) as part
-        // of top-level statement execution, before WebApplicationFactory's ConfigureAppConfiguration hook
-        // for deferred/minimal-hosting apps has a chance to apply - an environment variable is read by
-        // WebApplication.CreateBuilder's own default configuration sources from the very first line, so it
-        // sidesteps that ordering question entirely. The value itself is never actually dialed: Data
-        // Protection persistence is redirected to a local temp directory below before anything touches it.
         Environment.SetEnvironmentVariable(
             "ConnectionStrings__blobs",
             "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;" +
@@ -63,17 +76,12 @@ public class SignInShould : IAsyncLifetime
         {
             builder.ConfigureServices(services =>
             {
-                // Replaces the transport under the "Api" named HttpClient Program.cs already registers -
-                // InternalApiKeyHandler still runs (harmlessly), it just delegates to this fake instead of
-                // a real network call.
                 services.AddHttpClient("Api").ConfigurePrimaryHttpMessageHandler(() => _fakeApi);
 
                 services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(_dataProtectionKeysDirectory));
             });
         });
 
-        // Forces the host to build now, while the env var above is still set, rather than lazily on first
-        // use - see DisposeAsync.
         _ = _factory.Services;
 
         return Task.CompletedTask;
@@ -137,9 +145,11 @@ public class SignInShould : IAsyncLifetime
     }
 }
 
-// A tiny in-memory identity store speaking the same wire shape as InternalIdentityEndpoints (Api), keyed
-// by id, with normalized-name/email lookups - just enough of the real endpoint surface for
-// UserManager/SignInManager to complete a password sign-in against.
+/// <remarks>
+/// A tiny in-memory identity store speaking the same wire shape as <c>InternalIdentityEndpoints</c> (Api),
+/// keyed by id, with normalized-name/email lookups - just enough of the real endpoint surface for
+/// <c>UserManager</c>/<c>SignInManager</c> to complete a password sign-in against.
+/// </remarks>
 internal sealed class FakeIdentityApiHandler : HttpMessageHandler
 {
     private readonly Dictionary<string, IdentityUserDto> _usersById = [];

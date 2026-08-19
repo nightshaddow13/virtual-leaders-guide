@@ -4,11 +4,13 @@ using VirtualLeadersGuide.Identity.Contracts;
 
 namespace VirtualLeadersGuide.Api.Tests;
 
-// Every case here drives _client, created via CreateAuthenticatedClient() (X-Internal-Key only, no bearer
-// token) - deliberately, since /internal/authorization/* stays off the RequireInternalUser policy (P2-5,
-// #14): it's the endpoint that produces a JWT's claims in the first place, so requiring one would be
-// circular. That every case below still succeeds pins the amendment in
-// docs/adr/0015-internal-key-validated-via-authentication-handler.md.
+/// <remarks>
+/// Every case here drives <c>_client</c>, created via <c>CreateAuthenticatedClient()</c>
+/// (<c>X-Internal-Key</c> only, no bearer token) - deliberately, since
+/// <c>/internal/authorization/*</c> stays off the <c>RequireInternalUser</c> policy (P2-5, #14): it's the
+/// endpoint that produces a JWT's claims in the first place, so requiring one would be circular. That every
+/// case below still succeeds pins ADR-0015's amendment.
+/// </remarks>
 public class InternalAuthorizationEndpointsShould : IAsyncLifetime
 {
     private ApiWebApplicationFactory _factory = null!;
@@ -31,9 +33,6 @@ public class InternalAuthorizationEndpointsShould : IAsyncLifetime
     public async Task SucceedWithMatchingData_WhenGrantingAndListingAcrossPlatformWideAndEventScopedGrants_ForFullLifecycle()
     {
         string userId = await CreateUserAsync();
-        // P2-6, #15: UserRoles.EventId is now a real FK - a request naming an EventId with no matching Events
-        // row would fail (see EventSchemaShould's cascade-delete coverage for the FK itself), so this test's
-        // fixture needs real Events, not just any Guid.
         Guid eventAId = (await _factory.CreateEventAsync()).Id;
         Guid eventBId = (await _factory.CreateEventAsync()).Id;
 
@@ -51,13 +50,11 @@ public class InternalAuthorizationEndpointsShould : IAsyncLifetime
         List<RoleGrantDto>? grants = await listResponse.Content.ReadFromJsonAsync<List<RoleGrantDto>>();
         Assert.Equal(3, grants!.Count);
 
-        // Duplicate platform-wide grant - the filtered unique index rejects it (ADR-0017).
         HttpResponseMessage duplicateAdminResponse = await _client.PostAsJsonAsync(
             InternalAuthorizationRoutes.ForUserGrants(userId),
             new CreateRoleGrantRequest { RoleId = RoleIds.Admin });
         Assert.Equal(HttpStatusCode.Conflict, duplicateAdminResponse.StatusCode);
 
-        // Duplicate Event-scoped grant, same Event - the other filtered unique index rejects it.
         HttpResponseMessage duplicateDirectorResponse = await _client.PostAsJsonAsync(
             InternalAuthorizationRoutes.ForUserGrants(userId),
             new CreateRoleGrantRequest { RoleId = RoleIds.Director, EventId = eventAId });

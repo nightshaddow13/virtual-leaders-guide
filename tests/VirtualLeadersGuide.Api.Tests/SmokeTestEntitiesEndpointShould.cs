@@ -11,12 +11,16 @@ public class SmokeTestEntitiesEndpointShould : IAsyncLifetime
     private ApiWebApplicationFactory _factory = null!;
     private HttpClient _client = null!;
 
+    /// <remarks>
+    /// Uses <see cref="ApiWebApplicationFactory.CreateUserClient"/>, not just
+    /// <see cref="ApiWebApplicationFactory.CreateAuthenticatedClient"/> - <c>/api/*</c> requires a valid
+    /// internal JWT in addition to <c>X-Internal-Key</c> (P2-5, #14), and this class is the "a valid JWT
+    /// reaches the resource pipeline" acceptance test.
+    /// </remarks>
     public async Task InitializeAsync()
     {
         _factory = new ApiWebApplicationFactory();
         await _factory.InitializeDatabaseAsync();
-        // /api/* now requires a valid internal JWT in addition to X-Internal-Key (P2-5, #14) - this is the
-        // "a valid JWT reaches the resource pipeline" AC test.
         _client = _factory.CreateUserClient();
     }
 
@@ -67,6 +71,11 @@ public class SmokeTestEntitiesEndpointShould : IAsyncLifetime
         Assert.Equal(HttpStatusCode.NotFound, verifyResponse.StatusCode);
     }
 
+    /// <remarks>
+    /// JSON:API content negotiation rejects a Content-Type with parameters (e.g. the charset
+    /// <see cref="StringContent"/>'s 3-arg constructor would add) with 415, so the header is set explicitly
+    /// below instead of going through that overload.
+    /// </remarks>
     private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string requestUri, object? body = null)
     {
         using var request = new HttpRequestMessage(method, requestUri);
@@ -74,9 +83,6 @@ public class SmokeTestEntitiesEndpointShould : IAsyncLifetime
 
         if (body is not null)
         {
-            // JSON:API content negotiation rejects a Content-Type with parameters (e.g. the
-            // charset StringContent's 3-arg constructor would add) with 415, so the header is
-            // set explicitly instead of going through that overload.
             request.Content = new StringContent(JsonSerializer.Serialize(body));
             request.Content.Headers.ContentType = new MediaTypeHeaderValue(JsonApiMediaType);
         }

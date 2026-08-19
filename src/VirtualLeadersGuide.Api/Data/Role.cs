@@ -1,9 +1,11 @@
 namespace VirtualLeadersGuide.Api.Data;
 
-// A grant a User can hold - Admin or Director today (see CONTEXT.md's Role entry, ADR-0017). Not a
-// JsonApiDotNetCore resource: not Identifiable<T>, so it's invisible to /api like every other entity in
-// this file until a ticket deliberately opts it in. Rows are seeded via HasData in
-// VirtualLeadersGuideDbContext.OnModelCreating using the well-known ids/names in RoleIds/RoleNames.
+/// <summary>A grant a <c>User</c> can hold - Admin or Director today (CONTEXT.md's Role entry, ADR-0017).</summary>
+/// <remarks>
+/// Not a JsonApiDotNetCore resource (ADR-0017's Consequences). Rows are seeded via <c>HasData</c> in
+/// <see cref="VirtualLeadersGuideDbContext"/> using the well-known ids/names in <see cref="RoleIds"/>/
+/// <see cref="RoleNames"/>.
+/// </remarks>
 public class Role
 {
     public int Id { get; set; }

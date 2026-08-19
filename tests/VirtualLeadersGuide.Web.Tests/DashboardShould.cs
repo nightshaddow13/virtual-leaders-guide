@@ -10,24 +10,30 @@ using Microsoft.Extensions.Options;
 
 namespace VirtualLeadersGuide.Web.Tests;
 
-// /dashboard is Blazor Interactive Server - the initial HTTP response is a static server-side prerender of
-// the page (before the client's SignalR circuit connects), and that prerender pass runs
-// Dashboard.razor's OnInitializedAsync, including its NavigationManager.NavigateTo call. Blazor converts a
-// NavigateTo during prerendering into a real HTTP redirect - the same mechanism RedirectToLogin.razor
-// already relies on for anonymous users - so a plain HTTP GET is enough to exercise the "no role yet"
-// branch without a live circuit.
+/// <remarks>
+/// <c>/dashboard</c> is Blazor Interactive Server - the initial HTTP response is a static server-side
+/// prerender of the page (before the client's SignalR circuit connects), and that prerender pass runs
+/// <c>Dashboard.razor</c>'s <c>OnInitializedAsync</c>, including its <c>NavigationManager.NavigateTo</c>
+/// call. Blazor converts a <c>NavigateTo</c> during prerendering into a real HTTP redirect - the same
+/// mechanism <c>RedirectToLogin.razor</c> already relies on for anonymous users - so a plain HTTP GET is
+/// enough to exercise the "no role yet" branch without a live circuit.
+/// </remarks>
 public class DashboardShould : IAsyncLifetime
 {
     private WebApplicationFactory<Program> _factory = null!;
     private readonly string _dataProtectionKeysDirectory =
         Path.Combine(Path.GetTempPath(), "vlg-web-tests-keys-" + Guid.NewGuid());
 
+    /// <remarks>
+    /// See <see cref="SignInShould"/>'s remarks on this same override for why an environment variable, not
+    /// <c>ConfigureAppConfiguration</c>, is needed here. Swaps in an always-authenticated, zero-role
+    /// principal (<see cref="TestAuthHandler"/>) in place of real cookie auth, so this test exercises
+    /// <c>Dashboard.razor</c>'s own role check rather than the sign-in flow (already covered by
+    /// <see cref="SignInShould"/>). <c>_factory.Services</c> is touched below to force the host to build
+    /// now, while the env var is still set - see <see cref="DisposeAsync"/>.
+    /// </remarks>
     public Task InitializeAsync()
     {
-        // See SignInShould's header comment on this same override: an environment variable, not
-        // ConfigureAppConfiguration, because WebApplicationFactory's config hook doesn't apply in time for
-        // Program.cs's top-level AddAzureBlobServiceClient call. Never actually dialed: Data Protection
-        // persistence is redirected to a local temp directory below before anything touches it.
         Environment.SetEnvironmentVariable(
             "ConnectionStrings__blobs",
             "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;" +
@@ -38,9 +44,6 @@ public class DashboardShould : IAsyncLifetime
         {
             builder.ConfigureServices(services =>
             {
-                // Swaps in an always-authenticated, zero-role principal in place of real cookie auth, so
-                // this test exercises Dashboard.razor's own role check rather than the sign-in flow
-                // (already covered by SignInShould).
                 services.AddAuthentication(TestAuthHandler.SchemeName)
                     .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.SchemeName, _ => { });
 
@@ -48,7 +51,6 @@ public class DashboardShould : IAsyncLifetime
             });
         });
 
-        // Forces the host to build now, while the env var above is still set - see DisposeAsync.
         _ = _factory.Services;
 
         return Task.CompletedTask;
@@ -82,8 +84,10 @@ public class DashboardShould : IAsyncLifetime
     }
 }
 
-// Always authenticates the request as a fixed user with no role claims at all - see DashboardShould's
-// header comment for why.
+/// <remarks>
+/// Always authenticates the request as a fixed user with no role claims at all - see
+/// <see cref="DashboardShould"/>'s remarks for why.
+/// </remarks>
 internal sealed class TestAuthHandler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,

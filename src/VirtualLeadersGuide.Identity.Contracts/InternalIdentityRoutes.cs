@@ -1,8 +1,13 @@
 namespace VirtualLeadersGuide.Identity.Contracts;
 
-// Route shape shared between Api's InternalIdentityEndpoints (which maps these) and Web's ApiUserStore
-// (which calls them) so the two sides can't drift. Deliberately outside JsonApi's /api namespace (see
-// ADR-0022) - these are plain internal CRUD-by-user endpoints, not a JSON:API resource.
+/// <summary>
+/// Route shape shared between Api's <c>InternalIdentityEndpoints</c> (which maps these) and Web's
+/// <c>ApiUserStore</c> (which calls them) so the two sides can't drift.
+/// </summary>
+/// <remarks>
+/// Deliberately outside JsonApi's <c>/api</c> namespace (ADR-0022) - these are plain internal
+/// CRUD-by-user endpoints, not a JSON:API resource.
+/// </remarks>
 public static class InternalIdentityRoutes
 {
     public const string GroupPrefix = "/internal/identity";

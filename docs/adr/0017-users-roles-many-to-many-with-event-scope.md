@@ -45,3 +45,9 @@ This also reshapes the "Director↔Event assignment" resource (P2-8, #17) into a
 resource, and removes the "generic scoping helper consumed by other resources" framing from P2-3 (#12) — see
 ADR-0007's amendment for why authorization now reads role claims directly instead of querying this table
 per-request.
+
+`Role` and `UserRole` stay plain POCOs, never exposed as JsonApiDotNetCore resources — grants are reachable
+only through `InternalAuthorizationEndpoints` (P2-3, #12; see `DomainAuthorizationEntitiesAreNotJsonApiResourcesShould`).
+Unlike `ApplicationUser` (ADR-0024), nothing needs a public-surface `Role`/`UserRole` resource today, and
+keeping them private avoids exposing grant data — including other users' roles — through `/api` before any
+scoping rule for who can see whose grants has been designed.

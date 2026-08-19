@@ -87,8 +87,6 @@ public class InternalIdentityEndpointsShould : IAsyncLifetime
         IdentityUserDto created = NewUserDto();
         await _client.PostAsJsonAsync(InternalIdentityRoutes.ForUsers(), created);
 
-        // created.ConcurrencyStamp is the value from before insert - still fine for a first update, but
-        // reused here unchanged for a *second* one below to simulate a caller acting on a stale read.
         HttpResponseMessage firstUpdateResponse = await _client.PutAsJsonAsync(
             InternalIdentityRoutes.ForUserById(created.Id), CopyWith(created, emailConfirmed: true));
         Assert.Equal(HttpStatusCode.OK, firstUpdateResponse.StatusCode);

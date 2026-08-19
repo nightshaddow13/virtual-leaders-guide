@@ -14,7 +14,9 @@ Single-context layout (CONTEXT.md + docs/adr/ at repo root). See `docs/agents/do
 
 ### Coding standards
 
-XML doc comment (`///`) conventions, including the interface/`<inheritdoc/>` rule. See `docs/agents/coding-standards.md`.
+XML doc comment (`///`) conventions, including the interface/`<inheritdoc/>` rule, and where design rationale
+belongs now that bare `//` comments don't survive. See `docs/agents/coding-standards.md` (also at
+`CODING_STANDARDS.md` for tools that look there).
 
 ### Code search
 

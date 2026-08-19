@@ -23,9 +23,12 @@ public class DashboardWithRoleClaimShould : IAsyncLifetime
     private readonly string _dataProtectionKeysDirectory =
         Path.Combine(Path.GetTempPath(), "vlg-web-tests-keys-" + Guid.NewGuid());
 
+    /// <remarks>
+    /// See <see cref="SignInShould"/>'s remarks on this same override. <c>_factory.Services</c> is touched
+    /// below to force the host to build now, while the env var is still set - see <see cref="DisposeAsync"/>.
+    /// </remarks>
     public Task InitializeAsync()
     {
-        // See SignInShould's header comment on this same override.
         Environment.SetEnvironmentVariable(
             "ConnectionStrings__blobs",
             "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;" +
@@ -44,7 +47,6 @@ public class DashboardWithRoleClaimShould : IAsyncLifetime
             });
         });
 
-        // Forces the host to build now, while the env var above is still set - see DisposeAsync.
         _ = _factory.Services;
 
         return Task.CompletedTask;

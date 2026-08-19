@@ -26,7 +26,7 @@ public class InternalApiClientShould
             new FixedAuthenticationStateProvider("user-1"), grantsClient, Configuration());
         var apiClient = new InternalApiClient(new StubHttpClientFactory(apiHandler), jwtProvider);
 
-        string expectedToken = await jwtProvider.GetTokenAsync(CancellationToken.None); // Same cached token.
+        string expectedToken = await jwtProvider.GetTokenAsync(CancellationToken.None);
 
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/users");
         await apiClient.SendAsync(request, CancellationToken.None);
@@ -40,8 +40,6 @@ public class InternalApiClientShould
     [Fact]
     public async Task NotAttachAnAuthorizationHeader_WhenApiUserStoreSendsARequest_ForFindByIdAsync()
     {
-        // ApiUserStore deliberately keeps using the bare "Api" client, never InternalApiClient - it runs on
-        // paths (backing SignInManager) where no user token exists yet. This pins that it stays that way.
         HttpRequestMessage? capturedRequest = null;
         var handler = new StubHttpMessageHandler(request =>
         {

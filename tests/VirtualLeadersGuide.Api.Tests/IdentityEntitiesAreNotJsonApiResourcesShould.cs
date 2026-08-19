@@ -3,13 +3,15 @@ using System.Net.Http.Headers;
 
 namespace VirtualLeadersGuide.Api.Tests;
 
-// JsonApiDotNetCore only picks up entities implementing IIdentifiable (see SmokeTestEntity) - the Identity
-// entities IdentityDbContext<ApplicationUser> adds don't, so they should never be reachable as a JSON:API
-// resource under /api. This asserts that stays true rather than trusting it - see ADR-0022.
-//
-// ApplicationUser itself is the one exception - it does implement IIdentifiable<string> and is reachable at
-// /api/users (ADR-0024), so that case moved to UsersResourceShould, which additionally proves credential
-// columns stay unreachable there. Every other case here still asserts a real, permanent 404.
+/// <remarks>
+/// JsonApiDotNetCore only picks up entities implementing <c>IIdentifiable</c> (see <c>SmokeTestEntity</c>) -
+/// the Identity entities <c>IdentityDbContext&lt;ApplicationUser&gt;</c> adds don't, so they should never be
+/// reachable as a JSON:API resource under <c>/api</c>. This asserts that stays true rather than trusting it
+/// (ADR-0022). <c>ApplicationUser</c> itself is the one exception - it does implement
+/// <c>IIdentifiable&lt;string&gt;</c> and is reachable at <c>/api/users</c> (ADR-0024), so that case moved
+/// to <c>UsersResourceShould</c>, which additionally proves credential columns stay unreachable there. Every
+/// other case here still asserts a real, permanent 404.
+/// </remarks>
 public class IdentityEntitiesAreNotJsonApiResourcesShould : IAsyncLifetime
 {
     private const string JsonApiMediaType = "application/vnd.api+json";

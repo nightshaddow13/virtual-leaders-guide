@@ -6,16 +6,19 @@ using VirtualLeadersGuide.Web.Identity;
 
 namespace Microsoft.AspNetCore.Routing;
 
-// Trimmed from the scaffold's version (see IdentityRedirectManager.cs's header comment): dropped
-// PerformExternalLogin, PasskeyCreationOptions/PasskeyRequestOptions, and LinkExternalLogin - external
-// logins and passkeys aren't wired up anywhere in this app (ADR-0019: password-only sign-in is deliberate;
-// ADR-0022 cuts 2FA similarly). Kept Logout and DownloadPersonalData, the latter trimmed to drop the
-// AuthenticatorKey/external-login-provider export lines - ApiUserStore implements neither
-// IUserAuthenticatorKeyStore nor IUserLoginStore, so calling those UserManager methods would throw
-// NotSupportedException.
+/// <summary>Endpoints required by the Identity Razor components in <c>/Components/Account/Pages</c>.</summary>
+/// <remarks>
+/// Trimmed from the <c>dotnet new blazor -au Individual -int Server</c> scaffold: dropped
+/// <c>PerformExternalLogin</c>, <c>PasskeyCreationOptions</c>/<c>PasskeyRequestOptions</c>, and
+/// <c>LinkExternalLogin</c> - external logins and passkeys aren't wired up anywhere in this app (ADR-0019:
+/// password-only sign-in is deliberate; ADR-0022 cuts 2FA similarly). Kept <c>Logout</c> and
+/// <c>DownloadPersonalData</c>, the latter trimmed to drop the <c>AuthenticatorKey</c>/external-login-provider
+/// export lines - <c>ApiUserStore</c> implements neither <c>IUserAuthenticatorKeyStore</c> nor
+/// <c>IUserLoginStore</c>, so calling those <c>UserManager</c> methods would throw
+/// <see cref="NotSupportedException"/>.
+/// </remarks>
 internal static class IdentityComponentsEndpointRouteBuilderExtensions
 {
-    // These endpoints are required by the Identity Razor components defined in the /Components/Account/Pages directory of this project.
     public static IEndpointConventionBuilder MapAdditionalIdentityEndpoints(this IEndpointRouteBuilder endpoints)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
@@ -49,7 +52,6 @@ internal static class IdentityComponentsEndpointRouteBuilderExtensions
             var userId = await userManager.GetUserIdAsync(user);
             downloadLogger.LogInformation("User with ID '{UserId}' asked for their personal data.", userId);
 
-            // Only include personal data for download
             var personalData = new Dictionary<string, string>();
             var personalDataProps = typeof(ApplicationUser).GetProperties().Where(
                 prop => Attribute.IsDefined(prop, typeof(PersonalDataAttribute)));

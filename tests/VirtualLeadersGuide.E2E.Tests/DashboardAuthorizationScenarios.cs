@@ -3,10 +3,12 @@ using Microsoft.Playwright;
 
 namespace VirtualLeadersGuide.E2E.Tests;
 
-// Exercises all three states of /dashboard's own authorization gate (P2.1-2, #60) - anonymous, signed in with
-// no role, and signed in as an allowlisted Admin (P2-4, #13) - as opposed to LoginPageScenarios, which is
-// scoped to the Login form's own behavior (ADR-0012, narrowed by ADR-0027). See LoginPageScenarios's header
-// comment for the split rationale.
+/// <remarks>
+/// Exercises all three states of <c>/dashboard</c>'s own authorization gate (P2.1-2, #60) - anonymous,
+/// signed in with no role, and signed in as an allowlisted Admin (P2-4, #13) - as opposed to
+/// <see cref="LoginPageScenarios"/>, which is scoped to the Login form's own behavior (ADR-0029 narrows
+/// ADR-0012). See <see cref="LoginPageScenarios"/>'s remarks for the split rationale.
+/// </remarks>
 [Collection(nameof(AspireE2ECollection))]
 public class DashboardAuthorizationScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
 {
@@ -16,11 +18,16 @@ public class DashboardAuthorizationScenarios(AspireE2EFixture fixture) : E2ETest
         {
             await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
 
-            // RedirectToLogin.razor builds `Account/Login?returnUrl=<the full dashboard URL, escaped>` -
-            // matching on the path plus the lowercase `returnUrl=` key (not the full encoded value) keeps
-            // this from breaking if the escaping scheme ever changes.
-            await Expect(Page).ToHaveURLAsync(new Regex(@"Account/Login\?returnUrl=.*dashboard", RegexOptions.IgnoreCase));
+            await Expect(Page).ToHaveURLAsync(RedirectToLoginWithReturnUrl());
         });
+
+    /// <remarks>
+    /// <c>RedirectToLogin.razor</c> builds <c>Account/Login?returnUrl=&lt;the full dashboard URL,
+    /// escaped&gt;</c> - matching on the path plus the lowercase <c>returnUrl=</c> key (not the full encoded
+    /// value) keeps this from breaking if the escaping scheme ever changes.
+    /// </remarks>
+    private static Regex RedirectToLoginWithReturnUrl() =>
+        new(@"Account/Login\?returnUrl=.*dashboard", RegexOptions.IgnoreCase);
 
     [Fact(DisplayName = "Given a signed-in user with no role claim, when navigating to /dashboard, then the browser redirects to Account/NoAccess")]
     public async Task GivenANoRoleUser_WhenNavigatingToDashboard_ThenItRedirectsToNoAccess() =>
@@ -40,10 +47,6 @@ public class DashboardAuthorizationScenarios(AspireE2EFixture fixture) : E2ETest
     public async Task GivenAnAllowlistedAdmin_WhenNavigatingToDashboard_ThenTheDashboardRenders() =>
         await RunAsync(async () =>
         {
-            // AdminAllowlistedEmail is baked into the AppHost's admin-allowlist parameter for this whole run
-            // (see AspireE2EFixture) - creating the account here is enough; AdminAllowlistSynchronizer
-            // promotes it to Admin during this same sign-in (ApplicationUserClaimsPrincipalFactory awaits the
-            // sync before the cookie is written), so no separate grant-creation step is needed.
             await Fixture.IdentityApi.CreateUserAsync(
                 Fixture.AdminAllowlistedEmail, TestCredentials.KnownPassword, CancellationToken.None);
 
