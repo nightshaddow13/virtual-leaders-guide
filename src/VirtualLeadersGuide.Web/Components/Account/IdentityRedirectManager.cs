@@ -4,9 +4,12 @@ using VirtualLeadersGuide.Web.Identity;
 
 namespace VirtualLeadersGuide.Web.Components.Account;
 
-// Lifted from the .NET 10 `dotnet new blazor -au Individual -int Server` scaffold, adjusted only for this
-// project's namespaces - see P2-2 (#11) plan for why the Account pages are hand-lifted rather than scaffolded
-// in place (no aspnet-codegenerator path for Blazor Identity).
+/// <summary>Redirect helper for the Identity Account pages, matching the Blazor scaffold's shape.</summary>
+/// <remarks>
+/// Lifted from the .NET 10 <c>dotnet new blazor -au Individual -int Server</c> scaffold, adjusted only for
+/// this project's namespaces - see the P2-2 (#11) plan for why the Account pages are hand-lifted rather
+/// than scaffolded in place (no <c>aspnet-codegenerator</c> path for Blazor Identity).
+/// </remarks>
 internal sealed class IdentityRedirectManager(NavigationManager navigationManager)
 {
     public const string StatusCookieName = "Identity.StatusMessage";
@@ -19,11 +22,11 @@ internal sealed class IdentityRedirectManager(NavigationManager navigationManage
         MaxAge = TimeSpan.FromSeconds(5),
     };
 
+    /// <remarks>Guards against open redirects.</remarks>
     public void RedirectTo(string? uri)
     {
         uri ??= "";
 
-        // Prevent open redirects.
         if (!Uri.IsWellFormedUriString(uri, UriKind.Relative))
         {
             uri = navigationManager.ToBaseRelativePath(uri);

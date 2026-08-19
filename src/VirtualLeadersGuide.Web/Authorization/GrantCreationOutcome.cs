@@ -1,7 +1,6 @@
 namespace VirtualLeadersGuide.Web.Authorization;
 
-// Outcomes ApiRoleGrantClient.CreateGrantAsync distinguishes - see that method's comment for why
-// AlreadyGranted is a typed outcome rather than an exception.
+/// <summary>Outcomes <see cref="ApiRoleGrantClient.CreateGrantAsync"/> distinguishes.</summary>
 public enum GrantCreationOutcome
 {
     Created,

@@ -4,17 +4,20 @@ using Microsoft.AspNetCore.Identity;
 
 namespace VirtualLeadersGuide.Web.Identity;
 
-// IEmailSender<ApplicationUser> over Azure Communication Services Email (P2-1, #1) - reads Email:ConnectionString
-// and Email:SenderAddress, both already wired by P2-1's AppHost.cs/appsettings.json (acs-connection-string
-// is a required, fail-closed Aspire parameter, so there's no "connection string absent" state to fall back
-// from here - see the P2-2 plan's section 6).
-//
-// Only SendPasswordResetLinkAsync is meaningfully implemented: RequireConfirmedAccount is false for P2-2
-// (see plan Scope), so nothing calls SendConfirmationLinkAsync, and the Account pages carried over from the
-// scaffold use the link-based reset flow, not the code-based one, so nothing calls
-// SendPasswordResetCodeAsync either. Both throw rather than silently no-op or send a mismatched email -
-// same "don't pretend to support a capability with no caller" reasoning as omitting IUserTwoFactorStore
-// from ApiUserStore (see ADR-0022).
+/// <summary>
+/// <see cref="IEmailSender{TUser}"/> over Azure Communication Services Email (P2-1, #1) - reads
+/// <c>Email:ConnectionString</c> and <c>Email:SenderAddress</c>, both wired by P2-1's
+/// <c>AppHost.cs</c>/<c>appsettings.json</c> (<c>acs-connection-string</c> is a required, fail-closed
+/// Aspire parameter, so there's no "connection string absent" state to fall back from here).
+/// </summary>
+/// <remarks>
+/// Only <see cref="SendPasswordResetLinkAsync"/> is meaningfully implemented:
+/// <c>RequireConfirmedAccount</c> is false for P2-2, so nothing calls <see cref="SendConfirmationLinkAsync"/>,
+/// and the Account pages carried over from the scaffold use the link-based reset flow, not the code-based
+/// one, so nothing calls <see cref="SendPasswordResetCodeAsync"/> either. Both throw rather than silently
+/// no-op or send a mismatched email - same "don't pretend to support a capability with no caller" reasoning
+/// as omitting <c>IUserTwoFactorStore</c> from <c>ApiUserStore</c> (ADR-0022).
+/// </remarks>
 public sealed class AcsEmailSender(IConfiguration configuration, ILogger<AcsEmailSender> logger)
     : IEmailSender<ApplicationUser>
 {

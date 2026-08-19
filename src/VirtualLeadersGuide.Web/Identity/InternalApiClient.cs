@@ -25,6 +25,10 @@ namespace VirtualLeadersGuide.Web.Identity;
 /// <c>"Api"</c> client directly rather than this type - both run on paths where no user token exists yet
 /// (backing sign-in itself, or minting the token this type attaches).
 /// </para>
+/// <para>
+/// Unconsumed for now: the seam future JSON:API resource calls will go through, once a caller needs P2-5's
+/// bearer token attached to something.
+/// </para>
 /// </remarks>
 public sealed class InternalApiClient(IHttpClientFactory httpClientFactory, InternalJwtProvider jwtProvider)
 {

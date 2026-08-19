@@ -44,6 +44,14 @@ public sealed class InternalJwtProvider(
     /// token - whatever outbound call needed this token should fail loudly instead of silently proceeding as
     /// the wrong user.
     /// </exception>
+    /// <remarks>
+    /// A <see langword="null"/> grants result (as opposed to <see cref="AuthorizationDataUnavailableException"/>)
+    /// means the user's row no longer exists on Api (e.g. deleted mid-session), not a genuine outage.
+    /// Minting a zero-role token here is the honest representation: the person is still authenticated, they
+    /// just hold nothing - and it's self-healing, since the existing security-stamp revalidation
+    /// (<c>IdentityRevalidatingAuthenticationStateProvider</c>) signs them out within its own cycle once
+    /// <c>UserManager.GetUserAsync</c> also returns null for the same missing row.
+    /// </remarks>
     public async Task<string> GetTokenAsync(CancellationToken cancellationToken)
     {
         if (_cachedToken is not null
@@ -60,12 +68,6 @@ public sealed class InternalJwtProvider(
                 "Cannot mint an internal JWT: the current circuit has no signed-in user.");
         }
 
-        // A null result means the user's row no longer exists on Api (e.g. deleted mid-session) - distinct
-        // from AuthorizationDataUnavailableException, which GetGrantsAsync throws (and this method lets
-        // propagate) for a genuine outage. Minting a zero-role token here is the honest representation: the
-        // person is still authenticated, they just hold nothing - and it's self-healing, since the existing
-        // security-stamp revalidation (IdentityRevalidatingAuthenticationStateProvider) signs them out within
-        // its own cycle once UserManager.GetUserAsync also returns null for the same missing row.
         IReadOnlyList<RoleGrantDto>? grants = await roleGrantClient.GetGrantsAsync(userId, cancellationToken);
 
         (string token, DateTimeOffset expiresAt) = Mint(userId, grants);

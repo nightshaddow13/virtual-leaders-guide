@@ -2,11 +2,14 @@ using Microsoft.AspNetCore.Identity;
 
 namespace VirtualLeadersGuide.Web.Identity;
 
-// Web's own IdentityUser subclass - deliberately a separate type from Api's ApplicationUser (Data/), not a
-// shared model. UserManager/SignInManager only need the shape IdentityUser already provides, and
-// duplicating it across the Web<->Api boundary keeps the two sides independently deployable - see
-// ADR-0022. ApiUserStore maps to/from IdentityUserDto (VirtualLeadersGuide.Identity.Contracts) rather than
-// this type crossing the wire directly.
+/// <summary>Web's own <see cref="IdentityUser"/> subclass.</summary>
+/// <remarks>
+/// Deliberately a separate type from Api's <c>ApplicationUser</c> (<c>Data/</c>), not a shared model -
+/// <c>UserManager</c>/<c>SignInManager</c> only need the shape <see cref="IdentityUser"/> already provides,
+/// and duplicating it across the Web↔Api boundary keeps the two sides independently deployable (ADR-0022).
+/// <c>ApiUserStore</c> maps to/from <c>IdentityUserDto</c> (<c>VirtualLeadersGuide.Identity.Contracts</c>)
+/// rather than this type crossing the wire directly.
+/// </remarks>
 public class ApplicationUser : IdentityUser
 {
     public string? DisplayName { get; set; }

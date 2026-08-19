@@ -4,11 +4,13 @@ using VirtualLeadersGuide.Identity.Contracts;
 
 namespace VirtualLeadersGuide.Api.Authorization;
 
-// Grant CRUD only - person CRUD already lives in Api.Identity.InternalIdentityEndpoints, and there is no
-// separate domain User to duplicate it for (ADR-0024). Backs Web's ApiRoleGrantClient. Gated by the same
-// X-Internal-Key fallback policy as every other Api endpoint (ADR-0015) - no per-endpoint auth attributes
-// needed. Deliberately outside JsonApi's /api namespace - UserRole isn't a JSON:API resource until P2-8
-// (#17).
+/// <summary>Grant CRUD, backing Web's <c>ApiRoleGrantClient</c> over the internal channel.</summary>
+/// <remarks>
+/// Person CRUD lives separately in <c>InternalIdentityEndpoints</c> (ADR-0022) - see ADR-0024's
+/// Consequences for why there's no separate domain-User CRUD surface here. Gated by the same
+/// <c>X-Internal-Key</c> fallback policy as every other Api endpoint (ADR-0015), and deliberately outside
+/// JsonApi's <c>/api</c> namespace - <see cref="UserRole"/> isn't a JSON:API resource yet (ADR-0017).
+/// </remarks>
 public static class InternalAuthorizationEndpoints
 {
     public static IEndpointRouteBuilder MapInternalAuthorizationEndpoints(this IEndpointRouteBuilder app)
@@ -22,6 +24,12 @@ public static class InternalAuthorizationEndpoints
         return app;
     }
 
+    /// <remarks>
+    /// <c>grant.Role!.Name</c> is inlined here (not routed through a helper method) so EF Core can translate
+    /// the whole projection into one SQL query with a join, rather than requiring an explicit
+    /// <c>.Include(g =&gt; g.Role)</c> - navigating into a reference navigation directly inside
+    /// <c>Select</c> is exactly the shape EF's query translator handles.
+    /// </remarks>
     private static async Task<IResult> GetGrantsAsync(
         string id, VirtualLeadersGuideDbContext db, CancellationToken cancellationToken)
     {
@@ -30,10 +38,6 @@ public static class InternalAuthorizationEndpoints
             return Results.NotFound();
         }
 
-        // grant.Role!.Name is inlined here (not routed through a helper method) so EF Core can translate
-        // the whole projection into one SQL query with a join, rather than requiring an explicit
-        // .Include(g => g.Role) - navigating into a reference navigation directly inside Select is exactly
-        // the shape EF's query translator handles.
         List<RoleGrantDto> grants = await db.DomainUserRoles.AsNoTracking()
             .Where(grant => grant.UserId == id)
             .Select(grant => new RoleGrantDto
@@ -48,6 +52,10 @@ public static class InternalAuthorizationEndpoints
         return Results.Ok(grants);
     }
 
+    /// <remarks>
+    /// The filtered unique indexes on <c>UserRoles</c> (<see cref="VirtualLeadersGuideDbContext"/>,
+    /// ADR-0017) are what a <see cref="DbUpdateException"/> here means.
+    /// </remarks>
     private static async Task<IResult> CreateGrantAsync(
         string id, CreateRoleGrantRequest request, VirtualLeadersGuideDbContext db,
         CancellationToken cancellationToken)
@@ -81,8 +89,6 @@ public static class InternalAuthorizationEndpoints
         }
         catch (DbUpdateException)
         {
-            // Filtered unique index on (UserId, RoleId) WHERE EventId IS NULL, or (UserId, RoleId, EventId)
-            // WHERE EventId IS NOT NULL - see VirtualLeadersGuideDbContext.OnModelCreating and ADR-0017.
             return Results.Conflict();
         }
 

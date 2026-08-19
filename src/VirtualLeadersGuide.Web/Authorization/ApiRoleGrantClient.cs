@@ -4,10 +4,12 @@ using VirtualLeadersGuide.Identity.Contracts;
 
 namespace VirtualLeadersGuide.Web.Authorization;
 
-// Thin HTTP client over Api's internal authorization endpoints (see InternalAuthorizationRoutes),
-// mirroring ApiUserStore's shape - same "Api" HttpClient (InternalApiKeyHandler + resilience already
-// wired in Program.cs), same SendAsync/EnsureExpectedStatus failure discipline. Nothing in this ticket
-// consumes it; P2-4 (#13, allowlist resync) and P2-5 (#14, JWT claim minting) are the first callers.
+/// <summary>Thin HTTP client over Api's internal authorization endpoints (see <see cref="InternalAuthorizationRoutes"/>).</summary>
+/// <remarks>
+/// Mirrors <c>ApiUserStore</c>'s shape - same <c>"Api"</c> <see cref="HttpClient"/>
+/// (<c>InternalApiKeyHandler</c> + resilience already wired in <c>Program.cs</c>), same
+/// <c>SendAsync</c>/<c>EnsureExpectedStatus</c> failure discipline.
+/// </remarks>
 public sealed class ApiRoleGrantClient(IHttpClientFactory httpClientFactory)
 {
     public async Task<IReadOnlyList<RoleGrantDto>?> GetGrantsAsync(string userId, CancellationToken cancellationToken)
@@ -25,10 +27,13 @@ public sealed class ApiRoleGrantClient(IHttpClientFactory httpClientFactory)
         return await response.Content.ReadFromJsonAsync<List<RoleGrantDto>>(cancellationToken);
     }
 
-    // AlreadyGranted (409) is an expected outcome for a caller re-syncing a grant that may already exist
-    // (e.g. P2-4's per-login allowlist sync), not an error - hence a typed outcome rather than an
-    // exception. UserOrRoleNotFound (404) collapses two distinct failures the endpoint itself doesn't
-    // distinguish (see InternalAuthorizationEndpoints.CreateGrantAsync).
+    /// <remarks>
+    /// <see cref="GrantCreationOutcome.AlreadyGranted"/> (409) is an expected outcome for a caller
+    /// re-syncing a grant that may already exist (e.g. P2-4's per-login allowlist sync), not an error -
+    /// hence a typed outcome rather than an exception. <see cref="GrantCreationOutcome.UserOrRoleNotFound"/>
+    /// (404) collapses two distinct failures the endpoint itself doesn't distinguish (see
+    /// <c>InternalAuthorizationEndpoints.CreateGrantAsync</c>).
+    /// </remarks>
     public async Task<(GrantCreationOutcome Outcome, RoleGrantDto? Grant)> CreateGrantAsync(
         string userId, int roleId, Guid? eventId, CancellationToken cancellationToken)
     {

@@ -3,9 +3,6 @@ using System.Text;
 
 namespace VirtualLeadersGuide.Api.Data;
 
-// Named SlugDerivation, not Slug - a static class named exactly "Slug" collided with Event.Slug (the
-// property) badly enough to force fully-qualified references and an explanatory comment at every call site
-// (see Event.Create). Renaming the type instead of working around the collision at each use.
 /// <summary>
 /// Derives a URL-safe starting value for <see cref="Event.Slug"/> from an Event's <see cref="Event.Name"/>
 /// (CONTEXT.md's Slug entry - "auto-derived from Name but editable"). A pure string transform: it never
@@ -13,10 +10,19 @@ namespace VirtualLeadersGuide.Api.Data;
 /// collision when the second save trips the unique index - resolved by the Admin editing the Slug by hand,
 /// not by this helper silently appending a suffix on their behalf (a route the Admin never chose).
 /// </summary>
+/// <remarks>
+/// Named <c>SlugDerivation</c>, not <c>Slug</c> - a static class named exactly "Slug" collided with
+/// <see cref="Event.Slug"/> (the property) badly enough to force fully-qualified references and an
+/// explanatory comment at every call site (see <see cref="Event.Create"/>). Renaming the type instead of
+/// working around the collision at each use.
+/// </remarks>
 public static class SlugDerivation
 {
-    // Matches Event.Slug's column length (VirtualLeadersGuideDbContext) - truncating here rather than letting
-    // an oversized candidate reach the database and fail the CHECK constraint / column length there instead.
+    /// <remarks>
+    /// Matches <see cref="Event.Slug"/>'s column length (<see cref="VirtualLeadersGuideDbContext"/>) -
+    /// truncating here rather than letting an oversized candidate reach the database and fail the CHECK
+    /// constraint / column length there instead.
+    /// </remarks>
     private const int MaxLength = 100;
 
     /// <summary>
@@ -31,6 +37,11 @@ public static class SlugDerivation
     /// <paramref name="name"/> is entirely punctuation/whitespace) - the caller decides what to do with that;
     /// this helper doesn't invent a fallback value.
     /// </returns>
+    /// <remarks>
+    /// A diacritic mark FormD splits off its base letter (e.g. the acute accent on "é") - the base letter is
+    /// appended on its own iteration, so a <see cref="UnicodeCategory.NonSpacingMark"/> is simply dropped
+    /// rather than turned into a hyphen.
+    /// </remarks>
     public static string From(string name)
     {
         string decomposed = name.Normalize(NormalizationForm.FormD);
@@ -41,8 +52,6 @@ public static class SlugDerivation
         {
             if (CharUnicodeInfo.GetUnicodeCategory(c) == UnicodeCategory.NonSpacingMark)
             {
-                // A diacritic mark FormD split off its base letter (e.g. the acute accent on "é") - the base
-                // letter was already appended below, so just drop the mark instead of turning it into a hyphen.
                 continue;
             }
 

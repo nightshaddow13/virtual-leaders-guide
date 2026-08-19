@@ -1,10 +1,15 @@
 namespace VirtualLeadersGuide.Identity.Contracts;
 
-// Route shape shared between Api's InternalAuthorizationEndpoints (which maps these) and Web's
-// ApiRoleGrantClient (which calls them), mirroring InternalIdentityRoutes' pattern so the two sides can't
-// drift. Deliberately outside JsonApi's /api namespace - these are plain internal grant CRUD, not a
-// JSON:API resource (UserRole itself only becomes one under P2-8, #17). {id} is an ApplicationUser.Id
-// (string, per ADR-0024) - there is no separate domain User id.
+/// <summary>
+/// Route shape shared between Api's <c>InternalAuthorizationEndpoints</c> (which maps these) and Web's
+/// <c>ApiRoleGrantClient</c> (which calls them), mirroring <see cref="InternalIdentityRoutes"/>' pattern so
+/// the two sides can't drift.
+/// </summary>
+/// <remarks>
+/// Deliberately outside JsonApi's <c>/api</c> namespace - these are plain internal grant CRUD, not a
+/// JSON:API resource (<see cref="UserRole"/> itself only becomes one under P2-8, #17). <c>{id}</c> is an
+/// <c>ApplicationUser.Id</c> (string, per ADR-0024) - there is no separate domain User id.
+/// </remarks>
 public static class InternalAuthorizationRoutes
 {
     public const string GroupPrefix = "/internal/authorization";

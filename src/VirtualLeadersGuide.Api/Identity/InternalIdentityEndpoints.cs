@@ -4,13 +4,15 @@ using VirtualLeadersGuide.Identity.Contracts;
 
 namespace VirtualLeadersGuide.Api.Identity;
 
-// Backs Web's ApiUserStore (an IUserStore<ApplicationUser> implemented over HTTP - see ADR-0022) with plain
-// CRUD-by-user endpoints against Api's own IdentityDbContext. Deliberately not routed through
-// Microsoft.AspNetCore.Identity's UserManager/EF UserStore on this side - Api has no reason to run the full
-// Identity pipeline (password hashing, token providers, ...) just to read/write rows; those concerns live
-// entirely in Web, the only place SignInManager/UserManager run. Gated by the same X-Internal-Key fallback
-// policy as every other Api endpoint (ADR-0015) - no per-endpoint auth attributes needed. Deliberately
-// outside JsonApi's /api namespace - these aren't a JSON:API resource.
+/// <summary>Plain CRUD-by-user endpoints against Api's own <see cref="IdentityDbContext{TUser}"/>.</summary>
+/// <remarks>
+/// Backs Web's <c>ApiUserStore</c> (ADR-0022). Deliberately not routed through
+/// Microsoft.AspNetCore.Identity's <c>UserManager</c>/EF <c>UserStore</c> here - those concerns (password
+/// hashing, token providers, ...) live entirely in Web, the only place
+/// <c>SignInManager</c>/<c>UserManager</c> run. Gated by the same <c>X-Internal-Key</c> fallback policy as
+/// every other Api endpoint (ADR-0015), and deliberately outside JsonApi's <c>/api</c> namespace - these
+/// aren't a JSON:API resource.
+/// </remarks>
 public static class InternalIdentityEndpoints
 {
     public static IEndpointRouteBuilder MapInternalIdentityEndpoints(this IEndpointRouteBuilder app)
@@ -51,12 +53,19 @@ public static class InternalIdentityEndpoints
         return user is null ? Results.NotFound() : Results.Ok(ToDto(user));
     }
 
+    /// <remarks>
+    /// <see cref="IdentityUserDto.Id"/>/<see cref="IdentityUserDto.ConcurrencyStamp"/> already come
+    /// populated from the caller: Web constructs <c>new ApplicationUser()</c>, and <c>IdentityUser</c>'s
+    /// own parameterless constructor assigns both before <c>UserManager.CreateAsync</c> ever reaches
+    /// <c>ApiUserStore</c> - so this is a plain insert, not a generator. A <see cref="DbUpdateException"/>
+    /// here means the unique index on <c>NormalizedUserName</c> (<c>IdentityDbContext</c>'s default
+    /// <c>"UserNameIndex"</c>) - the practical email-uniqueness enforcement, since <c>UserName</c> is set
+    /// equal to <c>Email</c> everywhere this app creates a user (no separate username concept - see
+    /// CONTEXT.md's User/Credential entries).
+    /// </remarks>
     private static async Task<IResult> CreateAsync(
         IdentityUserDto dto, VirtualLeadersGuideDbContext db, CancellationToken cancellationToken)
     {
-        // Id and ConcurrencyStamp already come populated from the caller: Web constructs `new
-        // ApplicationUser()`, and IdentityUser's own parameterless constructor assigns both before
-        // UserManager.CreateAsync ever reaches ApiUserStore - so this is a plain insert, not a generator.
         db.Users.Add(FromDto(dto));
 
         try
@@ -65,15 +74,24 @@ public static class InternalIdentityEndpoints
         }
         catch (DbUpdateException)
         {
-            // Unique index on NormalizedUserName (IdentityDbContext's default "UserNameIndex") - the
-            // practical email-uniqueness enforcement, since UserName is set equal to Email everywhere this
-            // app creates a user (no separate username concept - see CONTEXT.md's User/Credential entries).
             return Results.Conflict();
         }
 
         return Results.Created(InternalIdentityRoutes.ForUserById(dto.Id), dto);
     }
 
+    /// <remarks>
+    /// Mirrors the stock EF Core Identity <c>UserStore.UpdateAsync</c> pattern exactly (Attach, then bump
+    /// the stamp, then Update): <c>Attach</c> captures <c>dto.ConcurrencyStamp</c> - the value the caller
+    /// last read - as the row's ORIGINAL value for the WHERE clause; reassigning
+    /// <see cref="ApplicationUser.ConcurrencyStamp"/> before <c>Update()</c> changes only the value being
+    /// WRITTEN. If the row's real stamp has since moved on, 0 rows match and EF throws
+    /// <see cref="DbUpdateConcurrencyException"/> - see ADR-0022's Consequences for why this concurrency
+    /// check is kept at all. A <see cref="DbUpdateConcurrencyException"/> here covers a stale
+    /// ConcurrencyStamp, the row having been deleted since the caller read it, and (in practice unreachable
+    /// here, since Update always follows a successful FindBy*) the row never having existed at all - all
+    /// three are usefully signalled to Web as <c>ConcurrencyFailure</c>.
+    /// </remarks>
     private static async Task<IResult> UpdateAsync(
         string id, IdentityUserDto dto, VirtualLeadersGuideDbContext db, CancellationToken cancellationToken)
     {
@@ -82,13 +100,6 @@ public static class InternalIdentityEndpoints
             return Results.BadRequest();
         }
 
-        // Mirrors the stock EF Core Identity UserStore.UpdateAsync pattern exactly (Attach, then bump the
-        // stamp, then Update): Attach captures dto.ConcurrencyStamp - the value the caller last read - as
-        // the row's ORIGINAL value for the WHERE clause; reassigning ConcurrencyStamp before Update()
-        // changes only the value being WRITTEN. If the row's real stamp has since moved on, 0 rows match
-        // and EF throws DbUpdateConcurrencyException below - kept per ADR-0022 even though real conflict
-        // risk at this app's scale is low, to match the framework's own contract rather than special-case
-        // it away.
         ApplicationUser entity = FromDto(dto);
         db.Attach(entity);
         entity.ConcurrencyStamp = Guid.NewGuid().ToString();
@@ -100,9 +111,6 @@ public static class InternalIdentityEndpoints
         }
         catch (DbUpdateConcurrencyException)
         {
-            // Covers a stale ConcurrencyStamp, the row having been deleted since the caller read it, and
-            // (in practice unreachable here, since Update always follows a successful FindBy*) the row
-            // never having existed at all - all three are usefully signalled to Web as ConcurrencyFailure.
             return Results.Conflict();
         }
 

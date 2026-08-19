@@ -1,13 +1,14 @@
 namespace VirtualLeadersGuide.Identity.Contracts;
 
-// Wire shape for the internal identity-store endpoints (see InternalIdentityRoutes). A flat mirror of
-// Microsoft.AspNetCore.Identity.IdentityUser's columns, deliberately including PasswordHash and
-// SecurityStamp — Web verifies hashes and mints reset tokens locally against these values, which is what
-// keeps the stock SignInManager/DataProtectorTokenProvider path intact instead of hand-rolling either in
-// Api. See ADR-0022 for why this data crosses the internal Web<->Api hop at all.
-//
-// No EF/DbContext dependency here on purpose: this project is referenced by both Api and Web, and is only
-// the contract between them, not a data-access layer either side shares.
+/// <summary>Wire shape for the internal identity-store endpoints (see <c>InternalIdentityRoutes</c>).</summary>
+/// <remarks>
+/// A flat mirror of <c>Microsoft.AspNetCore.Identity.IdentityUser</c>'s columns, deliberately including
+/// <see cref="PasswordHash"/> and <see cref="SecurityStamp"/> — Web verifies hashes and mints reset tokens
+/// locally against these values, keeping the stock <c>SignInManager</c>/<c>DataProtectorTokenProvider</c>
+/// path intact instead of hand-rolling either in Api. See ADR-0022 for why this data crosses the internal
+/// Web↔Api hop at all. No EF/DbContext dependency here on purpose: this project is referenced by both Api
+/// and Web, and is only the contract between them, not a data-access layer either side shares.
+/// </remarks>
 public sealed class IdentityUserDto
 {
     public required string Id { get; set; }
@@ -22,9 +23,11 @@ public sealed class IdentityUserDto
 
     public bool EmailConfirmed { get; set; }
 
-    // Not an IdentityUser column - carried here so Web's ApplicationUser round-trips it through the same
-    // CRUD-by-user endpoints as every other property (see ADR-0024). Unset by anything in this ticket;
-    // P2-12 (#43)/account-setup is the first place expected to write it.
+    /// <remarks>
+    /// Not an <c>IdentityUser</c> column - carried here so Web's <c>ApplicationUser</c> round-trips it
+    /// through the same CRUD-by-user endpoints as every other property (ADR-0024's Consequences). Unset by
+    /// anything in this ticket; P2-12 (#43)/account-setup is the first place expected to write it.
+    /// </remarks>
     public string? DisplayName { get; set; }
 
     public string? PasswordHash { get; set; }
@@ -37,9 +40,11 @@ public sealed class IdentityUserDto
 
     public bool PhoneNumberConfirmed { get; set; }
 
-    // Always false / unused: Web does not implement IUserTwoFactorStore (see ADR-0022's Consequences and
-    // issue #54), so UserManager never reads or writes this. Kept only for a full 1:1 mirror of
-    // IdentityUser's columns.
+    /// <remarks>
+    /// Always <see langword="false"/> / unused: Web does not implement <c>IUserTwoFactorStore</c> (ADR-0022's
+    /// Consequences, issue #54), so <c>UserManager</c> never reads or writes this. Kept only for a full 1:1
+    /// mirror of <c>IdentityUser</c>'s columns.
+    /// </remarks>
     public bool TwoFactorEnabled { get; set; }
 
     public DateTimeOffset? LockoutEnd { get; set; }

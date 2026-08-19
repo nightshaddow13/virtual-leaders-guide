@@ -3,6 +3,7 @@ using System.Text;
 using Azure.Storage.Blobs;
 using JsonApiDotNetCore.Configuration;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
@@ -19,77 +20,10 @@ builder.AddServiceDefaults();
 
 builder.AddSqlServerDbContext<VirtualLeadersGuideDbContext>("virtualleadersguide");
 
-// --- Data Protection keys persisted to Blob Storage (P2-6, #15; ADR-0026) ---
-// Event.Passcode is encrypted at this layer (VirtualLeadersGuideDbContext's Event configuration), so Api
-// needs its own Data Protection key ring - isolated from Web's (separate application name, separate blob key
-// file in the same container), so neither app can decrypt data the other one protected. Same blob-persistence
-// reasoning as Web's own key ring (P2-2, #11; docs/runbooks/p2-2-blob-dataprotection-keys.md): min-replicas 0
-// (ADR-0005) means an in-memory key ring would silently make every stored Passcode undecryptable on restart.
-builder.AddAzureBlobServiceClient("blobs");
-builder.Services.AddDataProtection()
-    .SetApplicationName("VirtualLeadersGuide.Api")
-    .PersistKeysToAzureBlobStorage(services =>
-        services.GetRequiredService<BlobServiceClient>()
-            .GetBlobContainerClient("dataprotection-keys")
-            .GetBlobClient("api-keys.xml"));
+builder.AddPasscodeDataProtection();
 
-builder.Services.AddAuthentication(InternalApiKeyDefaults.AuthenticationScheme)
-    .AddScheme<InternalApiKeyAuthenticationOptions, InternalApiKeyAuthenticationHandler>(
-        InternalApiKeyDefaults.AuthenticationScheme, options => { })
-    // Validates the internal JWT Web mints to forward a signed-in user's identity (ADR-0007, P2-5/#14),
-    // alongside - not instead of - the X-Internal-Key scheme above. Stock JwtBearer middleware rather than
-    // hand-rolled validation, per ADR-0007.
-    .AddJwtBearer(InternalJwtDefaults.AuthenticationScheme, options =>
-    {
-        string? signingKey = builder.Configuration[InternalJwtDefaults.SigningKeyConfigurationKey];
-
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidIssuer = InternalJwtDefaults.Issuer,
-            ValidateAudience = true,
-            ValidAudience = InternalJwtDefaults.Audience,
-            ValidateLifetime = true,
-            // A 5-minute-lived token (InternalJwtDefaults.Lifetime) under the 5-minute *default* clock skew
-            // would never actually be treated as expired - shortened here to something that only absorbs
-            // clock drift between Web and Api, not the token's entire lifetime.
-            ClockSkew = TimeSpan.FromSeconds(30),
-            ValidateIssuerSigningKey = true,
-            // Left null (rather than throwing here) when unconfigured, so validation fails closed per token
-            // - AuthenticateAsync returns a failed result, matching InternalApiKeyAuthenticationHandler's
-            // posture for a missing InternalApi:Key - rather than the app crashing at startup.
-            IssuerSigningKey = string.IsNullOrEmpty(signingKey)
-                ? null
-                : new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
-            RoleClaimType = ClaimTypes.Role,
-            NameClaimType = ClaimTypes.NameIdentifier,
-            // JwtBearer defaults an unset AuthenticationType to AuthenticationTypes.Federation, not the
-            // scheme name - set explicitly so the RequireInternalUser policy below can reliably tell a
-            // JWT-issued identity apart from the claims-free X-Internal-Key identity.
-            AuthenticationType = InternalJwtDefaults.AuthenticationScheme
-        };
-    });
-
-builder.Services.AddAuthorizationBuilder()
-    // Unchanged: the loose floor every endpoint gets by default, including anything added later (ADR-0015).
-    .SetFallbackPolicy(new AuthorizationPolicyBuilder()
-        .RequireAuthenticatedUser()
-        .Build())
-    // Stricter, opt-in policy applied only to the JSON:API resource surface below (MapControllers) - proves
-    // a valid internal JWT is present, not just X-Internal-Key. Deliberately not required on
-    // /internal/identity/* or /internal/authorization/*: those run before a user token can exist (they back
-    // sign-in itself, and the latter is what produces this token's claims in the first place) - see the
-    // amendment in docs/adr/0015-internal-key-validated-via-authentication-handler.md.
-    //
-    // RequireAuthenticatedUser() alone would pass on the X-Internal-Key identity too (it's "any listed
-    // scheme succeeded"), so the assertion below is load-bearing: it demands the JWT scheme specifically.
-    // Deliberately does not require any role claim to be present - "zero roles" is a valid, authenticated
-    // identity that simply can't do anything yet; deciding what a role permits is P2-6/P2-7/P2-8's job.
-    .AddPolicy(InternalJwtDefaults.PolicyName, policy => policy
-        .AddAuthenticationSchemes(InternalApiKeyDefaults.AuthenticationScheme, InternalJwtDefaults.AuthenticationScheme)
-        .RequireAuthenticatedUser()
-        .RequireAssertion(context => context.User.Identities
-            .Any(identity => identity.AuthenticationType == InternalJwtDefaults.AuthenticationScheme)));
+builder.AddInternalAuthentication();
+builder.Services.AddInternalAuthorization();
 
 builder.Services.AddJsonApi<VirtualLeadersGuideDbContext>(options =>
 {
@@ -110,9 +44,6 @@ if (builder.Configuration.GetValue<bool>("Migrations:ApplyAutomatically"))
 }
 
 app.UseJsonApi();
-// JsonApiDotNetCore's generated controllers are the only controllers in the app, so this is the entire
-// /api/* surface and nothing else - /internal/* endpoints below are minimal APIs, unaffected by
-// MapControllers, and stay on the fallback policy alone.
 app.MapControllers().RequireAuthorization(InternalJwtDefaults.PolicyName);
 app.MapInternalIdentityEndpoints();
 app.MapInternalAuthorizationEndpoints();
@@ -127,3 +58,96 @@ app.Run();
 /// (see <c>ApiWebApplicationFactory</c>).
 /// </summary>
 public partial class Program;
+
+/// <summary>Bootstrapping for <c>VirtualLeadersGuide.Api</c>'s <c>Program.cs</c>.</summary>
+internal static class ApiProgramExtensions
+{
+    /// <remarks>
+    /// Api's own Data Protection key ring, isolated from Web's — separate application name, separate blob
+    /// key file in the same container, so neither app can decrypt data the other protected. See ADR-0026
+    /// for why, and P2-2 (#11) / <c>docs/runbooks/p2-2-blob-dataprotection-keys.md</c> for the
+    /// blob-persistence mechanics this reuses.
+    /// </remarks>
+    internal static void AddPasscodeDataProtection(this WebApplicationBuilder builder)
+    {
+        builder.AddAzureBlobServiceClient("blobs");
+        builder.Services.AddDataProtection()
+            .SetApplicationName("VirtualLeadersGuide.Api")
+            .PersistKeysToAzureBlobStorage(services =>
+                services.GetRequiredService<BlobServiceClient>()
+                    .GetBlobContainerClient("dataprotection-keys")
+                    .GetBlobClient("api-keys.xml"));
+    }
+
+    /// <remarks>
+    /// Composes the <c>X-Internal-Key</c> scheme (ADR-0015) with a stock <c>JwtBearer</c> handler validating
+    /// the internal JWT Web mints (ADR-0007) — see <see cref="AddInternalAuthorization"/> for how the two
+    /// compose under one policy.
+    /// </remarks>
+    internal static void AddInternalAuthentication(this WebApplicationBuilder builder)
+    {
+        builder.Services.AddAuthentication(InternalApiKeyDefaults.AuthenticationScheme)
+            .AddScheme<InternalApiKeyAuthenticationOptions, InternalApiKeyAuthenticationHandler>(
+                InternalApiKeyDefaults.AuthenticationScheme, options => { })
+            .AddJwtBearer(
+                InternalJwtDefaults.AuthenticationScheme,
+                options => ConfigureInternalJwtBearer(options, builder.Configuration));
+    }
+
+    /// <remarks>
+    /// A 5-minute-lived token (<see cref="InternalJwtDefaults.Lifetime"/>) under the 5-minute *default*
+    /// clock skew would never actually be treated as expired — <c>ClockSkew</c> is shortened here to
+    /// something that only absorbs clock drift between Web and Api, not the token's entire lifetime.
+    /// <c>IssuerSigningKey</c> is left <see langword="null"/> (rather than throwing here) when unconfigured,
+    /// so validation fails closed per token — <c>AuthenticateAsync</c> returns a failed result, matching
+    /// <see cref="InternalApiKeyAuthenticationHandler"/>'s posture for a missing key, rather than the app
+    /// crashing at startup. <c>AuthenticationType</c> is set explicitly because <c>JwtBearer</c> otherwise
+    /// defaults an unset value to <c>AuthenticationTypes.Federation</c>, not the scheme name — the assertion
+    /// in <see cref="AddInternalAuthorization"/> needs to tell a JWT-issued identity apart from the
+    /// claims-free <c>X-Internal-Key</c> identity reliably.
+    /// </remarks>
+    private static void ConfigureInternalJwtBearer(JwtBearerOptions options, IConfiguration configuration)
+    {
+        string? signingKey = configuration[InternalJwtDefaults.SigningKeyConfigurationKey];
+
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = InternalJwtDefaults.Issuer,
+            ValidateAudience = true,
+            ValidAudience = InternalJwtDefaults.Audience,
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromSeconds(30),
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = string.IsNullOrEmpty(signingKey)
+                ? null
+                : new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
+            RoleClaimType = ClaimTypes.Role,
+            NameClaimType = ClaimTypes.NameIdentifier,
+            AuthenticationType = InternalJwtDefaults.AuthenticationScheme
+        };
+    }
+
+    /// <remarks>
+    /// The fallback policy (every endpoint, including anything added later — ADR-0015) stays the loose
+    /// floor: any authenticated identity. <see cref="InternalJwtDefaults.PolicyName"/> is the stricter,
+    /// opt-in policy applied only to the JSON:API resource surface (<c>MapControllers</c>) — see ADR-0015's
+    /// amendment for why it isn't the fallback, why <c>/internal/identity/*</c> and
+    /// <c>/internal/authorization/*</c> stay off it, and why a request with <c>X-Internal-Key</c> but no
+    /// valid JWT gets 403 rather than 401. Requires no role claim to be present — "zero roles" is a valid,
+    /// authenticated identity that simply can't do anything yet.
+    /// </remarks>
+    internal static void AddInternalAuthorization(this IServiceCollection services)
+    {
+        services.AddAuthorizationBuilder()
+            .SetFallbackPolicy(new AuthorizationPolicyBuilder()
+                .RequireAuthenticatedUser()
+                .Build())
+            .AddPolicy(InternalJwtDefaults.PolicyName, policy => policy
+                .AddAuthenticationSchemes(
+                    InternalApiKeyDefaults.AuthenticationScheme, InternalJwtDefaults.AuthenticationScheme)
+                .RequireAuthenticatedUser()
+                .RequireAssertion(context => context.User.Identities
+                    .Any(identity => identity.AuthenticationType == InternalJwtDefaults.AuthenticationScheme)));
+    }
+}

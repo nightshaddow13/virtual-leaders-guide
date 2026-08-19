@@ -79,6 +79,12 @@ public sealed class AdminAllowlistSynchronizer(
             .Any(email => normalizer.NormalizeEmail(email) == normalizedUserEmail);
     }
 
+    /// <remarks>
+    /// <see cref="GrantCreationOutcome.AlreadyGranted"/> means a concurrent sign-in already created the
+    /// grant - not an error, see <see cref="ApiRoleGrantClient.CreateGrantAsync"/>'s remarks for why. The
+    /// fallthrough case is <see cref="GrantCreationOutcome.UserOrRoleNotFound"/> - the row vanished between
+    /// the read in <see cref="SyncAsync"/> and this write.
+    /// </remarks>
     private async Task<IReadOnlyList<RoleGrantDto>> PromoteAsync(
         ApplicationUser user, IReadOnlyList<RoleGrantDto> grants, CancellationToken cancellationToken)
     {
@@ -92,11 +98,9 @@ public sealed class AdminAllowlistSynchronizer(
                 return [.. grants, grant!];
 
             case GrantCreationOutcome.AlreadyGranted:
-                // A concurrent sign-in already created it - not an error, see
-                // ApiRoleGrantClient.CreateGrantAsync's own comment on why this outcome isn't an exception.
                 return grants;
 
-            default: // UserOrRoleNotFound - the row vanished between the read above and this write.
+            default:
                 logger.LogWarning(
                     "Could not promote user {UserId} to Admin - Api no longer has a row for them.", user.Id);
                 return grants;

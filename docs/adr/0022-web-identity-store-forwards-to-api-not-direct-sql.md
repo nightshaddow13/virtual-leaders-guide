@@ -45,5 +45,9 @@ on the `Web` side — the stock Identity UI needs no rewrite, only a different s
   `SignInManager.PasswordSignInAsync` treats a `null` `FindByEmailAsync` result as an ordinary failed login (by
   design, so it doesn't reveal whether an email exists). Without this, an `Api` outage would read to every user
   as "your password is wrong" instead of a distinguishable service error.
+- The same fail-loud principle applies to every Web→Api forwarding path, not just the user store: a transport
+  failure is never mapped to a safe-looking empty/default result, because that would silently understate what
+  the caller is entitled to instead of surfacing the outage. `AuthorizationDataUnavailableException` applies
+  this to `ApiRoleGrantClient`'s role-grant lookups — a failure there is not read as "the user holds no grants."
 - No `IUserTwoFactorStore` or 2FA UI ships alongside this — TOTP-based 2FA is orthogonal to the store shape here
   and is tracked separately (issue #54), not implied by this ADR.

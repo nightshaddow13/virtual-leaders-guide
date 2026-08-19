@@ -4,14 +4,15 @@ using Azure.Provisioning.Storage;
 var builder = DistributedApplication.CreateBuilder(args);
 
 var internalApiKey = builder.AddParameter("internal-api-key", secret: true);
-// Signs/validates the internal JWT (P2-5, #14; ADR-0007) - separate from internal-api-key since the two
-// answer different trust questions and should rotate independently.
 var internalJwtKey = builder.AddParameter("internal-jwt-key", secret: true);
 var acsConnectionString = builder.AddParameter("acs-connection-string", secret: true);
-// Not a secret - a list of emails, not a credential (P2-4, #13; ADR-0008). Empty fallback so a developer who
-// hasn't set this yet still gets a clean `dotnet run` (no Admins) instead of a startup failure.
-var adminAllowlist = builder.AddParameter(
-    "admin-allowlist", () => builder.Configuration["Parameters:admin-allowlist"] ?? string.Empty);
+var adminAllowlist = builder.AddParameter("admin-allowlist", GetAdminAllowlistOrEmpty);
+
+/// <remarks>
+/// Not a secret - a list of emails, not a credential (P2-4, #13; ADR-0008). Empty fallback so a developer
+/// who hasn't set this yet still gets a clean <c>dotnet run</c> (no Admins) instead of a startup failure.
+/// </remarks>
+string GetAdminAllowlistOrEmpty() => builder.Configuration["Parameters:admin-allowlist"] ?? string.Empty;
 
 var sqlServer = builder.AddAzureSqlServer("sqlserver")
     .ConfigureInfrastructure(infra =>
@@ -51,7 +52,6 @@ var dataProtectionKeysContainer = storage.AddBlobContainer("dataprotection-keys"
 var api = builder.AddProject<Projects.VirtualLeadersGuide_Api>("api")
     .WithReference(database)
     .WaitFor(database)
-    // P2-6, #15; ADR-0026: Event.Passcode's own Data Protection key ring, isolated from Web's.
     .WithReference(blobs)
     .WaitFor(blobs)
     .WaitFor(dataProtectionKeysContainer)
