@@ -38,6 +38,14 @@ public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, G
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly VirtualLeadersGuideDbContext _dbContext;
 
+    /// <summary>Constructs the definition with the services it needs to authorize and default Event writes.</summary>
+    /// <param name="resourceGraph">Passed through to <see cref="JsonApiResourceDefinition{TResource,TId}"/>.</param>
+    /// <param name="httpContextAccessor">
+    /// Resolves the current request's <see cref="System.Security.Claims.ClaimsPrincipal"/> (for
+    /// <see cref="EventAccessPolicy"/>) and <see cref="IJsonApiRequest"/> - see <see cref="CurrentPolicy"/> and
+    /// <see cref="GetRequest"/>.
+    /// </param>
+    /// <param name="dbContext">Backs <see cref="CheckForConflictsAsync"/>'s Name/Slug uniqueness pre-check.</param>
     public EventResourceDefinition(
         IResourceGraph resourceGraph, IHttpContextAccessor httpContextAccessor, VirtualLeadersGuideDbContext dbContext)
         : base(resourceGraph)
