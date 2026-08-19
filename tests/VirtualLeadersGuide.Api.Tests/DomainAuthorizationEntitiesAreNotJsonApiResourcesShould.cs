@@ -4,11 +4,11 @@ using System.Net.Http.Headers;
 namespace VirtualLeadersGuide.Api.Tests;
 
 /// <remarks>
-/// <c>Role</c>, <c>UserRole</c>, and <c>Event</c> (<c>VirtualLeadersGuide.Api.Data</c>) are plain POCOs, not
-/// <c>Identifiable&lt;T&gt;</c>, so none are reachable as a JSON:API resource yet (ADR-0017's Consequences).
-/// <c>userRoles</c> is expected to flip once P2-8 (#17) deliberately turns <c>UserRole</c> into a resource;
-/// <c>events</c> is expected to flip once P2-7 (#16) does the same for <c>Event</c>; <c>roles</c> has no
-/// ticket planning to expose it at all.
+/// <c>Role</c> and <c>UserRole</c> (<c>VirtualLeadersGuide.Api.Data</c>) are plain POCOs, not
+/// <c>Identifiable&lt;T&gt;</c>, so neither is reachable as a JSON:API resource (ADR-0017's Consequences).
+/// <c>Event</c> was the same until P2-7 (#16) turned it into a resource - see <c>EventsResourceShould</c> for
+/// its positive coverage. <c>userRoles</c> is expected to flip once P2-8 (#17) deliberately turns
+/// <c>UserRole</c> into a resource; <c>roles</c> has no ticket planning to expose it at all.
 /// </remarks>
 public class DomainAuthorizationEntitiesAreNotJsonApiResourcesShould : IAsyncLifetime
 {
@@ -33,7 +33,6 @@ public class DomainAuthorizationEntitiesAreNotJsonApiResourcesShould : IAsyncLif
     [Theory]
     [InlineData("/api/roles")]
     [InlineData("/api/userRoles")]
-    [InlineData("/api/events")]
     public async Task ReturnNotFound_WhenRequestingADomainAuthorizationTableAsAJsonApiResource_ForGetCollection(
         string requestUri)
     {
