@@ -29,6 +29,8 @@ builder.Services.AddJsonApi<VirtualLeadersGuideDbContext>(options =>
 {
     options.Namespace = "api";
 });
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddResourceDefinition<EventResourceDefinition>();
 
 var app = builder.Build();
 

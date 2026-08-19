@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using VirtualLeadersGuide.Identity.Contracts;
 
 namespace VirtualLeadersGuide.Api.Data;
@@ -95,6 +96,14 @@ public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDb
     /// #15). <see cref="Event.Passcode"/> gets no CHECK constraint for its shape: it's ciphertext once
     /// <see cref="BuildPasscodeConverter"/> runs, so no DB constraint could validate a plaintext shape anyway
     /// — <c>PasscodeGenerator</c> upholds "never blank" instead, at the point a caller assigns it.
+    /// <see cref="Event.Slug"/> and <see cref="Event.Passcode"/> are both explicitly <c>IsRequired()</c> here
+    /// rather than left to convention, since both are typed <c>string?</c> at the C# level (see their
+    /// remarks on <c>Event.cs</c> for why) - the column stays <c>NOT NULL</c> regardless. Passcode's
+    /// converter is cast to the non-generic <see cref="ValueConverter"/> overload because
+    /// <see cref="DataProtectionStringConverter"/> is <c>ValueConverter&lt;string, string&gt;</c>, not exactly
+    /// nullability-compatible with a <c>string?</c> property for the generic overload, even though the
+    /// converter never actually receives a null at runtime (the same <c>NOT NULL</c> constraint guarantees
+    /// that).
     /// </remarks>
     private void ConfigureEvents(EntityTypeBuilder<Event> entity)
     {
@@ -103,10 +112,10 @@ public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDb
         entity.Property(e => e.Name).HasMaxLength(200);
         entity.HasIndex(e => e.Name).IsUnique();
 
-        entity.Property(e => e.Slug).HasMaxLength(100);
+        entity.Property(e => e.Slug).HasMaxLength(100).IsRequired();
         entity.HasIndex(e => e.Slug).IsUnique();
 
-        entity.Property(e => e.Passcode).HasConversion(BuildPasscodeConverter());
+        entity.Property(e => e.Passcode).HasConversion((ValueConverter)BuildPasscodeConverter()).IsRequired();
     }
 
     /// <remarks>

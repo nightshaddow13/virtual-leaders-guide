@@ -133,6 +133,25 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>
+    /// A pre-formatted platform-wide <c>Admin</c> role claim (see <see cref="RoleClaimValue.Format"/>), ready
+    /// to pass to <see cref="CreateUserClient"/> - for tests (P2-7, #16) exercising Admin-only access to
+    /// <c>/api/events</c> without hand-building a <see cref="RoleGrantDto"/>.
+    /// </summary>
+    public static string AdminRoleClaim() =>
+        RoleClaimValue.Format(new RoleGrantDto { Id = Guid.NewGuid(), RoleId = RoleIds.Admin, RoleName = RoleNames.Admin });
+
+    /// <summary>
+    /// A pre-formatted <c>Director</c> role claim scoped to <paramref name="eventId"/> (see
+    /// <see cref="RoleClaimValue.Format"/>), ready to pass to <see cref="CreateUserClient"/> - for tests
+    /// (P2-7, #16) exercising Director access scoped to one Event, without a real <c>UserRoles</c> row (Api
+    /// authorizes from JWT claims alone, per ADR-0007's amendment).
+    /// </summary>
+    public static string DirectorRoleClaim(Guid eventId) => RoleClaimValue.Format(new RoleGrantDto
+    {
+        Id = Guid.NewGuid(), RoleId = RoleIds.Director, RoleName = RoleNames.Director, EventId = eventId
+    });
+
+    /// <summary>
     /// An <see cref="HttpClient"/> carrying only <c>X-Internal-Key</c> - what a genuine <c>/internal/*</c>
     /// caller sends (ADR-0022/0024), and what the JSON:API resource surface used to accept alone before this
     /// ticket. Use <see cref="CreateUserClient"/> for <c>/api/*</c> calls now that they additionally require
