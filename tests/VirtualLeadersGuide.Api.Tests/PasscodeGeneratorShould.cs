@@ -27,9 +27,6 @@ public class PasscodeGeneratorShould
             generated.Add(PasscodeGenerator.Generate());
         }
 
-        // Not a strict guarantee (two random two-word phrases could collide), but with the EFF Large
-        // Wordlist's ~7,776 words, 20 calls colliding even once is astronomically unlikely - this is really
-        // asserting "Generate() isn't returning a constant," not measuring true randomness.
         Assert.True(generated.Count > 1);
     }
 }

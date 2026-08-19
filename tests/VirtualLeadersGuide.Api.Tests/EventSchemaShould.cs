@@ -5,12 +5,15 @@ using VirtualLeadersGuide.Identity.Contracts;
 
 namespace VirtualLeadersGuide.Api.Tests;
 
-// EF-model-level coverage of P2-6's (#15) acceptance criteria - Name/Slug uniqueness, the Name/Slug CHECK
-// constraints, and the new UserRoles.EventId FK - exercised directly against the DbContext rather than
-// through HTTP, same pattern as UserRoleSchemaShould. ADR-0014: EnsureCreatedAsync builds this schema from
-// the current EF model on SQLite, not by replaying the real SQL Server migration, so this is also what proves
-// the SQL Server-flavored CHECK constraints (LIKE-based; see VirtualLeadersGuideDbContext) parse under SQLite
-// too. See EventPasscodeShould for Passcode's encryption-at-rest coverage specifically.
+/// <remarks>
+/// EF-model-level coverage of P2-6's (#15) acceptance criteria - Name/Slug uniqueness, the Name/Slug CHECK
+/// constraints, and the <c>UserRoles.EventId</c> FK - exercised directly against the DbContext rather than
+/// through HTTP, same pattern as <c>UserRoleSchemaShould</c>. ADR-0014: <c>EnsureCreatedAsync</c> builds
+/// this schema from the current EF model on SQLite, not by replaying the real SQL Server migration, so this
+/// is also what proves the SQL Server-flavored CHECK constraints (LIKE-based; see
+/// <see cref="VirtualLeadersGuideDbContext"/>) parse under SQLite too. See <c>EventPasscodeShould</c> for
+/// <see cref="Event.Passcode"/>'s encryption-at-rest coverage specifically.
+/// </remarks>
 public class EventSchemaShould : IAsyncLifetime
 {
     private ApiWebApplicationFactory _factory = null!;
@@ -70,8 +73,6 @@ public class EventSchemaShould : IAsyncLifetime
         using IServiceScope scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
 
-        // The Name setter trims, so this reaches SaveChanges as an all-whitespace string, which
-        // CK_Events_Name_NotEmpty must reject rather than a trimmed-to-empty string sneaking through.
         db.Events.Add(Event.Create("   ", "blank-name"));
 
         await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
@@ -88,8 +89,6 @@ public class EventSchemaShould : IAsyncLifetime
         using IServiceScope scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
 
-        // Event.Slug's setter lowercases but doesn't reject bad characters/hyphen placement - the DB
-        // constraint (CK_Events_Slug_Format) is the actual backstop under test here.
         db.Events.Add(Event.Create("Some Event", invalidSlug));
 
         await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());

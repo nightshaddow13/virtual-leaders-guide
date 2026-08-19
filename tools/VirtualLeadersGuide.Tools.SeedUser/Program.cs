@@ -1,21 +1,3 @@
-// Creates one local-Identity account by POSTing directly to Api's internal identity endpoint
-// (InternalIdentityEndpoints.cs), with a real ASP.NET Core Identity password hash so the account can
-// actually sign in afterward. Deliberately a separate, unshipped tool rather than app code - see ADR-0023
-// and the P2-2 (#11) plan's Scope section: bootstrapping "how does a fresh environment get its first
-// Admin" is P2-4's job (#13), not something this tool or P2-2 invents a second answer for. This exists
-// purely to unblock local development/testing before P2-4/P2-12 land.
-//
-// Prerequisite: the AppHost must be running (dotnet run --project src/VirtualLeadersGuide.AppHost, or your
-// IDE's debug session) so Api is reachable.
-//
-// Usage:
-//   dotnet run --project tools/VirtualLeadersGuide.Tools.SeedUser -- --api-key <key> [--email <email>] [--api-url <url>]
-// Example:
-//   dotnet run --project tools/VirtualLeadersGuide.Tools.SeedUser -- --api-key local-dev-key --email xgoss@live.com
-//
-// The password is always prompted for interactively (masked) - never pass it as a command-line argument,
-// or it ends up in shell history.
-
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Identity;
 using VirtualLeadersGuide.Identity.Contracts;
@@ -119,6 +101,18 @@ static Dictionary<string, string> ParseOptions(string[] args)
     return result;
 }
 
+/// <summary>
+/// Creates one local-Identity account by POSTing directly to Api's internal identity endpoint
+/// (<c>InternalIdentityEndpoints</c>), with a real ASP.NET Core Identity password hash so the account can
+/// actually sign in afterward.
+/// </summary>
+/// <remarks>
+/// Deliberately a separate, unshipped tool rather than app code - see ADR-0023 for why tools live here.
+/// Bootstrapping "how does a fresh environment get its first Admin" is P2-4's job (#13); this exists purely
+/// to unblock local development/testing before P2-4/P2-12 land. Requires the AppHost already running
+/// (<c>dotnet run --project src/VirtualLeadersGuide.AppHost</c>, or an IDE debug session) so Api is
+/// reachable.
+/// </remarks>
 static void PrintUsage()
 {
     Console.WriteLine("Usage: dotnet run --project tools/VirtualLeadersGuide.Tools.SeedUser --");
@@ -128,7 +122,8 @@ static void PrintUsage()
     Console.WriteLine("  --email     Optional. Prompted for if omitted.");
     Console.WriteLine("  --api-url   Optional. Defaults to http://localhost:5058 (Api's local launch profile port).");
     Console.WriteLine();
-    Console.WriteLine("The password is always prompted for interactively, masked.");
+    Console.WriteLine("The password is always prompted for interactively, masked - never pass it as a");
+    Console.WriteLine("command-line argument, or it ends up in shell history.");
 }
 
 static string ReadMaskedLine()

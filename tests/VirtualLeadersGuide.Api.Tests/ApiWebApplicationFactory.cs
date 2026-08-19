@@ -30,21 +30,26 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
 
     private readonly SqliteConnection _connection = new("DataSource=:memory:");
 
-    // P2-6, #15: Event.Passcode's converter needs a real IDataProtectionProvider to be registered
-    // (VirtualLeadersGuideDbContext.BuildPasscodeConverter fails closed otherwise) - redirected to a local
-    // temp directory below so nothing ever reaches real Blob Storage.
+    /// <remarks>
+    /// <see cref="Event.Passcode"/>'s converter needs a real <see cref="IDataProtectionProvider"/> to be
+    /// registered (<c>VirtualLeadersGuideDbContext.BuildPasscodeConverter</c> fails closed otherwise) -
+    /// redirected to this local temp directory so nothing ever reaches real Blob Storage.
+    /// </remarks>
     private readonly string _dataProtectionKeysDirectory =
         Path.Combine(Path.GetTempPath(), "vlg-api-tests-keys-" + Guid.NewGuid());
 
-    // Program.cs's top-level statements call AddAzureBlobServiceClient("blobs") unconditionally, before
-    // ConfigureWebHost's ConfigureAppConfiguration hook below gets a chance to apply (same ordering
-    // constraint SignInShould/DashboardShould hit in Web.Tests) - an environment variable is read by
-    // WebApplication.CreateBuilder's own default configuration sources from the very first line, sidestepping
-    // that ordering question entirely. Set once in a static constructor rather than per-instance: unlike
-    // Web.Tests' per-test set/reset (which swaps in different fakes per scenario), this value never changes
-    // across Api.Tests, so there's nothing to race and no assembly-level parallelization opt-out needed. The
-    // value itself is never dialed - Data Protection persistence is redirected to a local temp directory
-    // above before anything touches it.
+    /// <remarks>
+    /// <c>Program.cs</c>'s top-level statements call <c>AddAzureBlobServiceClient("blobs")</c>
+    /// unconditionally, before <see cref="ConfigureWebHost"/>'s <c>ConfigureAppConfiguration</c> hook gets a
+    /// chance to apply (the same ordering constraint <c>SignInShould</c>/<c>DashboardShould</c> hit in
+    /// <c>Web.Tests</c>) - an environment variable is read by <c>WebApplication.CreateBuilder</c>'s own
+    /// default configuration sources from the very first line, sidestepping that ordering question entirely.
+    /// Set once here in a static constructor rather than per-instance: unlike <c>Web.Tests</c>' per-test
+    /// set/reset (which swaps in different fakes per scenario), this value never changes across
+    /// <c>Api.Tests</c>, so there's nothing to race and no assembly-level parallelization opt-out needed.
+    /// The value itself is never dialed - Data Protection persistence is redirected to
+    /// <see cref="_dataProtectionKeysDirectory"/> before anything touches it.
+    /// </remarks>
     static ApiWebApplicationFactory()
     {
         Environment.SetEnvironmentVariable(
@@ -54,6 +59,18 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
             "BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;");
     }
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Removing EF Core's pooled <see cref="VirtualLeadersGuideDbContext"/> registration
+    /// (<c>AddSqlServerDbContext</c>'s <c>AddDbContextPool</c>) isn't just <c>RemoveAll&lt;T&gt;</c>: pooling
+    /// also registers <c>DbContextOptions&lt;T&gt;</c> as singleton plus internal pool-lease services closed
+    /// over the DbContext type that would otherwise be left behind expecting a pooled registration -
+    /// every descriptor closed over the DbContext type has to go before re-adding a plain (non-pooled)
+    /// <c>AddDbContext</c> for SQLite (ADR-0014). Also replaces <c>Program.cs</c>'s blob-backed Data
+    /// Protection registration with a file-system one rooted at
+    /// <see cref="_dataProtectionKeysDirectory"/>, same shape as <c>SignInShould</c>/<c>DashboardShould</c>
+    /// in <c>Web.Tests</c>.
+    /// </remarks>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.ConfigureAppConfiguration(config =>
@@ -67,11 +84,6 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
 
         builder.ConfigureServices(services =>
         {
-            // Aspire's AddSqlServerDbContext pools contexts (AddDbContextPool), registering
-            // DbContextOptions<T> as singleton plus internal pool-lease services closed over T.
-            // Removing only DbContextOptions<T> leaves those singletons behind expecting a pooled
-            // registration, so every descriptor closed over the DbContext type must go before
-            // re-adding a plain (non-pooled) AddDbContext for SQLite (ADR-0014).
             services.RemoveAll<VirtualLeadersGuideDbContext>();
 
             foreach (ServiceDescriptor descriptor in services
@@ -87,8 +99,6 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
             services.AddDbContext<VirtualLeadersGuideDbContext>(options =>
                 options.UseSqlite(_connection));
 
-            // Replaces Program.cs's blob-backed Data Protection registration with a file-system one, same
-            // shape as SignInShould/DashboardShould in Web.Tests.
             services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(_dataProtectionKeysDirectory));
         });
     }

@@ -3,8 +3,11 @@ using System.Net.Http.Json;
 
 namespace VirtualLeadersGuide.Web.Tests;
 
-// A fake IHttpClientFactory whose "Api" client always uses the given handler and has the same BaseAddress
-// shape Program.cs configures - ApiUserStore and ApiRoleGrantClient both build request URIs relative to it.
+/// <remarks>
+/// A fake <see cref="IHttpClientFactory"/> whose <c>"Api"</c> client always uses the given handler and has
+/// the same <c>BaseAddress</c> shape <c>Program.cs</c> configures - <c>ApiUserStore</c> and
+/// <c>ApiRoleGrantClient</c> both build request URIs relative to it.
+/// </remarks>
 internal sealed class StubHttpClientFactory(HttpMessageHandler handler) : IHttpClientFactory
 {
     public HttpClient CreateClient(string name) =>

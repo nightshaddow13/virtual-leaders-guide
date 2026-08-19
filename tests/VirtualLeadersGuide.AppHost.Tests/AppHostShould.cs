@@ -2,25 +2,26 @@ using Microsoft.Extensions.Logging;
 
 namespace VirtualLeadersGuide.AppHost.Tests;
 
+/// <remarks>
+/// Asserts the <c>DistributedApplication</c> builds, starts, and stops cleanly with no unhandled exceptions,
+/// and that a core Aspire service resolves from its DI container - not that any specific resource reaches
+/// Healthy. AppHost.cs now registers real resources (SQL/api/web, P1-3/P1-4/P1-5); stronger per-resource
+/// health checks for api/web live in <c>AspireE2EFixture</c> (<c>WaitForResourceHealthyAsync</c>), not here.
+/// </remarks>
 public class AppHostShould
 {
-    // 30s wasn't enough on a GitHub-hosted CI runner: a cold VM has no cached
-    // mssql/azurite images, so the pull alone can eat most of that before SQL
-    // Server's first-boot init (~40s observed locally even with a warm image
-    // cache) even starts. 90s leaves headroom for both, per phase.
+    /// <remarks>
+    /// 30s wasn't enough on a GitHub-hosted CI runner: a cold VM has no cached mssql/azurite images, so the
+    /// pull alone can eat most of that before SQL Server's first-boot init (~40s observed locally even with
+    /// a warm image cache) even starts. 90s leaves headroom for both, per phase.
+    /// </remarks>
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(90);
 
-    // NOTE: AppHost.cs currently registers zero resources (Web/Api/SQL land in
-    // P1-3/P1-4/P1-5). Because there is no named resource yet, this test cannot
-    // literally assert "at least one resource reaches Healthy" per the issue's
-    // acceptance criteria - instead it asserts the DistributedApplication
-    // builds, starts, and stops cleanly with no unhandled exceptions. Tracked
-    // as a follow-up in P1-9 (#28), which will extend this test to call
-    // app.ResourceNotifications.WaitForResourceHealthyAsync(<resource name>, ...)
-    // once P1-3/P1-4 register a real resource.
-    // internal-api-key (P1-7, ADR-0015) and acs-connection-string (P2-1) both have no default value
-    // (fail-closed) so every AppHost testing builder must supply them explicitly - real environments get them
-    // from user-secrets or a Container Apps secret, but tests need their own throwaway values.
+    /// <remarks>
+    /// <c>internal-api-key</c> (P1-7, ADR-0015) and <c>acs-connection-string</c> (P2-1) both have no default
+    /// value (fail-closed) so every AppHost testing builder must supply them explicitly - real environments
+    /// get them from user-secrets or a Container Apps secret, but tests need their own throwaway values.
+    /// </remarks>
     private static readonly string[] TestArgs =
     [
         "Parameters:internal-api-key=test-only-value",
@@ -28,7 +29,7 @@ public class AppHostShould
     ];
 
     [Fact]
-    public async Task BuildAndStartSuccessfully_WhenNoResourcesAreRegistered_ForStartAsync()
+    public async Task BuildAndStartSuccessfully_WhenResourcesAreRegistered_ForStartAsync()
     {
         var cancellationToken = CancellationToken.None;
 
@@ -47,8 +48,6 @@ public class AppHostShould
 
         await app.StartAsync(cancellationToken).WaitAsync(DefaultTimeout, cancellationToken);
 
-        // Resolve a core Aspire service off the running app to confirm the
-        // DI container came up correctly, not just that StartAsync returned.
         var resourceNotifications = app.Services.GetRequiredService<ResourceNotificationService>();
         Assert.NotNull(resourceNotifications);
 

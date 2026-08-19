@@ -14,30 +14,40 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// </remarks>
 public sealed class AspireE2EFixture : IAsyncLifetime
 {
-    // Cold CI has to pull the mssql/azurite images before SQL Server's first-boot init even starts
-    // (AppHostShould.cs observed ~40s locally with a warm cache) - this covers container start, both resource
-    // waits, and both readiness probes below, with headroom on top.
+    /// <remarks>
+    /// Cold CI has to pull the mssql/azurite images before SQL Server's first-boot init even starts
+    /// (<c>AppHostShould</c> observed ~40s locally with a warm cache) - this covers container start, both
+    /// resource waits, and both readiness probes below, with headroom on top.
+    /// </remarks>
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromMinutes(3);
 
     private static readonly TimeSpan ProbePollInterval = TimeSpan.FromSeconds(1);
 
-    // Test-only values, mirroring ApiWebApplicationFactory's constants in Api.Tests - any string works
-    // locally, it just has to be what this fixture also hands the AppHost via TestArgs below.
-    // internal-jwt-key must be >= 32 bytes (HMAC-SHA256's minimum key size).
+    /// <remarks>
+    /// Test-only values, mirroring <c>ApiWebApplicationFactory</c>'s constants in <c>Api.Tests</c> - any
+    /// string works locally, it just has to be what this fixture also hands the AppHost via
+    /// <see cref="FixedTestArgs"/>. <see cref="InternalJwtKey"/> must be at least 32 bytes (HMAC-SHA256's
+    /// minimum key size).
+    /// </remarks>
     private const string InternalApiKey = "e2e-test-internal-api-key";
     private const string InternalJwtKey = "e2e-test-internal-jwt-signing-key-at-least-32-bytes-long";
 
-    // Web's own InternalApiKeyHandler.cs and Tools.SeedUser both hardcode this literal too, rather than
-    // referencing Api's InternalApiKeyDefaults across a process boundary - this fixture follows the same
-    // precedent instead of adding a ProjectReference to Api just for one string.
+    /// <remarks>
+    /// Web's own <c>InternalApiKeyHandler.cs</c> and <c>Tools.SeedUser</c> both hardcode this literal too,
+    /// rather than referencing Api's <c>InternalApiKeyDefaults</c> across a process boundary - this fixture
+    /// follows the same precedent instead of adding a <c>ProjectReference</c> to Api just for one string.
+    /// </remarks>
     private const string InternalApiKeyHeaderName = "X-Internal-Key";
 
-    // internal-api-key and internal-jwt-key (P2-5, ADR-0007) and acs-connection-string (P2-1) all have no
-    // default value (fail-closed, see AppHostShould.cs), so every AppHost testing builder must supply them
-    // explicitly. Unlike AppHostShould.cs, this fixture actually waits for api/web to become healthy, so
-    // omitting internal-jwt-key here would leave both resources unable to start. admin-allowlist is built
-    // per-instance in InitializeAsync instead (see AdminAllowlistedEmail) - it needs a value generated at
-    // runtime, unlike the other three fixed test-only values here.
+    /// <remarks>
+    /// <see cref="InternalApiKey"/>/<see cref="InternalJwtKey"/> (P2-5, ADR-0007) and
+    /// <c>acs-connection-string</c> (P2-1) all have no default value (fail-closed, see
+    /// <c>AppHostShould</c>), so every AppHost testing builder must supply them explicitly. Unlike
+    /// <c>AppHostShould</c>, this fixture actually waits for api/web to become healthy, so omitting
+    /// <see cref="InternalJwtKey"/> here would leave both resources unable to start.
+    /// <see cref="AdminAllowlistedEmail"/> is built per-instance in <see cref="InitializeAsync"/> instead -
+    /// it needs a value generated at runtime, unlike the other three fixed test-only values here.
+    /// </remarks>
     private static readonly string[] FixedTestArgs =
     [
         $"Parameters:internal-api-key={InternalApiKey}",
@@ -75,6 +85,20 @@ public sealed class AspireE2EFixture : IAsyncLifetime
     public string AdminAllowlistedEmail { get; } = $"e2e-admin-{Guid.NewGuid():n}@example.test";
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// Waits for <c>api</c> before <c>web</c>: <c>AppHost.cs</c>'s <c>web</c> resource does not
+    /// <c>WaitFor(api)</c>, so waiting on <c>web</c> alone proves nothing about <c>api</c>. Neither resource
+    /// declares a <c>HealthCheckAnnotation</c>, so <c>WaitForResourceHealthyAsync</c> only proves "reached
+    /// Running," not "serving requests" - that's what <see cref="WaitForApiReadyAsync"/> and
+    /// <see cref="WaitForWebReadyAsync"/> are for. <c>StopOnResourceUnavailable</c> makes a
+    /// <c>FailedToStart</c> resource fail the wait instead of hanging on it forever (the default,
+    /// <c>WaitOnResourceUnavailable</c>, waits indefinitely for a restart that will never come here). The
+    /// probe <see cref="HttpClient"/> carries no client-level <c>Timeout</c> -
+    /// <see cref="PollUntilAsync"/> caps each individual attempt itself, so a slow (not merely refused)
+    /// attempt is retried rather than failing the whole probe outright. <see cref="IdentityApi"/> is built
+    /// only once <c>api</c> has proven it's actually serving requests, so tests that seed a user before
+    /// their first navigation don't race <c>api</c>'s own startup.
+    /// </remarks>
     public async Task InitializeAsync()
     {
         CancellationToken cancellationToken = CancellationToken.None;
@@ -89,12 +113,6 @@ public sealed class AspireE2EFixture : IAsyncLifetime
             _app = await appHost.BuildAsync(cancellationToken).WaitAsync(DefaultTimeout, cancellationToken);
             await _app.StartAsync(cancellationToken).WaitAsync(DefaultTimeout, cancellationToken);
 
-            // api first: AppHost.cs's web resource does not WaitFor(api), so waiting on web alone proves
-            // nothing about api. Neither resource declares a HealthCheckAnnotation, so
-            // WaitForResourceHealthyAsync only proves "reached Running", not "serving requests" - that's what
-            // the two readiness probes below are for. StopOnResourceUnavailable makes a FailedToStart
-            // resource fail this wait instead of hanging on it forever (the default,
-            // WaitOnResourceUnavailable, waits indefinitely for a restart that will never come here).
             await _app.ResourceNotifications
                 .WaitForResourceHealthyAsync("api", WaitBehavior.StopOnResourceUnavailable, cancellationToken)
                 .WaitAsync(DefaultTimeout, cancellationToken);
@@ -102,15 +120,11 @@ public sealed class AspireE2EFixture : IAsyncLifetime
                 .WaitForResourceHealthyAsync("web", WaitBehavior.StopOnResourceUnavailable, cancellationToken)
                 .WaitAsync(DefaultTimeout, cancellationToken);
 
-            // No client-level Timeout here - PollUntilAsync caps each individual attempt itself, so a slow
-            // (not merely refused) attempt is retried rather than failing the whole probe outright.
             _probeClient = new HttpClient();
 
             await WaitForApiReadyAsync(cancellationToken).WaitAsync(DefaultTimeout, cancellationToken);
             await WaitForWebReadyAsync(cancellationToken).WaitAsync(DefaultTimeout, cancellationToken);
 
-            // Built only once api has proven it's actually serving requests (the probe just above) - tests
-            // that seed a user before their first navigation would otherwise race api's own startup.
             _identityApiHttpClient = new HttpClient { BaseAddress = _app.GetEndpoint("api", "http") };
             _identityApiHttpClient.DefaultRequestHeaders.Add(InternalApiKeyHeaderName, InternalApiKey);
             IdentityApi = new IdentityApiClient(_identityApiHttpClient);
@@ -138,10 +152,13 @@ public sealed class AspireE2EFixture : IAsyncLifetime
         }
     }
 
-    // "Running"/"healthy" only proves the api process started, not that it's actually serving requests yet
-    // (see InitializeAsync). Polling a real endpoint that depends on routing, the X-Internal-Key auth
-    // handler, and a migrated schema all being live simultaneously is what the issue's acceptance criteria
-    // asks for - a 404 here (this user genuinely doesn't exist) is success, not a probe failure.
+    /// <remarks>
+    /// "Running"/"healthy" only proves the api process started, not that it's actually serving requests yet
+    /// (see <see cref="InitializeAsync"/>). Polling a real endpoint that depends on routing, the
+    /// <c>X-Internal-Key</c> auth handler, and a migrated schema all being live simultaneously is what the
+    /// issue's acceptance criteria asks for - a 404 here (this user genuinely doesn't exist) is success, not
+    /// a probe failure.
+    /// </remarks>
     private async Task WaitForApiReadyAsync(CancellationToken cancellationToken)
     {
         Uri apiBaseUrl = _app.GetEndpoint("api", "http");
@@ -154,8 +171,10 @@ public sealed class AspireE2EFixture : IAsyncLifetime
             cancellationToken);
     }
 
-    // Polling before the first Playwright navigation avoids eating Playwright's default navigation timeout on
-    // cold JIT (the issue's own rationale for this probe).
+    /// <remarks>
+    /// Polling before the first Playwright navigation avoids eating Playwright's default navigation timeout
+    /// on cold JIT (the issue's own rationale for this probe).
+    /// </remarks>
     private async Task WaitForWebReadyAsync(CancellationToken cancellationToken)
     {
         WebBaseUrl = _app.GetEndpoint("web", "https");
@@ -164,6 +183,20 @@ public sealed class AspireE2EFixture : IAsyncLifetime
         await PollUntilAsync(probeUri, HttpStatusCode.OK, static _ => { }, cancellationToken);
     }
 
+    /// <remarks>
+    /// Each attempt gets its own short deadline, linked to the outer <paramref name="cancellationToken"/>
+    /// (the phase's overall <see cref="DefaultTimeout"/> budget from <see cref="InitializeAsync"/>). A
+    /// single slow attempt - a hung TCP handshake, a cold-start response that just needs another second -
+    /// must not fail the whole probe; only the outer deadline expiring should. Distinguishing the two by
+    /// exception type alone doesn't work here: an <see cref="HttpClient"/> timeout surfaces as a
+    /// <see cref="TaskCanceledException"/> wrapping a <see cref="TimeoutException"/> wrapping
+    /// <see cref="System.IO.IOException"/>/<see cref="System.Net.Sockets.SocketException"/>, not a clean
+    /// <see cref="HttpRequestException"/>. Any exception while the outer deadline hasn't been reached -
+    /// refused connection, hung handshake, slow cold-start response, or a not-yet-migrated schema - means
+    /// "not ready yet," so polling continues; once the deadline is reached the exception rethrows (via the
+    /// <see langword="when"/> guard failing) so <see cref="InitializeAsync"/>'s catch blocks can build a
+    /// real failure message instead of looping forever.
+    /// </remarks>
     private async Task PollUntilAsync(
         Uri uri,
         HttpStatusCode expectedStatusCode,
@@ -174,12 +207,6 @@ public sealed class AspireE2EFixture : IAsyncLifetime
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            // Each attempt gets its own short deadline, linked to the outer cancellationToken (the phase's
-            // overall DefaultTimeout budget from InitializeAsync). A single slow attempt - a hung TCP
-            // handshake, a cold-start response that just needs another second - must not fail the whole
-            // probe; only the outer deadline expiring should. Distinguishing the two by exception type alone
-            // doesn't work here: a HttpClient timeout surfaces as TaskCanceledException wrapping a
-            // TimeoutException wrapping IOException/SocketException, not a clean HttpRequestException.
             using var attemptDeadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             attemptDeadline.CancelAfter(TimeSpan.FromSeconds(5));
 
@@ -196,10 +223,6 @@ public sealed class AspireE2EFixture : IAsyncLifetime
             }
             catch (Exception) when (!cancellationToken.IsCancellationRequested)
             {
-                // Not ready yet - refused connection, hung handshake, slow cold-start response, or a
-                // not-yet-migrated schema all land here. Keep polling as long as the outer deadline hasn't
-                // been reached; rethrow (via the `when` guard failing) once it has, so InitializeAsync's
-                // catch blocks can build a real failure message instead of looping forever.
             }
 
             await Task.Delay(ProbePollInterval, cancellationToken);

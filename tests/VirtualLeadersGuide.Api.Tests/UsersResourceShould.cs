@@ -6,11 +6,13 @@ using VirtualLeadersGuide.Identity.Contracts;
 
 namespace VirtualLeadersGuide.Api.Tests;
 
-// Positive counterpart to IdentityEntitiesAreNotJsonApiResourcesShould's removed /api/users case:
-// ApplicationUser is deliberately reachable at /api/users (ADR-0024), but only its [Attr]-marked
-// properties (Email, DisplayName) - this proves both the read shape and the write lockdown
-// (GenerateControllerEndpoints = JsonApiEndpoints.Query means no Post/Patch/Delete controller action
-// exists for this resource).
+/// <remarks>
+/// Positive counterpart to <c>IdentityEntitiesAreNotJsonApiResourcesShould</c>'s removed <c>/api/users</c>
+/// case: <c>ApplicationUser</c> is deliberately reachable at <c>/api/users</c> (ADR-0024), but only its
+/// <c>[Attr]</c>-marked properties (<c>Email</c>, <c>DisplayName</c>) - this proves both the read shape and
+/// the write lockdown (<c>GenerateControllerEndpoints = JsonApiEndpoints.Query</c> means no
+/// Post/Patch/Delete controller action exists for this resource).
+/// </remarks>
 public class UsersResourceShould : IAsyncLifetime
 {
     private const string JsonApiMediaType = "application/vnd.api+json";
@@ -22,8 +24,6 @@ public class UsersResourceShould : IAsyncLifetime
     {
         _factory = new ApiWebApplicationFactory();
         await _factory.InitializeDatabaseAsync();
-        // /api/* now requires a valid internal JWT in addition to X-Internal-Key (P2-5, #14) -
-        // CreateAuthenticatedClient() alone would 401 here.
         _client = _factory.CreateUserClient();
     }
 
@@ -47,9 +47,6 @@ public class UsersResourceShould : IAsyncLifetime
         Assert.Equal(created.Email, attributes.GetProperty("email").GetString());
         Assert.Equal(created.DisplayName, attributes.GetProperty("displayName").GetString());
 
-        // The whole point of attribute-gating ApplicationUser (ADR-0024) rather than exposing it wholesale
-        // - none of Identity's credential columns are reachable here, even though they're real columns on
-        // the same underlying row.
         Assert.False(attributes.TryGetProperty("passwordHash", out _));
         Assert.False(attributes.TryGetProperty("securityStamp", out _));
         Assert.False(attributes.TryGetProperty("concurrencyStamp", out _));
@@ -108,6 +105,11 @@ public class UsersResourceShould : IAsyncLifetime
         return dto;
     }
 
+    /// <remarks>
+    /// JSON:API content negotiation rejects a Content-Type with parameters (e.g. the charset
+    /// <see cref="StringContent"/>'s 3-arg constructor would add) with 415, so the header is set explicitly
+    /// below instead of going through that overload.
+    /// </remarks>
     private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string requestUri, object? body = null)
     {
         using var request = new HttpRequestMessage(method, requestUri);
@@ -115,9 +117,6 @@ public class UsersResourceShould : IAsyncLifetime
 
         if (body is not null)
         {
-            // JSON:API content negotiation rejects a Content-Type with parameters (e.g. the charset
-            // StringContent's 3-arg constructor would add) with 415, so the header is set explicitly
-            // instead of going through that overload.
             request.Content = new StringContent(JsonSerializer.Serialize(body));
             request.Content.Headers.ContentType = new MediaTypeHeaderValue(JsonApiMediaType);
         }

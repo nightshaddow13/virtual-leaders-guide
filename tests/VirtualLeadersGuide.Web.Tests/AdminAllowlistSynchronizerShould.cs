@@ -7,10 +7,12 @@ using VirtualLeadersGuide.Web.Identity;
 
 namespace VirtualLeadersGuide.Web.Tests;
 
-// Exercises AdminAllowlistSynchronizer.SyncAsync's promote/demote decision (ADR-0008) against
-// FakeAuthorizationApiHandler, which actually tracks grant state across GET/POST/DELETE calls - unlike
-// StubHttpMessageHandler's one-canned-response-per-test model, which can't express "read current grants,
-// then write a change".
+/// <remarks>
+/// Exercises <see cref="AdminAllowlistSynchronizer.SyncAsync"/>'s promote/demote decision (ADR-0008)
+/// against <see cref="FakeAuthorizationApiHandler"/>, which actually tracks grant state across
+/// GET/POST/DELETE calls - unlike <see cref="StubHttpMessageHandler"/>'s one-canned-response-per-test
+/// model, which can't express "read current grants, then write a change".
+/// </remarks>
 public class AdminAllowlistSynchronizerShould
 {
     private const string UserId = "user-1";

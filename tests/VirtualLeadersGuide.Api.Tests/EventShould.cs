@@ -2,10 +2,13 @@ using VirtualLeadersGuide.Api.Data;
 
 namespace VirtualLeadersGuide.Api.Tests;
 
-// Unit-level coverage of Event.Create in isolation (no DbContext/DB involved) - complements EventSchemaShould,
-// which exercises Event against the real EF model/constraints. This is what actually proves P2-6's (#15) first
-// AC bullet - "a URL-safe Slug is auto-derived from the Name as a starting value" - since nothing else in this
-// ticket calls SlugDerivation.From at Event-construction time.
+/// <remarks>
+/// Unit-level coverage of <see cref="Event.Create"/> in isolation (no DbContext/DB involved) - complements
+/// <c>EventSchemaShould</c>, which exercises <see cref="Event"/> against the real EF model/constraints. This
+/// is what actually proves P2-6's (#15) first AC bullet - "a URL-safe Slug is auto-derived from the Name as
+/// a starting value" - since nothing else in this ticket calls <c>SlugDerivation.From</c> at
+/// Event-construction time.
+/// </remarks>
 public class EventShould
 {
     [Fact]

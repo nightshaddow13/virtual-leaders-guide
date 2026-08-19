@@ -56,8 +56,6 @@ public class InternalJwtProviderShould
     [Fact]
     public async Task MintAZeroRoleToken_WhenTheUserRowNoLongerExistsOnApi_ForGetTokenAsync()
     {
-        // grants: null - ApiRoleGrantClient.GetGrantsAsync returns null on a 404 (the user's row is gone),
-        // distinct from AuthorizationDataUnavailableException on a genuine outage (see the test below).
         InternalJwtProvider provider = CreateProvider(grants: null);
 
         string token = await provider.GetTokenAsync(CancellationToken.None);
@@ -87,17 +85,10 @@ public class InternalJwtProviderShould
         InternalJwtProvider provider = CreateProvider([], () => grantLookupCount++);
 
         await provider.GetTokenAsync(CancellationToken.None);
-        // InternalJwtProvider has no injected clock seam (deliberately - see its own remarks: lazy, inline,
-        // no background timer, matching ADR-0007). Waiting out the real ~5-minute lifetime here isn't
-        // practical, so this reaches into the cached-expiry field directly to simulate "almost expired"
-        // rather than actually waiting.
         SetCachedTokenExpiresAt(provider, DateTimeOffset.UtcNow + TimeSpan.FromSeconds(10));
 
         await provider.GetTokenAsync(CancellationToken.None);
 
-        // Not asserting the two token strings differ: JWT nbf/exp/iat are second-granular, so two mints
-        // within the same wall-clock second can legitimately produce a byte-identical (still correct) token.
-        // The grant lookup actually re-running is the real, deterministic signal that a re-mint happened.
         Assert.Equal(2, grantLookupCount);
     }
 
@@ -147,6 +138,12 @@ public class InternalJwtProviderShould
         return new InternalJwtProvider(new FixedAuthenticationStateProvider(UserId), client, Configuration());
     }
 
+    /// <remarks>
+    /// <see cref="InternalJwtProvider"/> has no injected clock seam (deliberately - see its own remarks:
+    /// lazy, inline, no background timer, matching ADR-0007). Waiting out the real ~5-minute lifetime isn't
+    /// practical in a test, so this reaches into the cached-expiry field directly to simulate "almost
+    /// expired" rather than actually waiting.
+    /// </remarks>
     private static void SetCachedTokenExpiresAt(InternalJwtProvider provider, DateTimeOffset expiresAt)
     {
         FieldInfo field = typeof(InternalJwtProvider)
@@ -161,8 +158,11 @@ public class InternalJwtProviderShould
         })
         .Build();
 
-    // Validates against the same TokenValidationParameters shape Api's Program.cs configures, proving the
-    // minted token is one Api would actually accept - without spinning up a full Api host.
+    /// <remarks>
+    /// Validates against the same <see cref="TokenValidationParameters"/> shape Api's <c>Program.cs</c>
+    /// configures, proving the minted token is one Api would actually accept - without spinning up a full
+    /// Api host.
+    /// </remarks>
     private static async Task<ClaimsPrincipal> ValidateAsync(string token)
     {
         var handler = new JsonWebTokenHandler();
