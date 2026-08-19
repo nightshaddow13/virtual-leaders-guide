@@ -4,6 +4,11 @@
 
 Issues are tracked in GitHub Issues for nightshaddow13/virtual-leaders-guide. See `docs/agents/issue-tracker.md`.
 
+### Story scoping
+
+New stories must be vertical slices (UI to DB, or DB to UI) — no API-only or other single-layer stories.
+Applies to new stories only, not the existing backlog. See `docs/agents/story-scoping.md`.
+
 ### Triage labels
 
 Default label vocabulary (needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix). See `docs/agents/triage-labels.md`.
