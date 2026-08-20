@@ -1,0 +1,58 @@
+.vlg-header {
+    border-bottom: 1px solid var(--vlg-line);
+    background-color: var(--vlg-canvas-sunk);
+}
+
+.vlg-brand-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    max-width: 72rem;
+    margin-inline: auto;
+    box-sizing: border-box;
+    padding: 0.75rem 1.5rem;
+}
+
+.vlg-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.625rem;
+    text-decoration: none;
+    color: inherit;
+}
+
+.vlg-logo-mark {
+    width: 1.75rem;
+    height: 1.75rem;
+    flex: none;
+    border-radius: var(--vlg-radius);
+    background-color: var(--vlg-moss);
+}
+
+.vlg-brand-text {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    color: var(--vlg-ink);
+}
+
+.vlg-account-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+@media (max-width: 40rem) {
+    .vlg-brand-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .vlg-signin {
+        padding-inline: 0;
+        background: none;
+        border: none;
+        box-shadow: none;
+    }
+}

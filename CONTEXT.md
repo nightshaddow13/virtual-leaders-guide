@@ -53,7 +53,9 @@ _Avoid_: Account, Identity, Credential (as a separate concept — it's columns o
 A grant a User holds — either platform-wide (Admin) or scoped to a specific Event (Director, and future
 Event-scoped roles). One User may hold several Roles at once, scoped to different Events. Stored as a
 UserRole row, exposed to Admins at `/api/roleGrants`.
-_Avoid_: Permission, Group
+_Avoid_: Permission, Group. "Staff" is UI copy only (e.g. the public site's "Staff sign in" affordance,
+meaning "anyone with an Admin or Director grant") — it is not a Role and must not appear as one in code, an
+API shape, or a claim.
 
 **Admin**:
 A platform-wide Role: can create, edit, and delete any Event's content, regardless of Director assignment —

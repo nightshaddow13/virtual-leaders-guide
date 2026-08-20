@@ -2,6 +2,7 @@ using Azure.Storage.Blobs;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
+using Radzen;
 using VirtualLeadersGuide.Web;
 using VirtualLeadersGuide.Web.Authorization;
 using VirtualLeadersGuide.Web.Components;
@@ -14,6 +15,8 @@ builder.AddServiceDefaults();
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+builder.Services.AddRadzenComponents();
 
 builder.Services.AddTransient<InternalApiKeyHandler>();
 builder.Services.AddHttpClient("Api", client => client.BaseAddress = new Uri("https+http://api"))

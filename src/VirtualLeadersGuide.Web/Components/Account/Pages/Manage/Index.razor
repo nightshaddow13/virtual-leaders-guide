@@ -13,24 +13,24 @@
 <h3>Profile</h3>
 <StatusMessage />
 
-<div class="row">
-    <div class="col-xl-6">
+<RadzenRow>
+    <RadzenColumn Size="12" SizeXL="6">
         <EditForm Model="Input" FormName="profile" OnValidSubmit="OnValidSubmitAsync" method="post">
             <DataAnnotationsValidator />
-            <ValidationSummary class="text-danger" role="alert" />
-            <div class="form-floating mb-3">
-                <input type="text" value="@username" id="username" class="form-control" placeholder="Choose your username." disabled />
-                <label for="username" class="form-label">Username</label>
+            <ValidationSummary class="rz-messages-error" role="alert" />
+            <div class="vlg-field">
+                <label for="username">Username</label>
+                <input type="text" value="@username" id="username" class="rz-textbox rz-input-md" placeholder="Choose your username." disabled />
             </div>
-            <div class="form-floating mb-3">
-                <InputText @bind-Value="Input.PhoneNumber" id="Input.PhoneNumber" class="form-control" placeholder="Enter your phone number" />
-                <label for="Input.PhoneNumber" class="form-label">Phone number</label>
-                <ValidationMessage For="() => Input.PhoneNumber" class="text-danger" />
+            <div class="vlg-field">
+                <label for="Input.PhoneNumber">Phone number</label>
+                <InputText @bind-Value="Input.PhoneNumber" id="Input.PhoneNumber" class="rz-textbox rz-input-md" placeholder="Enter your phone number" />
+                <ValidationMessage For="() => Input.PhoneNumber" class="rz-messages-error" />
             </div>
-            <button type="submit" class="w-100 btn btn-lg btn-primary">Save</button>
+            <button type="submit" class="rz-button rz-button-lg rz-variant-filled rz-primary rz-shade-default" style="width:100%">Save</button>
         </EditForm>
-    </div>
-</div>
+    </RadzenColumn>
+</RadzenRow>
 
 @code {
     private ApplicationUser? user;

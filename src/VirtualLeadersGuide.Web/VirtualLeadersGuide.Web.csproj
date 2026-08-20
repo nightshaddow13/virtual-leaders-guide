@@ -20,6 +20,7 @@
     <!-- Mints the internal JWT (P2-5, #14) with the same token-handling stack
          Microsoft.AspNetCore.Authentication.JwtBearer uses on the Api side to validate it. -->
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.19.2" />
+    <PackageReference Include="Radzen.Blazor" Version="11.2.6" />
   </ItemGroup>
 
 </Project>

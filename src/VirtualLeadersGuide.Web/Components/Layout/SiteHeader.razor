@@ -1,0 +1,30 @@
+@* See ADR-0034 for why every control here is a real <a>/<form>, never a Radzen component. *@
+
+<header class="vlg-header">
+    <div class="vlg-brand-row">
+        <a class="vlg-brand" href="">
+            <span class="vlg-logo-mark" aria-hidden="true"></span>
+            <span class="vlg-brand-text">Virtual Leaders Guide</span>
+        </a>
+
+        <AuthorizeView>
+            <Authorized>
+                <nav class="vlg-account-actions" aria-label="Account">
+                    <NavLink class="rz-button rz-button-sm rz-variant-text rz-base rz-shade-default"
+                             href="Account/Manage">
+                        <span class="rz-button-box"><span class="rz-button-text">Manage account</span></span>
+                    </NavLink>
+                    <SignOutForm />
+                </nav>
+            </Authorized>
+            <NotAuthorized>
+                <NavLink class="rz-button rz-button-md rz-variant-outlined rz-primary rz-shade-default vlg-signin"
+                         href="Account/Login">
+                    <span class="rz-button-box"><span class="rz-button-text">Staff sign in</span></span>
+                </NavLink>
+            </NotAuthorized>
+        </AuthorizeView>
+    </div>
+
+    <SignedInContextStrip />
+</header>
