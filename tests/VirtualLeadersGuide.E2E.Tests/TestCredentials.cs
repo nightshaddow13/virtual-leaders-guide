@@ -12,4 +12,11 @@ internal static class TestCredentials
     /// does.
     /// </summary>
     public const string KnownPassword = "P@ssw0rd123!";
+
+    /// <summary>
+    /// A second password satisfying the same policy as <see cref="KnownPassword"/>, submitted to
+    /// <c>Account/ResetPassword</c> by <c>PasswordResetScenarios</c> - distinct from
+    /// <see cref="KnownPassword"/> only so a test can assert the old password stops working after a reset.
+    /// </summary>
+    public const string RotatedPassword = "N3wP@ssw0rd!";
 }

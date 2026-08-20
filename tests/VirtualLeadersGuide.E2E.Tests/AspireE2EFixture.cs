@@ -84,6 +84,13 @@ public sealed class AspireE2EFixture : IAsyncLifetime
     /// </remarks>
     public string AdminAllowlistedEmail { get; } = $"e2e-admin-{Guid.NewGuid():n}@example.test";
 
+    /// <summary>
+    /// Where <c>web</c> is told to write every email it sends (P2.1-4, #62; ADR-0032), wired onto the <c>web</c>
+    /// resource in <see cref="InitializeAsync"/>. <c>Email:FileSinkAllowed</c> needs no equivalent wiring here -
+    /// <c>AppHost.cs</c> already grants it whenever <c>!IsPublishMode</c>, which is true under this fixture.
+    /// </summary>
+    public EmailFileSink EmailSink { get; } = new();
+
     /// <inheritdoc/>
     /// <remarks>
     /// Waits for <c>api</c> before <c>web</c>: <c>AppHost.cs</c>'s <c>web</c> resource does not
@@ -109,6 +116,8 @@ public sealed class AspireE2EFixture : IAsyncLifetime
         {
             var appHost = await DistributedApplicationTestingBuilder
                 .CreateAsync<Projects.VirtualLeadersGuide_AppHost>(testArgs, cancellationToken);
+
+            ConfigureWebEmailSink(appHost);
 
             _app = await appHost.BuildAsync(cancellationToken).WaitAsync(DefaultTimeout, cancellationToken);
             await _app.StartAsync(cancellationToken).WaitAsync(DefaultTimeout, cancellationToken);
@@ -145,11 +154,28 @@ public sealed class AspireE2EFixture : IAsyncLifetime
     {
         _probeClient?.Dispose();
         _identityApiHttpClient?.Dispose();
+        EmailSink.Dispose();
 
         if (_app is not null)
         {
             await _app.DisposeAsync();
         }
+    }
+
+    /// <remarks>
+    /// The only step between <c>CreateAsync</c> and <c>BuildAsync</c> in this fixture - every other
+    /// configuration value goes through <see cref="FixedTestArgs"/> as a <c>Parameters:*</c> argument instead.
+    /// <c>Email:Provider</c>/<c>Email:FileSinkDirectory</c> aren't Aspire parameters, though - they're plain
+    /// environment variables on the <c>web</c> resource, so they need <c>CreateResourceBuilder</c> rather than
+    /// a testArgs entry.
+    /// </remarks>
+    private void ConfigureWebEmailSink(IDistributedApplicationTestingBuilder appHost)
+    {
+        ProjectResource webResource = appHost.Resources.OfType<ProjectResource>().Single(r => r.Name == "web");
+
+        appHost.CreateResourceBuilder(webResource)
+            .WithEnvironment("Email__Provider", "FileSink")
+            .WithEnvironment("Email__FileSinkDirectory", EmailSink.Directory);
     }
 
     /// <remarks>

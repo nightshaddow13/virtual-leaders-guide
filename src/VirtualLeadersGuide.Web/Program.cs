@@ -33,7 +33,7 @@ builder.Services.AddIdentityCore<ApplicationUser>(options => options.SignIn.Requ
     .AddDefaultTokenProviders()
     .AddClaimsPrincipalFactory<ApplicationUserClaimsPrincipalFactory>();
 
-builder.Services.AddScoped<IEmailSender<ApplicationUser>, AcsEmailSender>();
+builder.AddConfiguredEmailSender();
 
 builder.Services.AddScoped<ApiRoleGrantClient>();
 

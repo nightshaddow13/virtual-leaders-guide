@@ -58,12 +58,7 @@ var api = builder.AddProject<Projects.VirtualLeadersGuide_Api>("api")
     .WithEnvironment("InternalApi__Key", internalApiKey)
     .WithEnvironment("InternalJwt__SigningKey", internalJwtKey);
 
-if (!builder.ExecutionContext.IsPublishMode)
-{
-    api.WithEnvironment("Migrations__ApplyAutomatically", "true");
-}
-
-builder.AddProject<Projects.VirtualLeadersGuide_Web>("web")
+var web = builder.AddProject<Projects.VirtualLeadersGuide_Web>("web")
     .WithExternalHttpEndpoints()
     .WithReference(api)
     .WithReference(blobs)
@@ -74,4 +69,19 @@ builder.AddProject<Projects.VirtualLeadersGuide_Web>("web")
     .WithEnvironment("Email__ConnectionString", acsConnectionString)
     .WithEnvironment("AdminAllowlist__Emails", adminAllowlist);
 
+if (!builder.ExecutionContext.IsPublishMode)
+{
+    api.WithEnvironment("Migrations__ApplyAutomatically", "true");
+    AllowFileSinkEmailProvider(web);
+}
+
 builder.Build().Run();
+
+/// <remarks>
+/// Permission for Web to select <c>Email:Provider=FileSink</c> (P2.1-4, #62; ADR-0032) - absent from a
+/// published deploy manifest by construction, same as <c>Migrations:ApplyAutomatically</c> above (ADR-0013),
+/// so a deployed environment can select the file sink only by someone hand-editing its config, and
+/// <c>EmailSenderRegistration</c> still refuses it there.
+/// </remarks>
+void AllowFileSinkEmailProvider(IResourceBuilder<ProjectResource> webBuilder) =>
+    webBuilder.WithEnvironment("Email__FileSinkAllowed", "true");
