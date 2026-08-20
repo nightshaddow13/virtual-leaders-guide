@@ -4,6 +4,12 @@ Runs `tests/VirtualLeadersGuide.E2E.Tests` against the real Aspire-orchestrated 
 separate processes, a real SQL Server container, real Azurite - driven by a real (headless) browser via
 Playwright. Distinct from `dotnet test` on the rest of the solution, which none of this touches.
 
+The suite also forces `Email__Provider=FileSink` onto `web`, so no password-reset email actually reaches
+Azure Communication Services during a run - see
+[ADR-0032](../adr/0032-web-email-sender-is-config-selected-for-test-interception.md). Emails land as JSON
+files in a run-scoped temp directory (`AspireE2EFixture.EmailSink`), not under `artifacts/`, and are copied
+into a failed test's own artifact folder (Section 5) rather than left in temp.
+
 ## 1. Prerequisites
 
 Same three things `AspireE2EFixture` itself checks for and reports on failure:
@@ -76,7 +82,8 @@ run (container pulls on a cold cache add more). Every test shares that one boot 
 
 ## 5. Where failure artifacts land
 
-Every failed test leaves `trace.zip`, `screenshot.png`, `video.webm`, and `page.html` under:
+Every failed test leaves `trace.zip`, `screenshot.png`, `video.webm`, `page.html`, and an `emails/` folder
+(any JSON files the file-sink email sender had written by the time the test failed) under:
 
 ```
 artifacts/e2e/<run timestamp>/<Class>.<Method>/

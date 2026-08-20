@@ -58,12 +58,7 @@ var api = builder.AddProject<Projects.VirtualLeadersGuide_Api>("api")
     .WithEnvironment("InternalApi__Key", internalApiKey)
     .WithEnvironment("InternalJwt__SigningKey", internalJwtKey);
 
-if (!builder.ExecutionContext.IsPublishMode)
-{
-    api.WithEnvironment("Migrations__ApplyAutomatically", "true");
-}
-
-builder.AddProject<Projects.VirtualLeadersGuide_Web>("web")
+var web = builder.AddProject<Projects.VirtualLeadersGuide_Web>("web")
     .WithExternalHttpEndpoints()
     .WithReference(api)
     .WithReference(blobs)
@@ -74,4 +69,17 @@ builder.AddProject<Projects.VirtualLeadersGuide_Web>("web")
     .WithEnvironment("Email__ConnectionString", acsConnectionString)
     .WithEnvironment("AdminAllowlist__Emails", adminAllowlist);
 
+if (!builder.ExecutionContext.IsPublishMode)
+{
+    api.WithEnvironment("Migrations__ApplyAutomatically", "true");
+    AllowFileSinkEmailProvider(web);
+}
+
 builder.Build().Run();
+
+/// <remarks>
+/// One of two layers <c>EmailSenderRegistration</c> requires before Web will select the file sink - see
+/// ADR-0032.
+/// </remarks>
+void AllowFileSinkEmailProvider(IResourceBuilder<ProjectResource> webBuilder) =>
+    webBuilder.WithEnvironment("Email__FileSinkAllowed", "true");

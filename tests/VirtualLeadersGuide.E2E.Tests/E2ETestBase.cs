@@ -7,8 +7,9 @@ namespace VirtualLeadersGuide.E2E.Tests;
 
 /// <summary>
 /// Base class for every E2E test in this project. Captures <c>trace.zip</c>, <c>screenshot.png</c>,
-/// <c>video.webm</c>, and <c>page.html</c> under <c>artifacts/e2e/&lt;run timestamp&gt;/&lt;Class&gt;.&lt;Method&gt;/</c>
-/// for a failed test, and leaves nothing behind for a passing one.
+/// <c>video.webm</c>, <c>page.html</c>, and any <see cref="AspireE2EFixture.EmailSink"/> contents under
+/// <c>artifacts/e2e/&lt;run timestamp&gt;/&lt;Class&gt;.&lt;Method&gt;/</c> for a failed test, and leaves
+/// nothing behind for a passing one.
 /// </summary>
 /// <remarks>
 /// Extends <see cref="PageTest"/> directly rather than wrapping it, so xUnit's constructor-injection of
@@ -116,6 +117,21 @@ public abstract class E2ETestBase(AspireE2EFixture fixture) : PageTest
                 {
                     await File.WriteAllTextAsync(pageHtmlPath, await Page.ContentAsync());
                 }
+            });
+
+            await TryCaptureAsync(testDir, "emails", () =>
+            {
+                string emailsDir = Path.Combine(testDir, "emails");
+                foreach (string sourcePath in Fixture.EmailSink.FilePaths)
+                {
+                    string? destinationPath = ResolveArtifactPath(emailsDir, Path.GetFileName(sourcePath));
+                    if (destinationPath is not null)
+                    {
+                        File.Copy(sourcePath, destinationPath, overwrite: true);
+                    }
+                }
+
+                return Task.CompletedTask;
             });
         }
 

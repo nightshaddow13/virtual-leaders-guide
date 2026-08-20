@@ -74,8 +74,8 @@ event-scoped)
 
 **Invite**:
 A Role grant an Admin creates for someone by email before that person has ever signed in, delivered via an
-app-sent email (Azure Communication Services) with a password-setup link — not a copyable link for the
-Admin to relay. Resolves into an active grant the moment that person sets their password.
+app-sent email with a password-setup link — not a copyable link for the Admin to relay. Resolves into an
+active grant the moment that person sets their password.
 _Avoid_: Invitation link, copy-link invite
 
 **Leaders Guide**:
