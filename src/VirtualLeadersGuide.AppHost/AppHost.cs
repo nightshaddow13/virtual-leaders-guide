@@ -78,10 +78,8 @@ if (!builder.ExecutionContext.IsPublishMode)
 builder.Build().Run();
 
 /// <remarks>
-/// Permission for Web to select <c>Email:Provider=FileSink</c> (P2.1-4, #62; ADR-0032) - absent from a
-/// published deploy manifest by construction, same as <c>Migrations:ApplyAutomatically</c> above (ADR-0013),
-/// so a deployed environment can select the file sink only by someone hand-editing its config, and
-/// <c>EmailSenderRegistration</c> still refuses it there.
+/// One of two layers <c>EmailSenderRegistration</c> requires before Web will select the file sink - see
+/// ADR-0032.
 /// </remarks>
 void AllowFileSinkEmailProvider(IResourceBuilder<ProjectResource> webBuilder) =>
     webBuilder.WithEnvironment("Email__FileSinkAllowed", "true");

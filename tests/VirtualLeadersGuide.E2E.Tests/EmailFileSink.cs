@@ -74,6 +74,7 @@ public sealed class EmailFileSink : IDisposable
     /// </summary>
     public bool HasEmailFor(string toEmail) => TryFindEmailFor(toEmail) is not null;
 
+    /// <inheritdoc/>
     /// <remarks>Best-effort - a locked file here would only be evidence, never the cause of a real test failure.</remarks>
     public void Dispose()
     {

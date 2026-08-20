@@ -19,12 +19,15 @@ public sealed class FileSinkEmailSender(IConfiguration configuration, ILogger<Fi
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
+    /// <inheritdoc/>
     public Task SendConfirmationLinkAsync(ApplicationUser user, string email, string confirmationLink) =>
         WriteAsync(email, "Confirm your email", SentEmailKinds.ConfirmationLink, confirmationLink);
 
+    /// <inheritdoc/>
     public Task SendPasswordResetLinkAsync(ApplicationUser user, string email, string resetLink) =>
         WriteAsync(email, "Reset your password", SentEmailKinds.PasswordResetLink, resetLink);
 
+    /// <inheritdoc/>
     public Task SendPasswordResetCodeAsync(ApplicationUser user, string email, string resetCode) =>
         WriteAsync(email, "Your password reset code", SentEmailKinds.PasswordResetCode, resetCode);
 

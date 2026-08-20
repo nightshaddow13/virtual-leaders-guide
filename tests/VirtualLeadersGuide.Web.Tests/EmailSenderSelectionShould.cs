@@ -8,9 +8,10 @@ namespace VirtualLeadersGuide.Web.Tests;
 
 /// <remarks>
 /// Exercises <c>EmailSenderRegistration.AddConfiguredEmailSender</c>'s fail-closed provider selection
-/// (P2.1-4, #62; ADR-0032) - the guard that stops a real deployed environment from silently dropping
-/// password-reset emails into a file no one reads. <c>Program.cs</c> reads <c>Email:Provider</c>/
-/// <c>Email:FileSinkAllowed</c> as part of top-level statement execution, so - like
+/// (P2.1-4, #62; ADR-0032) - the two-layer guard (<c>Email:FileSinkAllowed</c> plus <c>IsProduction()</c>)
+/// that stops a real deployed environment from silently dropping password-reset emails into a file no one
+/// reads. <c>Program.cs</c> reads <c>Email:Provider</c>/<c>Email:FileSinkAllowed</c>/
+/// <c>ASPNETCORE_ENVIRONMENT</c> as part of top-level statement execution, so - like
 /// <c>ConnectionStrings:blobs</c>, see <see cref="DashboardShould"/>'s remarks - these have to be set as
 /// environment variables before the <see cref="WebApplicationFactory{TEntryPoint}"/> itself is constructed,
 /// not merely before <c>.Services</c> is first touched. <see cref="BuildFactory"/> centralizes that ordering.
@@ -36,6 +37,7 @@ public class EmailSenderSelectionShould : IAsyncLifetime
         Environment.SetEnvironmentVariable("ConnectionStrings__blobs", null);
         Environment.SetEnvironmentVariable("Email__Provider", null);
         Environment.SetEnvironmentVariable("Email__FileSinkAllowed", null);
+        Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", null);
 
         if (Directory.Exists(_dataProtectionKeysDirectory))
         {
@@ -85,19 +87,32 @@ public class EmailSenderSelectionShould : IAsyncLifetime
         Assert.Contains("Email:Provider", exception.Message);
     }
 
+    [Fact]
+    public void ThrowOnBuild_WhenProviderIsFileSinkAndAllowedButEnvironmentIsProduction_ForAddConfiguredEmailSender()
+    {
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+            () => BuildFactory(provider: "FileSink", fileSinkAllowed: true, production: true));
+
+        Assert.Contains("Production", exception.Message);
+    }
+
     /// <remarks>
     /// Forces the host to build immediately, inside this call, by touching <c>.Services</c> while the
     /// environment variables set here are still in scope (see this class's own remarks). A build failure
     /// surfaces here, possibly wrapped by reflection/host-building machinery -
     /// <see cref="UnwrapInvalidOperationException"/> recovers the real <see cref="InvalidOperationException"/>
     /// <c>EmailSenderRegistration</c> throws, rather than callers asserting on whatever wrapper type happens
-    /// to carry it.
+    /// to carry it. <paramref name="production"/> is applied via the raw <c>ASPNETCORE_ENVIRONMENT</c>
+    /// variable rather than <c>IWebHostBuilder.UseEnvironment</c> - the same reasoning as
+    /// <c>ConnectionStrings:blobs</c> above: <c>WebApplication.CreateBuilder</c> reads it from the process
+    /// environment on its very first line, before <c>WithWebHostBuilder</c>'s own hooks would apply.
     /// </remarks>
-    private WebApplicationFactory<Program> BuildFactory(string? provider, bool? fileSinkAllowed)
+    private WebApplicationFactory<Program> BuildFactory(string? provider, bool? fileSinkAllowed, bool production = false)
     {
         Environment.SetEnvironmentVariable("Email__Provider", provider);
         Environment.SetEnvironmentVariable(
             "Email__FileSinkAllowed", fileSinkAllowed is null ? null : fileSinkAllowed.Value ? "true" : "false");
+        Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", production ? "Production" : null);
 
         var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {

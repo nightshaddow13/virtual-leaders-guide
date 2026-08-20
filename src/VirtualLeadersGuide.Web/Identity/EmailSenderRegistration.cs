@@ -16,15 +16,10 @@ public static class EmailSenderRegistration
 
     private const string FileSinkProvider = "FileSink";
 
-    /// <remarks>
-    /// <c>Email:FileSinkAllowed</c> is set only by <c>AppHost.cs</c>'s <c>!builder.ExecutionContext.IsPublishMode</c>
-    /// block, which is absent from a published deploy manifest by construction (ADR-0013 uses the same guard
-    /// for <c>Migrations:ApplyAutomatically</c>) - so <c>Email:Provider=FileSink</c> can reach a deployed
-    /// environment only if someone hand-edits that environment's config directly, and this still refuses it
-    /// there. An unrecognized <c>Email:Provider</c> value also throws, rather than silently falling back to
-    /// <see cref="AcsEmailSender"/> - a typo in the E2E fixture's config would otherwise surface as a hung test
-    /// waiting on an email that was never going to arrive.
-    /// </remarks>
+    /// <summary>
+    /// Registers <see cref="AcsEmailSender"/> or <see cref="FileSinkEmailSender"/> depending on <c>Email:Provider</c>.
+    /// </summary>
+    /// <remarks>See ADR-0032 for the fail-closed guard this enforces and why.</remarks>
     public static void AddConfiguredEmailSender(this WebApplicationBuilder builder)
     {
         var provider = builder.Configuration[ProviderKey];
@@ -41,6 +36,12 @@ public static class EmailSenderRegistration
             {
                 throw new InvalidOperationException(
                     $"{ProviderKey}={FileSinkProvider} is not allowed here - {FileSinkAllowedKey} is not set.");
+            }
+
+            if (builder.Environment.IsProduction())
+            {
+                throw new InvalidOperationException(
+                    $"{ProviderKey}={FileSinkProvider} is not allowed under the Production environment.");
             }
 
             builder.Services.AddScoped<IEmailSender<ApplicationUser>, FileSinkEmailSender>();
