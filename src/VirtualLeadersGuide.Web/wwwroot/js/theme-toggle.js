@@ -11,11 +11,11 @@
     }
 
     // The server never renders data-theme - it's client-only state - and Blazor's enhanced navigation
-    // (crossing into e.g. the static-SSR Account/Manage page, or a POST-redirect like Account/Logout) has
-    // been observed to reset <html>'s attributes to whatever the fresh server response contains, i.e. no
-    // data-theme at all, silently falling back to the OS's prefers-color-scheme. Same logic as the
-    // FOUC-prevention script in App.razor's <head> (which only covers the very first hard load), called
-    // again on every enhanced navigation below so an explicit choice actually sticks everywhere.
+    // (any link/form navigation it intercepts, not just the static-SSR/POST-redirect cases) replaces
+    // <html>'s attributes with whatever the fresh server response contains, i.e. no data-theme at all,
+    // silently falling back to the OS's prefers-color-scheme. Same logic as the FOUC-prevention script in
+    // App.razor's <head> (which only covers the very first hard load), re-run on every enhanced navigation
+    // below so an explicit choice actually sticks everywhere, not just on pages reached by a full reload.
     function restoreStoredTheme() {
         var stored = localStorage.getItem('vlg-theme');
         if (stored === 'light' || stored === 'dark') {
@@ -47,14 +47,24 @@
         applyTheme(currentTheme() === 'dark' ? 'light' : 'dark');
     });
 
-    // Re-apply on every enhanced navigation, not just first load - restoreStoredTheme() undoes the reset
-    // described above, syncLabel() re-derives the label for whatever button the navigation just rendered
-    // (Blazor's enhanced nav puts back the server-rendered neutral label along with everything else).
-    document.addEventListener('blazor:enhancedload', function () {
-        restoreStoredTheme();
-        syncLabel();
-    });
+    // `Blazor.addEventListener('enhancedload', ...)` is the real API for this - not a 'blazor:enhancedload'
+    // DOM CustomEvent on `document` (there is no such thing; Blazor dispatches its lifecycle events through
+    // its own object, confirmed by reading the shipped blazor.web.js directly rather than assuming). `Blazor`
+    // exists as soon as its own <script> tag runs, but `.addEventListener` is only bound onto it partway
+    // through Blazor's own (async) start sequence - this script runs `defer`, which can execute before that
+    // sequence completes, so retry briefly instead of assuming the method is already there.
+    function registerEnhancedLoadHandler() {
+        if (window.Blazor && typeof window.Blazor.addEventListener === 'function') {
+            window.Blazor.addEventListener('enhancedload', function () {
+                restoreStoredTheme();
+                syncLabel();
+            });
+        } else {
+            setTimeout(registerEnhancedLoadHandler, 50);
+        }
+    }
 
+    registerEnhancedLoadHandler();
     restoreStoredTheme();
     syncLabel();
 })();
