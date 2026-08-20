@@ -90,6 +90,38 @@ public sealed class IdentityApiClient(HttpClient httpClient)
         return (await response.Content.ReadFromJsonAsync<IdentityUserDto>(cancellationToken))!;
     }
 
+    /// <summary>
+    /// Whether a User exists for <paramref name="email"/>, asked of <c>Api</c> directly rather than inferred
+    /// from the UI - for tests proving a self-deleted account is actually gone.
+    /// </summary>
+    /// <param name="email">The email to look up - normalized the same way <see cref="CreateUserAsync"/> does.</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
+    /// <returns><see langword="true"/> if a User row exists for <paramref name="email"/>, otherwise <see langword="false"/>.</returns>
+    /// <remarks>
+    /// Unlike <see cref="CreateUserAsync"/>/<see cref="LockOutAsync"/>, a 404 here is a legitimate answer, not
+    /// a failure - this class's header remarks' "every method throws on non-success" rule only ever covered
+    /// mutating calls whose whole precondition is a fresh, not-yet-existing email.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">The lookup returned neither 200 nor 404.</exception>
+    public async Task<bool> ExistsAsync(string email, CancellationToken cancellationToken)
+    {
+        using HttpResponseMessage response = await httpClient.GetAsync(
+            InternalIdentityRoutes.ForUserByNormalizedEmail(email.ToUpperInvariant()), cancellationToken);
+
+        if (response.StatusCode is HttpStatusCode.OK)
+        {
+            return true;
+        }
+
+        if (response.StatusCode is HttpStatusCode.NotFound)
+        {
+            return false;
+        }
+
+        await ThrowForFailureAsync("look up", email, response, cancellationToken);
+        return false;
+    }
+
     private static async Task ThrowForFailureAsync(
         string action, string subject, HttpResponseMessage response, CancellationToken cancellationToken)
     {
