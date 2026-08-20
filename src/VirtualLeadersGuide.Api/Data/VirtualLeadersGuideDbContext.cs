@@ -12,10 +12,10 @@ namespace VirtualLeadersGuide.Api.Data;
 /// <remarks>
 /// See ADR-0017/ADR-0024 and CONTEXT.md's <c>User</c> entry for why <see cref="Role"/>/<see cref="UserRole"/>
 /// are a separate, app-owned concept, and why <see cref="ApplicationUser"/> — not a domain <c>User</c> row —
-/// is the person. <see cref="Role"/>/<see cref="UserRole"/> stay plain POCOs, never exposed as
-/// JsonApiDotNetCore resources (ADR-0017's Consequences), same as <c>AspNetRoles</c>/<c>AspNetUserRoles</c> —
-/// see <c>IdentityEntitiesAreNotJsonApiResourcesShould</c> and
-/// <c>DomainAuthorizationEntitiesAreNotJsonApiResourcesShould</c>.
+/// is the person. <see cref="Role"/> stays a plain POCO, never exposed as a JsonApiDotNetCore resource
+/// (ADR-0017's Consequences), same as <c>AspNetRoles</c> — see <c>IdentityEntitiesAreNotJsonApiResourcesShould</c>
+/// and <c>DomainAuthorizationEntitiesAreNotJsonApiResourcesShould</c>. <see cref="UserRole"/> is exposed,
+/// Admin-only, at <c>/api/roleGrants</c> (P2-8, #17; ADR-0033) — see <c>UserRoleResourceDefinition</c>.
 /// </remarks>
 public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDbContext> options)
     : IdentityDbContext<ApplicationUser>(options)

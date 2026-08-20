@@ -6,8 +6,10 @@ namespace VirtualLeadersGuide.Identity.Contracts;
 /// the two sides can't drift.
 /// </summary>
 /// <remarks>
-/// Deliberately outside JsonApi's <c>/api</c> namespace - these are plain internal grant CRUD, not a
-/// JSON:API resource (<see cref="UserRole"/> itself only becomes one under P2-8, #17). <c>{id}</c> is an
+/// Deliberately outside JsonApi's <c>/api</c> namespace - this is the identity-forwarding path Web's login
+/// flow uses to mint role claims (ADR-0007), unauthenticated by role on purpose since it's what produces
+/// those claims in the first place; it coexists with, and is unaffected by, <c>UserRole</c>'s separate,
+/// Admin-only exposure at <c>/api/roleGrants</c> (P2-8, #17; ADR-0033). <c>{id}</c> is an
 /// <c>ApplicationUser.Id</c> (string, per ADR-0024) - there is no separate domain User id.
 /// </remarks>
 public static class InternalAuthorizationRoutes

@@ -9,7 +9,10 @@ namespace VirtualLeadersGuide.Api.Authorization;
 /// Person CRUD lives separately in <c>InternalIdentityEndpoints</c> (ADR-0022) - see ADR-0024's
 /// Consequences for why there's no separate domain-User CRUD surface here. Gated by the same
 /// <c>X-Internal-Key</c> fallback policy as every other Api endpoint (ADR-0015), and deliberately outside
-/// JsonApi's <c>/api</c> namespace - <see cref="UserRole"/> isn't a JSON:API resource yet (ADR-0017).
+/// JsonApi's <c>/api</c> namespace - this is what mints the role claims Web's login flow needs (ADR-0007),
+/// so it stays unauthenticated by role rather than depending on the claims it produces. Coexists with
+/// <see cref="UserRole"/>'s separate, Admin-only exposure at <c>/api/roleGrants</c> (P2-8, #17; ADR-0033);
+/// both read/write the same <c>UserRoles</c> table.
 /// </remarks>
 public static class InternalAuthorizationEndpoints
 {

@@ -1,5 +1,5 @@
 ---
-status: EntraObjectId field amended by ADR-0019 (local ASP.NET Core Identity uses a different linking field); User/Credential table collapsed onto ApplicationUser by ADR-0024 (Role/UserRole shape below unchanged)
+status: EntraObjectId field amended by ADR-0019 (local ASP.NET Core Identity uses a different linking field); User/Credential table collapsed onto ApplicationUser by ADR-0024 (Role/UserRole shape below unchanged); UserRole's "never exposed as a JsonApiDotNetCore resource" clause superseded by ADR-0033 (Role stays unexposed)
 ---
 
 # Users and Roles are many-to-many, scoped to an Event on the join row

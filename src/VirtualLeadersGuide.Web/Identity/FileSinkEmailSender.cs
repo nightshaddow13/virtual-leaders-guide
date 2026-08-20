@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text.Json;
-using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using VirtualLeadersGuide.Identity.Contracts;
 
@@ -14,24 +13,21 @@ namespace VirtualLeadersGuide.Web.Identity;
 /// <remarks>
 /// Unlike <see cref="AcsEmailSender"/>, every method here writes a file rather than throwing on the two
 /// <see cref="AcsEmailSender"/> treats as unsupported - see ADR-0032's Consequences for why the two senders
-/// are not behaviourally equivalent.
+/// are not behaviourally equivalent. Writes <see cref="SentEmailDto.Payload"/> as received, per that
+/// property's own "verbatim" contract - a test process navigating a captured link needs the real value, not
+/// ciphertext only Web's own key ring (unreachable across the process boundary this sender exists to route
+/// around) could undo.
 /// </remarks>
-public sealed class FileSinkEmailSender(
-    IConfiguration configuration,
-    ILogger<FileSinkEmailSender> logger,
-    IDataProtectionProvider dataProtectionProvider)
+public sealed class FileSinkEmailSender(IConfiguration configuration, ILogger<FileSinkEmailSender> logger)
     : IEmailSender<ApplicationUser>
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
-    private static readonly string PayloadProtectionPurpose = "VirtualLeadersGuide.Web.Identity.FileSinkEmailSender.Payload";
 
     private static string ComputeKindFingerprint(string value)
     {
         var hash = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value));
         return Convert.ToHexString(hash[..8]);
     }
-
-    private readonly IDataProtector payloadProtector = dataProtectionProvider.CreateProtector(PayloadProtectionPurpose);
 
     /// <inheritdoc/>
     public Task SendConfirmationLinkAsync(ApplicationUser user, string email, string confirmationLink) =>
@@ -58,8 +54,7 @@ public sealed class FileSinkEmailSender(
             ?? throw new InvalidOperationException("Email:FileSinkDirectory is not configured.");
         Directory.CreateDirectory(directory);
 
-        var protectedPayload = payloadProtector.Protect(payload);
-        var email = new SentEmailDto(toEmail, subject, kind, protectedPayload, DateTimeOffset.UtcNow);
+        var email = new SentEmailDto(toEmail, subject, kind, payload, DateTimeOffset.UtcNow);
 
         var fileName = Guid.NewGuid().ToString("n");
         var tempPath = Path.Combine(directory, fileName + ".tmp");

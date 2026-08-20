@@ -1,3 +1,7 @@
+---
+status: collection/single asymmetry generalized by ADR-0033 (a caller whose visible set is always empty, not just sometimes-narrowed, gets 403 on every shape instead of a silently-filtered collection)
+---
+
 # Event authorization is enforced in a JsonApiDotNetCore resource definition, not a controller
 
 P2-7 (#16) needed Admin/Director scoping on `/api/events`: an Admin gets full CRUD over every Event; a

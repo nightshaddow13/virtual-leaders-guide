@@ -133,6 +133,55 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>
+    /// Creates and persists a new <see cref="ApplicationUser"/> - for tests (P2-8, #17) that need a real row
+    /// satisfying <c>UserRoles.UserId</c>'s foreign key, rather than just an id string.
+    /// </summary>
+    /// <param name="email">
+    /// The user's email/username. Omit to get a fresh Guid-suffixed default, so repeated calls within one
+    /// test don't collide.
+    /// </param>
+    /// <returns>The newly persisted <see cref="ApplicationUser"/>.</returns>
+    public async Task<ApplicationUser> CreateUserAsync(string? email = null)
+    {
+        using IServiceScope scope = Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        string normalizedEmail = email ?? $"{Guid.NewGuid()}@example.com";
+        var user = new ApplicationUser
+        {
+            UserName = normalizedEmail,
+            NormalizedUserName = normalizedEmail.ToUpperInvariant(),
+            Email = normalizedEmail,
+            NormalizedEmail = normalizedEmail.ToUpperInvariant()
+        };
+
+        dbContext.Users.Add(user);
+        await dbContext.SaveChangesAsync();
+        return user;
+    }
+
+    /// <summary>
+    /// Creates and persists a new <see cref="UserRole"/> grant - for tests (P2-8, #17) that need a real row
+    /// to read, list, or delete over <c>/api/roleGrants</c>, rather than just a claim.
+    /// </summary>
+    /// <param name="userId">The grantee's <see cref="ApplicationUser.Id"/> - see <see cref="CreateUserAsync"/>.</param>
+    /// <param name="roleId">The <c>Role.Id</c> to grant (<see cref="RoleIds"/>).</param>
+    /// <param name="eventId">
+    /// The Event to scope the grant to, or <see langword="null"/> for a platform-wide grant - see
+    /// <see cref="CreateEventAsync"/> for a real row satisfying the foreign key when scoping.
+    /// </param>
+    /// <returns>The newly persisted <see cref="UserRole"/>.</returns>
+    public async Task<UserRole> CreateGrantAsync(string userId, int roleId, Guid? eventId = null)
+    {
+        using IServiceScope scope = Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        var grant = new UserRole { Id = Guid.NewGuid(), UserId = userId, RoleId = roleId, EventId = eventId };
+
+        dbContext.DomainUserRoles.Add(grant);
+        await dbContext.SaveChangesAsync();
+        return grant;
+    }
+
+    /// <summary>
     /// A pre-formatted platform-wide <c>Admin</c> role claim (see <see cref="RoleClaimValue.Format"/>), ready
     /// to pass to <see cref="CreateUserClient"/> - for tests (P2-7, #16) exercising Admin-only access to
     /// <c>/api/events</c> without hand-building a <see cref="RoleGrantDto"/>.

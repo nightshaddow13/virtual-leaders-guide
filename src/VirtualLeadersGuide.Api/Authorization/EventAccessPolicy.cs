@@ -13,7 +13,8 @@ namespace VirtualLeadersGuide.Api.Authorization;
 /// a Director's <see cref="AssignedEventIds"/> can lag a grant/revocation by up to the token's lifetime,
 /// which is the accepted trade-off, not a bug here. Mirrors CONTEXT.md's Admin/Director entries: Admin is
 /// a superset that can create/edit/delete any Event; Director gets read/edit on only the Events they're
-/// assigned to, never create or delete.
+/// assigned to, never create or delete. Claim parsing itself is <see cref="RoleClaims.Parse"/>, shared with
+/// <see cref="RoleGrantAccessPolicy"/> (P2-8, #17) rather than duplicated here.
 /// </remarks>
 public sealed class EventAccessPolicy
 {
@@ -27,13 +28,8 @@ public sealed class EventAccessPolicy
         var assignedEventIds = new HashSet<Guid>();
         var isAdmin = false;
 
-        foreach (Claim claim in user.FindAll(ClaimTypes.Role))
+        foreach ((string roleName, Guid? eventId) in RoleClaims.Parse(user))
         {
-            if (!RoleClaimValue.TryParse(claim.Value, out string roleName, out Guid? eventId))
-            {
-                continue;
-            }
-
             if (roleName == RoleNames.Admin && eventId is null)
             {
                 isAdmin = true;
