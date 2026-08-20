@@ -50,6 +50,6 @@ public sealed class FileSinkEmailSender(IConfiguration configuration, ILogger<Fi
         await File.WriteAllTextAsync(tempPath, JsonSerializer.Serialize(email, SerializerOptions));
         File.Move(tempPath, finalPath);
 
-        logger.LogInformation("Wrote {Kind} email for {Email} to {Path}.", kind, toEmail, finalPath);
+        logger.LogInformation("Wrote {Kind} email to {Path}.", kind, finalPath);
     }
 }
