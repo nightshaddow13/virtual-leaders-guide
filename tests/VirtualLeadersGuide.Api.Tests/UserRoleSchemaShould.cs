@@ -42,7 +42,7 @@ public class UserRoleSchemaShould : IAsyncLifetime
     {
         using IServiceScope scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
-        ApplicationUser user = await AddUserAsync(db);
+        ApplicationUser user = await _factory.CreateUserAsync();
         Event eventA = await _factory.CreateEventAsync();
         Event eventB = await _factory.CreateEventAsync();
 
@@ -60,8 +60,8 @@ public class UserRoleSchemaShould : IAsyncLifetime
     {
         using IServiceScope scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
-        ApplicationUser userA = await AddUserAsync(db);
-        ApplicationUser userB = await AddUserAsync(db);
+        ApplicationUser userA = await _factory.CreateUserAsync();
+        ApplicationUser userB = await _factory.CreateUserAsync();
         Event @event = await _factory.CreateEventAsync();
         var eventId = @event.Id;
 
@@ -79,7 +79,7 @@ public class UserRoleSchemaShould : IAsyncLifetime
     {
         using IServiceScope scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
-        ApplicationUser user = await AddUserAsync(db);
+        ApplicationUser user = await _factory.CreateUserAsync();
 
         db.DomainUserRoles.Add(new UserRole { Id = Guid.NewGuid(), UserId = user.Id, RoleId = RoleIds.Admin });
         await db.SaveChangesAsync();
@@ -93,7 +93,7 @@ public class UserRoleSchemaShould : IAsyncLifetime
     {
         using IServiceScope scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
-        ApplicationUser user = await AddUserAsync(db);
+        ApplicationUser user = await _factory.CreateUserAsync();
         Event @event = await _factory.CreateEventAsync();
 
         db.DomainUserRoles.AddRange(
@@ -110,7 +110,7 @@ public class UserRoleSchemaShould : IAsyncLifetime
     {
         using IServiceScope scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
-        ApplicationUser user = await AddUserAsync(db);
+        ApplicationUser user = await _factory.CreateUserAsync();
 
         db.DomainUserRoles.Add(new UserRole { Id = Guid.NewGuid(), UserId = user.Id, RoleId = RoleIds.Admin });
         await db.SaveChangesAsync();
@@ -125,7 +125,7 @@ public class UserRoleSchemaShould : IAsyncLifetime
     {
         using IServiceScope scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
-        ApplicationUser user = await AddUserAsync(db);
+        ApplicationUser user = await _factory.CreateUserAsync();
         Event @event = await _factory.CreateEventAsync();
         var eventId = @event.Id;
 
@@ -144,7 +144,7 @@ public class UserRoleSchemaShould : IAsyncLifetime
     {
         using IServiceScope scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
-        ApplicationUser user = await AddUserAsync(db);
+        ApplicationUser user = await _factory.CreateUserAsync();
         db.DomainUserRoles.Add(new UserRole { Id = Guid.NewGuid(), UserId = user.Id, RoleId = RoleIds.Admin });
         await db.SaveChangesAsync();
 
@@ -154,19 +154,4 @@ public class UserRoleSchemaShould : IAsyncLifetime
         Assert.False(await db.DomainUserRoles.AnyAsync(g => g.UserId == user.Id));
     }
 
-    private static async Task<ApplicationUser> AddUserAsync(VirtualLeadersGuideDbContext db)
-    {
-        var email = $"{Guid.NewGuid()}@example.com";
-        var user = new ApplicationUser
-        {
-            UserName = email,
-            NormalizedUserName = email.ToUpperInvariant(),
-            Email = email,
-            NormalizedEmail = email.ToUpperInvariant()
-        };
-
-        db.Users.Add(user);
-        await db.SaveChangesAsync();
-        return user;
-    }
 }

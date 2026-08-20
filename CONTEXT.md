@@ -51,7 +51,8 @@ _Avoid_: Account, Identity, Credential (as a separate concept — it's columns o
 
 **Role**:
 A grant a User holds — either platform-wide (Admin) or scoped to a specific Event (Director, and future
-Event-scoped roles). One User may hold several Roles at once, scoped to different Events.
+Event-scoped roles). One User may hold several Roles at once, scoped to different Events. Stored as a
+UserRole row, exposed to Admins at `/api/roleGrants`.
 _Avoid_: Permission, Group
 
 **Admin**:

@@ -10,8 +10,9 @@ namespace VirtualLeadersGuide.Api.Data;
 /// </summary>
 /// <remarks>
 /// Exposed at <c>/api/events</c> (P2-7, #16) - see <see cref="EventResourceDefinition"/> for the
-/// Admin/Director scoping enforced on top of the CRUD this attribute generates. <see cref="Role"/> and
-/// <see cref="UserRole"/> stay unexposed (ADR-0017's Consequences).
+/// Admin/Director scoping enforced on top of the CRUD this attribute generates. <see cref="Role"/> stays
+/// unexposed (ADR-0017's Consequences); <see cref="UserRole"/> is exposed separately, Admin-only, at
+/// <c>/api/roleGrants</c> (P2-8, #17; ADR-0033).
 /// </remarks>
 [Resource]
 public class Event : Identifiable<Guid>

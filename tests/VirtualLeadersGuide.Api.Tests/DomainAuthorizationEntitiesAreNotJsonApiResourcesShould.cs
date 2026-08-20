@@ -4,11 +4,12 @@ using System.Net.Http.Headers;
 namespace VirtualLeadersGuide.Api.Tests;
 
 /// <remarks>
-/// <c>Role</c> and <c>UserRole</c> (<c>VirtualLeadersGuide.Api.Data</c>) are plain POCOs, not
-/// <c>Identifiable&lt;T&gt;</c>, so neither is reachable as a JSON:API resource (ADR-0017's Consequences).
-/// <c>Event</c> was the same until P2-7 (#16) turned it into a resource - see <c>EventsResourceShould</c> for
-/// its positive coverage. <c>userRoles</c> is expected to flip once P2-8 (#17) deliberately turns
-/// <c>UserRole</c> into a resource; <c>roles</c> has no ticket planning to expose it at all.
+/// <c>Role</c> (<c>VirtualLeadersGuide.Api.Data</c>) is a plain POCO, not <c>Identifiable&lt;T&gt;</c>, so it
+/// isn't reachable as a JSON:API resource (ADR-0017's Consequences, unchanged by ADR-0033). <c>Event</c> was
+/// the same until P2-7 (#16) turned it into a resource - see <c>EventsResourceShould</c> for its positive
+/// coverage. <c>UserRole</c> was the same until P2-8 (#17; ADR-0033) turned it into a resource, exposed at
+/// <c>/api/roleGrants</c> (not <c>/api/userRoles</c> - see <c>UserRole</c>'s <c>[Resource(PublicName = ...)]</c>)
+/// - see <c>RoleGrantsResourceShould</c> for its positive coverage.
 /// </remarks>
 public class DomainAuthorizationEntitiesAreNotJsonApiResourcesShould : IAsyncLifetime
 {
@@ -30,13 +31,10 @@ public class DomainAuthorizationEntitiesAreNotJsonApiResourcesShould : IAsyncLif
         return _factory.DisposeAsync().AsTask();
     }
 
-    [Theory]
-    [InlineData("/api/roles")]
-    [InlineData("/api/userRoles")]
-    public async Task ReturnNotFound_WhenRequestingADomainAuthorizationTableAsAJsonApiResource_ForGetCollection(
-        string requestUri)
+    [Fact]
+    public async Task ReturnNotFound_WhenRequestingRolesAsAJsonApiResource_ForGetCollection()
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/roles");
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(JsonApiMediaType));
 
         HttpResponseMessage response = await _client.SendAsync(request);
