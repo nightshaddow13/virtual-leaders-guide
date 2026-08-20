@@ -1,7 +1,5 @@
 // Plain vanilla JS, not Blazor - per ADR-0034, this app has no interactive circuit anywhere, and a theme
-// flip is a pure client-side DOM/localStorage operation that doesn't need one. Listens on `document` (not
-// the button itself) so it survives Blazor's enhanced-navigation swapping <body> content between pages -
-// the app-level FOUC-prevention script in App.razor's <head> reads the same 'vlg-theme' key on load.
+// flip is a pure client-side DOM/localStorage operation that doesn't need one.
 (function () {
     function currentTheme() {
         var explicit = document.documentElement.getAttribute('data-theme');
@@ -12,9 +10,21 @@
         return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
 
-    // The server can't render the correct aria-label - theme state lives only in this browser's
-    // localStorage, never sent to it - so the markup ships a neutral label and this refines it once the
-    // real state is known, both on load and after every toggle.
+    // The server never renders data-theme - it's client-only state - and Blazor's enhanced navigation
+    // (crossing into e.g. the static-SSR Account/Manage page, or a POST-redirect like Account/Logout) has
+    // been observed to reset <html>'s attributes to whatever the fresh server response contains, i.e. no
+    // data-theme at all, silently falling back to the OS's prefers-color-scheme. Same logic as the
+    // FOUC-prevention script in App.razor's <head> (which only covers the very first hard load), called
+    // again on every enhanced navigation below so an explicit choice actually sticks everywhere.
+    function restoreStoredTheme() {
+        var stored = localStorage.getItem('vlg-theme');
+        if (stored === 'light' || stored === 'dark') {
+            document.documentElement.setAttribute('data-theme', stored);
+        }
+    }
+
+    // The server can't render the correct aria-label either, for the same reason - the markup ships a
+    // neutral label and this refines it once the real state is known.
     function syncLabel() {
         var button = document.getElementById('vlg-theme-toggle');
         if (button) {
@@ -37,9 +47,14 @@
         applyTheme(currentTheme() === 'dark' ? 'light' : 'dark');
     });
 
-    // Blazor's enhanced navigation re-renders <body> (including this button, back to its server-rendered
-    // neutral label) without a full page reload - re-sync after every such navigation, not just on first load.
-    document.addEventListener('blazor:enhancedload', syncLabel);
+    // Re-apply on every enhanced navigation, not just first load - restoreStoredTheme() undoes the reset
+    // described above, syncLabel() re-derives the label for whatever button the navigation just rendered
+    // (Blazor's enhanced nav puts back the server-rendered neutral label along with everything else).
+    document.addEventListener('blazor:enhancedload', function () {
+        restoreStoredTheme();
+        syncLabel();
+    });
 
+    restoreStoredTheme();
     syncLabel();
 })();
