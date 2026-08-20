@@ -208,6 +208,47 @@
 }
 
 /* ===========================================================================
+   Theme toggle (SiteHeader.razor's #vlg-theme-toggle button, wwwroot/js/theme-toggle.js).
+   The icon shown reflects the theme currently ACTIVE (click it to switch away from that theme) - mirrors
+   the exact same 4-state cascade as the --vlg-* tokens above: default light, system-dark-with-no-override,
+   explicit dark, explicit light.
+   =========================================================================== */
+
+.vlg-icon-moon {
+    display: block;
+}
+
+.vlg-icon-sun {
+    display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]):not([data-theme="dark"]) .vlg-icon-moon {
+        display: none;
+    }
+
+    :root:not([data-theme="light"]):not([data-theme="dark"]) .vlg-icon-sun {
+        display: block;
+    }
+}
+
+[data-theme="dark"] .vlg-icon-moon {
+    display: none;
+}
+
+[data-theme="dark"] .vlg-icon-sun {
+    display: block;
+}
+
+[data-theme="light"] .vlg-icon-moon {
+    display: block;
+}
+
+[data-theme="light"] .vlg-icon-sun {
+    display: none;
+}
+
+/* ===========================================================================
    Alias Radzen's `material` theme tokens onto --vlg-*, rather than hardcoding
    colors component-by-component (ADR-0034). -dark/-light/-lighter state
    variants (hover, pressed, tints) are independent hex values in Radzen's own

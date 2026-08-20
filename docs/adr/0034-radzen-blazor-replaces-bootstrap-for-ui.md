@@ -54,6 +54,18 @@ open a SignalR circuit on every page including `Account/Login`, and without one 
 @rendermode="InteractiveServer" />` next to its own `@rendermode` declaration** — an interactive island inside
 the statically-rendered shell — rather than promoting the whole layout to interactive.
 
+## Light/dark toggle is vanilla JS, not Blazor
+
+`styles.css`'s `--vlg-*` tokens ship full light/dark pairs, applied via `[data-theme]`/`prefers-color-scheme`
+(above). A manual toggle followed from that for free on the CSS side, but needs *something* to flip
+`<html data-theme>` and remember the choice across visits — and per this ADR's static-SSR constraint, that
+can't be a Blazor `@onclick`. `wwwroot/js/theme-toggle.js` is plain vanilla JS: a `click` listener on
+`document` (not the button itself, so it survives Blazor's enhanced navigation replacing `<body>`) that
+flips `data-theme` and writes `localStorage`. `App.razor`'s `<head>` has a small blocking inline script that
+reads that same key before first paint, to avoid a flash of the wrong theme on load — the one place this
+ADR's "no interactivity" shell still needed *some* JS, deliberately outside Blazor's rendering model rather
+than bending it.
+
 ## Considered options
 
 - **Radzen Blazor Pro, for `material3`** — rejected: a paid subscription and a vendored theme CSS blob in
@@ -70,7 +82,9 @@ the statically-rendered shell — rather than promoting the whole layout to inte
   `RadzenProfileMenu` since they look like the obvious fit, and both are silently broken here.
 - P2-9/P2-10 pages that need `DialogService` add their own
   `<RadzenComponents @rendermode="InteractiveServer" />`, scoped to themselves, not to the shared layout.
-- `styles.css` has no `--vlg-on-pine` contrast token; text/controls on the signed-in strip need a contrast
-  check against `--vlg-pine` specifically before shipping, not an assumption that `--vlg-on-primary` transfers.
+- `styles.css` has no `--vlg-on-pine` contrast token; `SignedInContextStrip.razor.css` overrides Radzen's own
+  `.rz-button.rz-base.rz-shade-default` color with `!important` for this reason — verified visually (a real
+  Playwright screenshot, not just a build) that `--vlg-on-primary` reads correctly against `--vlg-pine` in
+  both themes before shipping.
 - The design project is a live, user-owned artifact and can change after this ADR is written — re-read
   `styles.css` via `DesignSync` before trusting a token value quoted elsewhere (including this ADR) verbatim.
