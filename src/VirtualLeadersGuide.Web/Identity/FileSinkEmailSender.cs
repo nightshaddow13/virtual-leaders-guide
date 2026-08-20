@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using VirtualLeadersGuide.Identity.Contracts;
 
@@ -14,10 +15,16 @@ namespace VirtualLeadersGuide.Web.Identity;
 /// <see cref="AcsEmailSender"/> treats as unsupported - see ADR-0032's Consequences for why the two senders
 /// are not behaviourally equivalent.
 /// </remarks>
-public sealed class FileSinkEmailSender(IConfiguration configuration, ILogger<FileSinkEmailSender> logger)
+public sealed class FileSinkEmailSender(
+    IConfiguration configuration,
+    ILogger<FileSinkEmailSender> logger,
+    IDataProtectionProvider dataProtectionProvider)
     : IEmailSender<ApplicationUser>
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly string PayloadProtectionPurpose = "VirtualLeadersGuide.Web.Identity.FileSinkEmailSender.Payload";
+
+    private readonly IDataProtector payloadProtector = dataProtectionProvider.CreateProtector(PayloadProtectionPurpose);
 
     /// <inheritdoc/>
     public Task SendConfirmationLinkAsync(ApplicationUser user, string email, string confirmationLink) =>
@@ -44,7 +51,8 @@ public sealed class FileSinkEmailSender(IConfiguration configuration, ILogger<Fi
             ?? throw new InvalidOperationException("Email:FileSinkDirectory is not configured.");
         Directory.CreateDirectory(directory);
 
-        var email = new SentEmailDto(toEmail, subject, kind, payload, DateTimeOffset.UtcNow);
+        var protectedPayload = payloadProtector.Protect(payload);
+        var email = new SentEmailDto(toEmail, subject, kind, protectedPayload, DateTimeOffset.UtcNow);
 
         var fileName = Guid.NewGuid().ToString("n");
         var tempPath = Path.Combine(directory, fileName + ".tmp");
