@@ -1,92 +1,112 @@
 /* ===========================================================================
    Virtual Leaders Guide design tokens.
-   Copied from the "Virtual Leaders Guide" Claude Design project's styles.css
+   Sourced from the "Virtual Leaders Guide" Claude Design project's styles.css
    (projectId c79dcd66-8d26-45ac-ae9e-7c09add75d91) - see ADR-0034. Warm canvas
    neutrals + earth-toned multi-hue accents. Built for high outdoor contrast:
    body text >= 12:1, all accent-on-surface >= 4.5:1, white-on-accent buttons
    >= 4.5:1 in both themes. Event brand color is a separate channel
    (--vlg-event-*) so a council/event accent never collides with UI semantics -
    reserved for future per-event branding, not used by this ticket.
+
+   Structure: every raw color/shadow value is defined exactly once, as a
+   `-light`/`-dark` suffixed token. The theme-state blocks below (system
+   preference, explicit data-theme) only ever *reassign* the active
+   `--vlg-*` token to point at one of those two, one line each - never repeat
+   the value itself. Semantic roles (--vlg-primary, --vlg-danger, ...) are
+   pure aliases onto the active tokens, so they need no per-theme block at
+   all; they track whatever the active token currently resolves to. *radius*
+   doesn't change between themes and is defined once, unconditionally.
    =========================================================================== */
 
 :root {
-    /* --- neutrals (warm canvas) --- */
-    --vlg-canvas: oklch(0.972 0.008 85);
-    --vlg-canvas-sunk: oklch(0.945 0.010 85);
-    --vlg-surface: oklch(1 0 0);
-    --vlg-surface-raised: oklch(0.988 0.005 85);
-    --vlg-ink: oklch(0.400 0.080 162);
-    --vlg-ink-muted: oklch(0.455 0.014 60);
-    --vlg-ink-faint: oklch(0.545 0.012 60);
-    --vlg-line: oklch(0.855 0.012 80);
-    --vlg-line-strong: oklch(0.400 0.080 162);
+    /* --- neutrals (warm canvas): raw light/dark pairs --- */
+    --vlg-canvas-light: oklch(0.972 0.008 85);
+    --vlg-canvas-dark: oklch(0.185 0.010 70);
+    --vlg-canvas-sunk-light: oklch(0.945 0.010 85);
+    --vlg-canvas-sunk-dark: oklch(0.150 0.010 70);
+    --vlg-surface-light: oklch(1 0 0);
+    --vlg-surface-dark: oklch(0.235 0.011 70);
+    --vlg-surface-raised-light: oklch(0.988 0.005 85);
+    --vlg-surface-raised-dark: oklch(0.275 0.012 70);
+    --vlg-ink-light: oklch(0.400 0.080 162);
+    --vlg-ink-dark: oklch(0.955 0.008 85);
+    --vlg-ink-muted-light: oklch(0.455 0.014 60);
+    --vlg-ink-muted-dark: oklch(0.775 0.010 80);
+    --vlg-ink-faint-light: oklch(0.545 0.012 60);
+    --vlg-ink-faint-dark: oklch(0.625 0.010 80);
+    --vlg-line-light: oklch(0.855 0.012 80);
+    --vlg-line-dark: oklch(0.350 0.012 75);
+    --vlg-line-strong-light: oklch(0.400 0.080 162);
+    --vlg-line-strong-dark: oklch(0.955 0.008 85);
 
-    /* --- accents: shared L 0.48 / C ~0.10, hue does the work --- */
-    --vlg-moss: oklch(0.480 0.100 130); /* primary - action, unlock, brand */
-    --vlg-pine: oklch(0.400 0.080 162); /* deep support - headers, dark panels */
-    --vlg-campfire: oklch(0.545 0.130 46); /* secondary - highlights, "now" markers */
-    --vlg-dusk: oklch(0.480 0.095 242); /* links, info, map layer */
-    --vlg-clay: oklch(0.500 0.150 28); /* error / destructive */
-    --vlg-amber: oklch(0.520 0.115 78); /* warning / schedule change */
+    /* --- accents: shared L 0.48 / C ~0.10 in light, hue does the work --- */
+    --vlg-moss-light: oklch(0.480 0.100 130); /* primary - action, unlock, brand */
+    --vlg-moss-dark: oklch(0.780 0.115 130);
+    --vlg-pine-light: oklch(0.400 0.080 162); /* deep support - headers, dark panels */
+    --vlg-pine-dark: oklch(0.740 0.090 162);
+    --vlg-campfire-light: oklch(0.545 0.130 46); /* secondary - highlights, "now" markers */
+    --vlg-campfire-dark: oklch(0.775 0.130 52);
+    --vlg-dusk-light: oklch(0.480 0.095 242); /* links, info, map layer */
+    --vlg-dusk-dark: oklch(0.780 0.095 242);
+    --vlg-clay-light: oklch(0.500 0.150 28); /* error / destructive */
+    --vlg-clay-dark: oklch(0.735 0.140 30);
+    --vlg-amber-light: oklch(0.520 0.115 78); /* warning / schedule change */
+    --vlg-amber-dark: oklch(0.830 0.120 82);
 
-    --vlg-moss-tint: oklch(0.955 0.030 130);
-    --vlg-campfire-tint: oklch(0.955 0.035 46);
-    --vlg-dusk-tint: oklch(0.955 0.028 242);
-    --vlg-clay-tint: oklch(0.955 0.038 28);
-    --vlg-amber-tint: oklch(0.960 0.040 78);
+    --vlg-moss-tint-light: oklch(0.955 0.030 130);
+    --vlg-moss-tint-dark: oklch(0.300 0.050 130);
+    --vlg-campfire-tint-light: oklch(0.955 0.035 46);
+    --vlg-campfire-tint-dark: oklch(0.300 0.055 46);
+    --vlg-dusk-tint-light: oklch(0.955 0.028 242);
+    --vlg-dusk-tint-dark: oklch(0.300 0.045 242);
+    --vlg-clay-tint-light: oklch(0.955 0.038 28);
+    --vlg-clay-tint-dark: oklch(0.300 0.060 28);
+    --vlg-amber-tint-light: oklch(0.960 0.040 78);
+    --vlg-amber-tint-dark: oklch(0.305 0.055 78);
 
-    /* --- semantic roles --- */
-    --vlg-primary: var(--vlg-moss);
-    --vlg-on-primary: oklch(1 0 0);
-    --vlg-accent: var(--vlg-campfire);
-    --vlg-link: var(--vlg-dusk);
-    --vlg-link-hover: var(--vlg-campfire);
-    --vlg-danger: var(--vlg-clay);
-    --vlg-warning: var(--vlg-amber);
-    --vlg-success: var(--vlg-moss);
-    --vlg-locked: var(--vlg-ink-faint);
-    --vlg-focus: oklch(0.560 0.140 242);
+    --vlg-on-primary-light: oklch(1 0 0);
+    --vlg-on-primary-dark: oklch(0.185 0.010 70);
+    --vlg-event-on-accent-light: oklch(1 0 0);
+    --vlg-event-on-accent-dark: oklch(0.185 0.010 70);
+    --vlg-focus-light: oklch(0.560 0.140 242);
+    --vlg-focus-dark: oklch(0.800 0.120 242);
+    --vlg-shadow-light: 0 1px 2px oklch(0.205 0.012 60 / .10), 0 2px 8px oklch(0.205 0.012 60 / .06);
+    --vlg-shadow-dark: 0 1px 2px oklch(0 0 0 / .5), 0 2px 10px oklch(0 0 0 / .35);
+    --vlg-shadow-hard-light: 3px 3px 0 oklch(0.205 0.012 60 / .14);
+    --vlg-shadow-hard-dark: 3px 3px 0 oklch(0 0 0 / .45);
 
-    /* --- per-event brand channel (overridden on the event root; not used yet) --- */
-    --vlg-event-accent: var(--vlg-moss);
-    --vlg-event-on-accent: oklch(1 0 0);
-
+    /* --- theme-invariant --- */
     --vlg-radius: 6px;
     --vlg-radius-lg: 10px;
-    --vlg-shadow: 0 1px 2px oklch(0.205 0.012 60 / .10), 0 2px 8px oklch(0.205 0.012 60 / .06);
-    --vlg-shadow-hard: 3px 3px 0 oklch(0.205 0.012 60 / .14);
-}
 
-[data-theme="dark"] {
-    --vlg-canvas: oklch(0.185 0.010 70);
-    --vlg-canvas-sunk: oklch(0.150 0.010 70);
-    --vlg-surface: oklch(0.235 0.011 70);
-    --vlg-surface-raised: oklch(0.275 0.012 70);
-    --vlg-ink: oklch(0.955 0.008 85);
-    --vlg-ink-muted: oklch(0.775 0.010 80);
-    --vlg-ink-faint: oklch(0.625 0.010 80);
-    --vlg-line: oklch(0.350 0.012 75);
-    --vlg-line-strong: oklch(0.955 0.008 85);
+    /* --- active tokens: default to light; reassigned by the theme-state blocks below --- */
+    --vlg-canvas: var(--vlg-canvas-light);
+    --vlg-canvas-sunk: var(--vlg-canvas-sunk-light);
+    --vlg-surface: var(--vlg-surface-light);
+    --vlg-surface-raised: var(--vlg-surface-raised-light);
+    --vlg-ink: var(--vlg-ink-light);
+    --vlg-ink-muted: var(--vlg-ink-muted-light);
+    --vlg-ink-faint: var(--vlg-ink-faint-light);
+    --vlg-line: var(--vlg-line-light);
+    --vlg-line-strong: var(--vlg-line-strong-light);
+    --vlg-moss: var(--vlg-moss-light);
+    --vlg-pine: var(--vlg-pine-light);
+    --vlg-campfire: var(--vlg-campfire-light);
+    --vlg-dusk: var(--vlg-dusk-light);
+    --vlg-clay: var(--vlg-clay-light);
+    --vlg-amber: var(--vlg-amber-light);
+    --vlg-moss-tint: var(--vlg-moss-tint-light);
+    --vlg-campfire-tint: var(--vlg-campfire-tint-light);
+    --vlg-dusk-tint: var(--vlg-dusk-tint-light);
+    --vlg-clay-tint: var(--vlg-clay-tint-light);
+    --vlg-amber-tint: var(--vlg-amber-tint-light);
+    --vlg-on-primary: var(--vlg-on-primary-light);
+    --vlg-event-on-accent: var(--vlg-event-on-accent-light);
+    --vlg-focus: var(--vlg-focus-light);
+    --vlg-shadow: var(--vlg-shadow-light);
+    --vlg-shadow-hard: var(--vlg-shadow-hard-light);
 
-    --vlg-moss: oklch(0.780 0.115 130);
-    --vlg-pine: oklch(0.740 0.090 162);
-    --vlg-campfire: oklch(0.775 0.130 52);
-    --vlg-dusk: oklch(0.780 0.095 242);
-    --vlg-clay: oklch(0.735 0.140 30);
-    --vlg-amber: oklch(0.830 0.120 82);
-
-    --vlg-moss-tint: oklch(0.300 0.050 130);
-    --vlg-campfire-tint: oklch(0.300 0.055 46);
-    --vlg-dusk-tint: oklch(0.300 0.045 242);
-    --vlg-clay-tint: oklch(0.300 0.060 28);
-    --vlg-amber-tint: oklch(0.305 0.055 78);
-
-    --vlg-on-primary: oklch(0.185 0.010 70);
-    --vlg-event-on-accent: oklch(0.185 0.010 70);
-    --vlg-focus: oklch(0.800 0.120 242);
-    --vlg-shadow: 0 1px 2px oklch(0 0 0 / .5), 0 2px 10px oklch(0 0 0 / .35);
-    --vlg-shadow-hard: 3px 3px 0 oklch(0 0 0 / .45);
-
+    /* --- semantic roles: pure aliases onto the active tokens above, no theme block needed --- */
     --vlg-primary: var(--vlg-moss);
     --vlg-accent: var(--vlg-campfire);
     --vlg-link: var(--vlg-dusk);
@@ -100,80 +120,91 @@
 
 @media (prefers-color-scheme: dark) {
     :root {
-        --vlg-canvas: oklch(0.185 0.010 70);
-        --vlg-canvas-sunk: oklch(0.150 0.010 70);
-        --vlg-surface: oklch(0.235 0.011 70);
-        --vlg-surface-raised: oklch(0.275 0.012 70);
-        --vlg-ink: oklch(0.955 0.008 85);
-        --vlg-ink-muted: oklch(0.775 0.010 80);
-        --vlg-ink-faint: oklch(0.625 0.010 80);
-        --vlg-line: oklch(0.350 0.012 75);
-        --vlg-line-strong: oklch(0.955 0.008 85);
-
-        --vlg-moss: oklch(0.780 0.115 130);
-        --vlg-pine: oklch(0.740 0.090 162);
-        --vlg-campfire: oklch(0.775 0.130 52);
-        --vlg-dusk: oklch(0.780 0.095 242);
-        --vlg-clay: oklch(0.735 0.140 30);
-        --vlg-amber: oklch(0.830 0.120 82);
-
-        --vlg-moss-tint: oklch(0.300 0.050 130);
-        --vlg-campfire-tint: oklch(0.300 0.055 46);
-        --vlg-dusk-tint: oklch(0.300 0.045 242);
-        --vlg-clay-tint: oklch(0.300 0.060 28);
-        --vlg-amber-tint: oklch(0.305 0.055 78);
-
-        --vlg-on-primary: oklch(0.185 0.010 70);
-        --vlg-event-on-accent: oklch(0.185 0.010 70);
-        --vlg-focus: oklch(0.800 0.120 242);
-        --vlg-shadow: 0 1px 2px oklch(0 0 0 / .5), 0 2px 10px oklch(0 0 0 / .35);
-        --vlg-shadow-hard: 3px 3px 0 oklch(0 0 0 / .45);
+        --vlg-canvas: var(--vlg-canvas-dark);
+        --vlg-canvas-sunk: var(--vlg-canvas-sunk-dark);
+        --vlg-surface: var(--vlg-surface-dark);
+        --vlg-surface-raised: var(--vlg-surface-raised-dark);
+        --vlg-ink: var(--vlg-ink-dark);
+        --vlg-ink-muted: var(--vlg-ink-muted-dark);
+        --vlg-ink-faint: var(--vlg-ink-faint-dark);
+        --vlg-line: var(--vlg-line-dark);
+        --vlg-line-strong: var(--vlg-line-strong-dark);
+        --vlg-moss: var(--vlg-moss-dark);
+        --vlg-pine: var(--vlg-pine-dark);
+        --vlg-campfire: var(--vlg-campfire-dark);
+        --vlg-dusk: var(--vlg-dusk-dark);
+        --vlg-clay: var(--vlg-clay-dark);
+        --vlg-amber: var(--vlg-amber-dark);
+        --vlg-moss-tint: var(--vlg-moss-tint-dark);
+        --vlg-campfire-tint: var(--vlg-campfire-tint-dark);
+        --vlg-dusk-tint: var(--vlg-dusk-tint-dark);
+        --vlg-clay-tint: var(--vlg-clay-tint-dark);
+        --vlg-amber-tint: var(--vlg-amber-tint-dark);
+        --vlg-on-primary: var(--vlg-on-primary-dark);
+        --vlg-event-on-accent: var(--vlg-event-on-accent-dark);
+        --vlg-focus: var(--vlg-focus-dark);
+        --vlg-shadow: var(--vlg-shadow-dark);
+        --vlg-shadow-hard: var(--vlg-shadow-hard-dark);
     }
 }
 
-/* explicit light override wins over the system preference */
+/* An explicit data-theme always wins over the system preference. Same reassignment list as the
+   media block above/below, just pointed at the other raw-token suffix - the values themselves
+   live only in the :root block above. */
+[data-theme="dark"] {
+    --vlg-canvas: var(--vlg-canvas-dark);
+    --vlg-canvas-sunk: var(--vlg-canvas-sunk-dark);
+    --vlg-surface: var(--vlg-surface-dark);
+    --vlg-surface-raised: var(--vlg-surface-raised-dark);
+    --vlg-ink: var(--vlg-ink-dark);
+    --vlg-ink-muted: var(--vlg-ink-muted-dark);
+    --vlg-ink-faint: var(--vlg-ink-faint-dark);
+    --vlg-line: var(--vlg-line-dark);
+    --vlg-line-strong: var(--vlg-line-strong-dark);
+    --vlg-moss: var(--vlg-moss-dark);
+    --vlg-pine: var(--vlg-pine-dark);
+    --vlg-campfire: var(--vlg-campfire-dark);
+    --vlg-dusk: var(--vlg-dusk-dark);
+    --vlg-clay: var(--vlg-clay-dark);
+    --vlg-amber: var(--vlg-amber-dark);
+    --vlg-moss-tint: var(--vlg-moss-tint-dark);
+    --vlg-campfire-tint: var(--vlg-campfire-tint-dark);
+    --vlg-dusk-tint: var(--vlg-dusk-tint-dark);
+    --vlg-clay-tint: var(--vlg-clay-tint-dark);
+    --vlg-amber-tint: var(--vlg-amber-tint-dark);
+    --vlg-on-primary: var(--vlg-on-primary-dark);
+    --vlg-event-on-accent: var(--vlg-event-on-accent-dark);
+    --vlg-focus: var(--vlg-focus-dark);
+    --vlg-shadow: var(--vlg-shadow-dark);
+    --vlg-shadow-hard: var(--vlg-shadow-hard-dark);
+}
+
 [data-theme="light"] {
-    --vlg-canvas: oklch(0.972 0.008 85);
-    --vlg-canvas-sunk: oklch(0.945 0.010 85);
-    --vlg-surface: oklch(1 0 0);
-    --vlg-surface-raised: oklch(0.988 0.005 85);
-    --vlg-ink: oklch(0.400 0.080 162);
-    --vlg-ink-muted: oklch(0.455 0.014 60);
-    --vlg-ink-faint: oklch(0.545 0.012 60);
-    --vlg-line: oklch(0.855 0.012 80);
-    --vlg-line-strong: oklch(0.400 0.080 162);
-
-    --vlg-moss: oklch(0.480 0.100 130);
-    --vlg-pine: oklch(0.400 0.080 162);
-    --vlg-campfire: oklch(0.545 0.130 46);
-    --vlg-dusk: oklch(0.480 0.095 242);
-    --vlg-clay: oklch(0.500 0.150 28);
-    --vlg-amber: oklch(0.520 0.115 78);
-
-    --vlg-moss-tint: oklch(0.955 0.030 130);
-    --vlg-campfire-tint: oklch(0.955 0.035 46);
-    --vlg-dusk-tint: oklch(0.955 0.028 242);
-    --vlg-clay-tint: oklch(0.955 0.038 28);
-    --vlg-amber-tint: oklch(0.960 0.040 78);
-
-    --vlg-primary: var(--vlg-moss);
-    --vlg-on-primary: oklch(1 0 0);
-    --vlg-accent: var(--vlg-campfire);
-    --vlg-link: var(--vlg-dusk);
-    --vlg-link-hover: var(--vlg-campfire);
-    --vlg-danger: var(--vlg-clay);
-    --vlg-warning: var(--vlg-amber);
-    --vlg-success: var(--vlg-moss);
-    --vlg-locked: var(--vlg-ink-faint);
-    --vlg-focus: oklch(0.560 0.140 242);
-
-    --vlg-event-accent: var(--vlg-moss);
-    --vlg-event-on-accent: oklch(1 0 0);
-
-    --vlg-radius: 6px;
-    --vlg-radius-lg: 10px;
-    --vlg-shadow: 0 1px 2px oklch(0.205 0.012 60 / .10), 0 2px 8px oklch(0.205 0.012 60 / .06);
-    --vlg-shadow-hard: 3px 3px 0 oklch(0.205 0.012 60 / .14);
+    --vlg-canvas: var(--vlg-canvas-light);
+    --vlg-canvas-sunk: var(--vlg-canvas-sunk-light);
+    --vlg-surface: var(--vlg-surface-light);
+    --vlg-surface-raised: var(--vlg-surface-raised-light);
+    --vlg-ink: var(--vlg-ink-light);
+    --vlg-ink-muted: var(--vlg-ink-muted-light);
+    --vlg-ink-faint: var(--vlg-ink-faint-light);
+    --vlg-line: var(--vlg-line-light);
+    --vlg-line-strong: var(--vlg-line-strong-light);
+    --vlg-moss: var(--vlg-moss-light);
+    --vlg-pine: var(--vlg-pine-light);
+    --vlg-campfire: var(--vlg-campfire-light);
+    --vlg-dusk: var(--vlg-dusk-light);
+    --vlg-clay: var(--vlg-clay-light);
+    --vlg-amber: var(--vlg-amber-light);
+    --vlg-moss-tint: var(--vlg-moss-tint-light);
+    --vlg-campfire-tint: var(--vlg-campfire-tint-light);
+    --vlg-dusk-tint: var(--vlg-dusk-tint-light);
+    --vlg-clay-tint: var(--vlg-clay-tint-light);
+    --vlg-amber-tint: var(--vlg-amber-tint-light);
+    --vlg-on-primary: var(--vlg-on-primary-light);
+    --vlg-event-on-accent: var(--vlg-event-on-accent-light);
+    --vlg-focus: var(--vlg-focus-light);
+    --vlg-shadow: var(--vlg-shadow-light);
+    --vlg-shadow-hard: var(--vlg-shadow-hard-light);
 }
 
 /* ===========================================================================

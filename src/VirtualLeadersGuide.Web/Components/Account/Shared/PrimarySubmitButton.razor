@@ -1,0 +1,7 @@
+<button type="submit" class="rz-button rz-button-lg rz-variant-filled rz-primary rz-shade-default" style="width:100%">@Text</button>
+
+@code {
+    /// <summary>The button's visible label.</summary>
+    [Parameter, EditorRequired]
+    public string Text { get; set; } = string.Empty;
+}

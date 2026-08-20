@@ -1,9 +1,8 @@
 @* Trimmed from the scaffold: dropped Email (needs ConfirmEmailChange, cut), External logins (ADR-0019
    removed the only provider), Two-factor authentication and Passkeys (both cut - see ADR-0022, issue #54).
-   See IdentityRedirectManager.cs's header comment.
+   See IdentityRedirectManager.cs's header comment. *@
 
-   Plain <nav>/NavLink, not RadzenPanelMenu/RadzenMenu - see ADR-0034. *@
-
+@* See ADR-0034 for why this is a plain <nav>/NavLink, not RadzenPanelMenu/RadzenMenu. *@
 <nav class="vlg-manage-nav" aria-label="Account settings">
     <NavLink href="Account/Manage" Match="NavLinkMatch.All">Profile</NavLink>
     <NavLink href="Account/Manage/ChangePassword">Password</NavLink>
