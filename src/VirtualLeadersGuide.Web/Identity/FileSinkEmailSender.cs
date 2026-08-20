@@ -61,6 +61,6 @@ public sealed class FileSinkEmailSender(
         await File.WriteAllTextAsync(tempPath, JsonSerializer.Serialize(email, SerializerOptions));
         File.Move(tempPath, finalPath);
 
-        logger.LogInformation("Wrote {Kind} email to {Path}.", kind, finalPath);
+        logger.LogInformation("Wrote {Kind} email to file {FileName}.", kind, fileName + ".json");
     }
 }
