@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
@@ -23,6 +24,12 @@ public sealed class FileSinkEmailSender(
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private static readonly string PayloadProtectionPurpose = "VirtualLeadersGuide.Web.Identity.FileSinkEmailSender.Payload";
+
+    private static string ComputeKindFingerprint(string value)
+    {
+        var hash = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value));
+        return Convert.ToHexString(hash[..8]);
+    }
 
     private readonly IDataProtector payloadProtector = dataProtectionProvider.CreateProtector(PayloadProtectionPurpose);
 
@@ -61,6 +68,6 @@ public sealed class FileSinkEmailSender(
         await File.WriteAllTextAsync(tempPath, JsonSerializer.Serialize(email, SerializerOptions));
         File.Move(tempPath, finalPath);
 
-        logger.LogInformation("Wrote {Kind} email to file {FileName}.", kind, fileName + ".json");
+        logger.LogInformation("Wrote email of kind fingerprint {KindFingerprint} to file {FileName}.", ComputeKindFingerprint(kind), fileName + ".json");
     }
 }
