@@ -26,3 +26,8 @@ belongs now that bare `//` comments don't survive. See `docs/agents/coding-stand
 ### Code search
 
 Prefer `codebase-memory-mcp` over `Grep`/`Glob` for finding code definitions, implementations, and call chains. See `docs/agents/code-search.md`.
+
+### Wireframes
+
+Stories that add or visibly change UI need a wireframe before planning starts — prompt the user for one if it's
+missing. Doesn't apply to test-only, backend-only, or infra stories. See `docs/agents/wireframes.md`.
