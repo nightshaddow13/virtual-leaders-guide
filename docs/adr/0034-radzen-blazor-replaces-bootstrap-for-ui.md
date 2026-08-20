@@ -66,6 +66,23 @@ reads that same key before first paint, to avoid a flash of the wrong theme on l
 ADR's "no interactivity" shell still needed *some* JS, deliberately outside Blazor's rendering model rather
 than bending it.
 
+**`data-theme` doesn't survive Blazor's enhanced navigation on its own.** The server never renders it — it's
+client-only state — and enhanced navigation replaces `<html>`'s attributes with whatever the fresh server
+response contains, i.e. no `data-theme` at all, silently falling back to `prefers-color-scheme`.
+`theme-toggle.js` re-applies the stored value from `localStorage` on every such navigation, not just the
+first hard load the `<head>` script covers.
+
+**The hook for "every such navigation" is `Blazor.addEventListener('enhancedload', ...)` — confirmed by
+reading the shipped `blazor.web.js` directly, not assumed.** There is no `'blazor:enhancedload'` DOM
+`CustomEvent` on `document`; Blazor dispatches its lifecycle events through its own `window.Blazor` object.
+An earlier version of this code assumed the DOM-event form, which silently never fired — the bug it was
+meant to fix stayed fully present, and the Playwright verification that "confirmed" the fix passed only
+because it used `Page.GotoAsync` between steps, which forces a full reload in Playwright and bypasses
+enhanced navigation entirely (the exact code path being tested). `window.Blazor` exists as soon as its own
+`<script>` tag runs, but `.addEventListener` is only bound onto it partway through Blazor's own async start
+sequence; `theme-toggle.js` runs `defer` and can execute before that completes, so registering the listener
+retries briefly rather than assuming the method is already there.
+
 ## Considered options
 
 - **Radzen Blazor Pro, for `material3`** — rejected: a paid subscription and a vendored theme CSS blob in

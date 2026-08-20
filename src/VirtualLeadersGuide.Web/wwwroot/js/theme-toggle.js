@@ -10,12 +10,8 @@
         return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
 
-    // The server never renders data-theme - it's client-only state - and Blazor's enhanced navigation
-    // (any link/form navigation it intercepts, not just the static-SSR/POST-redirect cases) replaces
-    // <html>'s attributes with whatever the fresh server response contains, i.e. no data-theme at all,
-    // silently falling back to the OS's prefers-color-scheme. Same logic as the FOUC-prevention script in
-    // App.razor's <head> (which only covers the very first hard load), re-run on every enhanced navigation
-    // below so an explicit choice actually sticks everywhere, not just on pages reached by a full reload.
+    // See ADR-0034 ("data-theme doesn't survive Blazor's enhanced navigation on its own") for why this
+    // exists and is re-run on every enhanced navigation, not just the first hard load.
     function restoreStoredTheme() {
         var stored = localStorage.getItem('vlg-theme');
         if (stored === 'light' || stored === 'dark') {
@@ -47,12 +43,8 @@
         applyTheme(currentTheme() === 'dark' ? 'light' : 'dark');
     });
 
-    // `Blazor.addEventListener('enhancedload', ...)` is the real API for this - not a 'blazor:enhancedload'
-    // DOM CustomEvent on `document` (there is no such thing; Blazor dispatches its lifecycle events through
-    // its own object, confirmed by reading the shipped blazor.web.js directly rather than assuming). `Blazor`
-    // exists as soon as its own <script> tag runs, but `.addEventListener` is only bound onto it partway
-    // through Blazor's own (async) start sequence - this script runs `defer`, which can execute before that
-    // sequence completes, so retry briefly instead of assuming the method is already there.
+    // See ADR-0034 ("the hook for 'every such navigation' is Blazor.addEventListener('enhancedload', ...)")
+    // for why this is the real API and why registration retries instead of assuming it's already bound.
     function registerEnhancedLoadHandler() {
         if (window.Blazor && typeof window.Blazor.addEventListener === 'function') {
             window.Blazor.addEventListener('enhancedload', function () {
