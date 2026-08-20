@@ -1,0 +1,88 @@
+.vlg-header {
+    border-bottom: 1px solid var(--vlg-line);
+    background-color: var(--vlg-canvas-sunk);
+}
+
+.vlg-brand-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    max-width: 72rem;
+    margin-inline: auto;
+    box-sizing: border-box;
+    padding: 0.75rem 1.5rem;
+}
+
+.vlg-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.625rem;
+    text-decoration: none;
+    color: inherit;
+}
+
+.vlg-logo-mark {
+    width: 1.75rem;
+    height: 1.75rem;
+    flex: none;
+    border-radius: var(--vlg-radius);
+    background-color: var(--vlg-moss);
+}
+
+.vlg-brand-text {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    color: var(--vlg-ink);
+}
+
+.vlg-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.vlg-account-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.vlg-theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0;
+    flex: none;
+    border: 1px solid var(--vlg-line);
+    border-radius: var(--vlg-radius);
+    background: none;
+    color: var(--vlg-ink);
+    cursor: pointer;
+}
+
+    .vlg-theme-toggle svg {
+        width: 1.125rem;
+        height: 1.125rem;
+    }
+
+/* .vlg-icon-sun/.vlg-icon-moon visibility (which one shows per theme state) lives in app.css, not here -
+   it keys off :root/[data-theme], a `:root`-level concern that belongs alongside the --vlg-* token cascade
+   it mirrors, not split across a Blazor-scoped file too. */
+
+@media (max-width: 40rem) {
+    .vlg-brand-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .vlg-signin {
+        padding-inline: 0;
+        background: none;
+        border: none;
+        box-shadow: none;
+    }
+}

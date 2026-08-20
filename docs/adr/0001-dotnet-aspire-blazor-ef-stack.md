@@ -6,3 +6,6 @@ long-term-support release, minimizing how often a personal project is forced int
 stay supported. On top of that, **.NET Aspire** orchestrates the solution (service discovery, local dev dashboard,
 first-class Azure deployment tooling), **Blazor Web App** (Interactive Server) is the frontend, a separate
 **ASP.NET Core Web API** project is the backend, and **EF Core** is the data-access layer against Azure SQL.
+
+This ADR was silent on a UI component library — the `dotnet new blazor` scaffold's Bootstrap was a template
+default, never a decision. ADR-0034 fills that gap: Radzen.Blazor replaces it.

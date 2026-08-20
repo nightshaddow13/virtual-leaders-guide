@@ -1,0 +1,23 @@
+.vlg-manage-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+    .vlg-manage-nav ::deep a {
+        display: block;
+        padding: 0.5rem 0.75rem;
+        border-radius: var(--vlg-radius);
+        color: var(--vlg-ink);
+        text-decoration: none;
+    }
+
+        .vlg-manage-nav ::deep a:hover {
+            background-color: var(--vlg-canvas-sunk);
+        }
+
+        .vlg-manage-nav ::deep a.active {
+            background-color: var(--vlg-moss-tint);
+            color: var(--vlg-moss);
+            font-weight: 600;
+        }

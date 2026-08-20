@@ -18,33 +18,33 @@
 <PageTitle>Log in</PageTitle>
 
 <h1>Log in</h1>
-<div class="row">
-    <div class="col-lg-6">
+<RadzenRow>
+    <RadzenColumn Size="12" SizeLG="6">
         <section>
             <StatusMessage Message="@errorMessage" />
             <EditForm Model="Input" method="post" OnValidSubmit="LoginUser" FormName="login">
                 <DataAnnotationsValidator />
                 <h2>Use a local account to log in.</h2>
                 <hr />
-                <ValidationSummary class="text-danger" role="alert" />
-                <div class="form-floating mb-3">
-                    <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="name@example.com" />
-                    <label for="Input.Email" class="form-label">Email</label>
-                    <ValidationMessage For="() => Input.Email" class="text-danger" />
+                <ValidationSummary class="rz-messages-error" role="alert" />
+                <div class="vlg-field">
+                    <label for="Input.Email">Email</label>
+                    <InputText @bind-Value="Input.Email" id="Input.Email" class="rz-textbox rz-input-md" autocomplete="username" aria-required="true" placeholder="name@example.com" />
+                    <ValidationMessage For="() => Input.Email" class="rz-messages-error" />
                 </div>
-                <div class="form-floating mb-3">
-                    <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="current-password" aria-required="true" placeholder="password" />
-                    <label for="Input.Password" class="form-label">Password</label>
-                    <ValidationMessage For="() => Input.Password" class="text-danger" />
+                <div class="vlg-field">
+                    <label for="Input.Password">Password</label>
+                    <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="rz-textbox rz-input-md" autocomplete="current-password" aria-required="true" placeholder="password" />
+                    <ValidationMessage For="() => Input.Password" class="rz-messages-error" />
                 </div>
-                <div class="checkbox mb-3">
-                    <label class="form-label">
-                        <InputCheckbox @bind-Value="Input.RememberMe" class="darker-border-checkbox form-check-input" />
+                <div class="vlg-field">
+                    <label>
+                        <InputCheckbox @bind-Value="Input.RememberMe" />
                         Remember me
                     </label>
                 </div>
                 <div>
-                    <button type="submit" class="w-100 btn btn-lg btn-primary">Log in</button>
+                    <PrimarySubmitButton Text="Log in" />
                 </div>
                 <hr />
                 <div>
@@ -54,8 +54,8 @@
                 </div>
             </EditForm>
         </section>
-    </div>
-</div>
+    </RadzenColumn>
+</RadzenRow>
 
 @code {
     private string? errorMessage;

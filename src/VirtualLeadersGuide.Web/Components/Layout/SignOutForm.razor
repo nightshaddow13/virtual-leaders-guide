@@ -1,0 +1,23 @@
+@inject NavigationManager NavigationManager
+
+@* See ADR-0034 for why this is a real form post, not a RadzenButton. *@
+
+<form action="Account/Logout" method="post" class="vlg-signout-form">
+    <AntiforgeryToken />
+    <input type="hidden" name="ReturnUrl" value="@currentUrl" />
+    <button type="submit" class="rz-button rz-button-sm rz-variant-text rz-base rz-shade-default">
+        <span class="rz-button-box"><span class="rz-button-text">Sign out</span></span>
+    </button>
+</form>
+
+@code {
+    private string? currentUrl;
+
+    /// <remarks>
+    /// Read once per render rather than tracked via <c>NavigationManager.LocationChanged</c>: the shell
+    /// renders statically on every request (no page in this app declares an interactive render mode - see
+    /// ADR-0034), so each navigation re-executes this with no subscription needed.
+    /// </remarks>
+    protected override void OnInitialized() =>
+        currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+}

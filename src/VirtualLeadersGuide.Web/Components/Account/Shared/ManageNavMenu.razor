@@ -2,14 +2,9 @@
    removed the only provider), Two-factor authentication and Passkeys (both cut - see ADR-0022, issue #54).
    See IdentityRedirectManager.cs's header comment. *@
 
-<ul class="nav nav-pills flex-column">
-    <li class="nav-item">
-        <NavLink class="nav-link" href="Account/Manage" Match="NavLinkMatch.All">Profile</NavLink>
-    </li>
-    <li class="nav-item">
-        <NavLink class="nav-link" href="Account/Manage/ChangePassword">Password</NavLink>
-    </li>
-    <li class="nav-item">
-        <NavLink class="nav-link" href="Account/Manage/PersonalData">Personal data</NavLink>
-    </li>
-</ul>
+@* See ADR-0034 for why this is a plain <nav>/NavLink, not RadzenPanelMenu/RadzenMenu. *@
+<nav class="vlg-manage-nav" aria-label="Account settings">
+    <NavLink href="Account/Manage" Match="NavLinkMatch.All">Profile</NavLink>
+    <NavLink href="Account/Manage/ChangePassword">Password</NavLink>
+    <NavLink href="Account/Manage/PersonalData">Personal data</NavLink>
+</nav>

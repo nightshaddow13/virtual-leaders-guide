@@ -1,0 +1,40 @@
+@using System.Security.Claims
+@using VirtualLeadersGuide.Identity.Contracts
+
+@* Wireframe 1e/1f. Renders nothing when anonymous, so SiteHeader needs no conditional around it. *@
+
+<AuthorizeView>
+    <Authorized>
+        <div class="vlg-context-strip">
+            <span class="vlg-context-identity">
+                SIGNED IN &middot; @DisplayRole(context.User) &middot; @DisplayEmail(context.User)
+            </span>
+            <NavLink class="rz-button rz-button-sm rz-variant-outlined rz-base rz-shade-default"
+                     href="dashboard">
+                <span class="rz-button-box"><span class="rz-button-text">DASHBOARD &rarr;</span></span>
+            </NavLink>
+        </div>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    /// <remarks>
+    /// Admin outranks Director when a user holds both, so this always shows the higher-privilege role rather
+    /// than an arbitrary one. Claim values are <see cref="RoleClaimValue.Format"/> output (<c>"Admin"</c> or
+    /// <c>"Director:{eventId}"</c>) - the Event scope is parsed off, never displayed here.
+    /// </remarks>
+    private static string DisplayRole(ClaimsPrincipal user)
+    {
+        string[] roleNames = [.. user.FindAll(ClaimTypes.Role)
+            .Select(claim => RoleClaimValue.TryParse(claim.Value, out string name, out _) ? name : null)
+            .OfType<string>()
+            .Distinct()];
+
+        string? role = roleNames.FirstOrDefault(name => name == RoleNames.Admin) ?? roleNames.FirstOrDefault();
+
+        return role?.ToUpperInvariant() ?? "NO ROLE";
+    }
+
+    private static string DisplayEmail(ClaimsPrincipal user) =>
+        user.FindFirst(ClaimTypes.Email)?.Value ?? user.Identity?.Name ?? string.Empty;
+}

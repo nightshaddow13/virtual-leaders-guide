@@ -1,0 +1,25 @@
+.vlg-context-strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding: 0.5rem 1.5rem;
+    background-color: var(--vlg-pine);
+    color: var(--vlg-on-primary);
+}
+
+.vlg-context-identity {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+}
+
+/* Radzen's own .rz-button.rz-base.rz-shade-default sets color: var(--rz-on-base) (#212121, near-black) -
+   invisible against --vlg-pine's dark background. !important is deliberate here: this is a single, narrow,
+   documented exception (a button on a dark strip), not a broad override, and it must win regardless of the
+   exact specificity Blazor's CSS-isolation scoping produces for the compound selector it's beating. */
+.vlg-context-strip ::deep .rz-button {
+    color: var(--vlg-on-primary) !important;
+    border-color: var(--vlg-on-primary) !important;
+}
