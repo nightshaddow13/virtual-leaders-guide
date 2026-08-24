@@ -28,6 +28,7 @@ builder.Services.AddInternalAuthorization();
 builder.Services.AddJsonApi<VirtualLeadersGuideDbContext>(options =>
 {
     options.Namespace = "api";
+    options.IncludeTotalResourceCount = true;
 });
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddResourceDefinition<EventResourceDefinition>();

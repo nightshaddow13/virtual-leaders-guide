@@ -35,11 +35,11 @@ page, a schedule page) without renaming the base concept later.
 _Avoid_: ContentPage
 
 **Passcode**:
-A single shared secret for an Event (one value at a time, editable by an Admin/Director — no rotation history),
-entered by a visitor to unlock read access to that event's Leaders Guide. Not tied to an individual identity —
-anyone with the passcode gets the same access. Auto-generated (two common words, e.g. `TigerLantern`) the
-moment an Event is created, so every Event has a working Passcode immediately — never blank, unlike waiting on
-an Admin to set one.
+A single shared secret for an Event (one value at a time, editable by an Admin — no rotation history), visible
+in full to an assigned Director, entered by a visitor to unlock read access to that event's Leaders Guide. Not
+tied to an individual identity — anyone with the passcode gets the same access. Auto-generated (two common
+words, e.g. `TigerLantern`) the moment an Event is created, so every Event has a working Passcode immediately —
+never blank, unlike waiting on an Admin to set one.
 _Avoid_: AccessCode, SiteCode
 
 **User**:
@@ -69,9 +69,11 @@ database — emptying the list demotes every Admin, with no special-casing to pr
 _Avoid_: Whitelist, seed list, bootstrap list (this isn't a one-time seed — it's re-checked every login)
 
 **Director**:
-A Role granting read and edit access (not create or delete) to one or more specific Events — not a
-platform-wide Role. An Event can have multiple Directors, and one Director can be granted access to multiple
-Events. The grant is made by an Admin, either by choosing an existing User or via Invite.
+A Role scoping a User to one or more specific Events — not a platform-wide Role. Grants read access to those
+Events; what a Director may *write* is decided per resource, not inherited from the Role itself — Event
+details (Name, Slug, Passcode) are Admin-only to edit (ADR-0031). An Event can have multiple Directors, and one
+Director can be granted access to multiple Events. The grant is made by an Admin, either by choosing an
+existing User or via Invite.
 _Avoid_: Organizer, Admin (these are for the platform-level or generic role — Director is specifically
 event-scoped)
 

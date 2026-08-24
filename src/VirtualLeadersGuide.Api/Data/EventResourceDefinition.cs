@@ -13,9 +13,9 @@ using VirtualLeadersGuide.Api.Authorization;
 namespace VirtualLeadersGuide.Api.Data;
 
 /// <summary>
-/// Enforces Admin/Director scoping on <c>/api/events</c> (P2-7, #16): an <c>Admin</c> gets full CRUD over
-/// every Event; a <c>Director</c> gets read/update on only the Events in their
-/// <see cref="EventAccessPolicy.AssignedEventIds"/>, and never create or delete (CONTEXT.md's Director entry).
+/// Enforces Admin/Director scoping on <c>/api/events</c> (P2-7, #16; narrowed by P2-9, #18): an
+/// <c>Admin</c> gets full CRUD over every Event; a <c>Director</c> gets read-only access to the Events in
+/// their <see cref="EventAccessPolicy.AssignedEventIds"/>, and never create, update, or delete (ADR-0031).
 /// </summary>
 /// <remarks>
 /// Authorization lives here - a JsonApiDotNetCore extension point - rather than a hand-written controller or
