@@ -122,6 +122,30 @@ public sealed class IdentityApiClient(HttpClient httpClient)
         return false;
     }
 
+    /// <summary>Grants <paramref name="userId"/> the Director Role, scoped to <paramref name="eventId"/>.</summary>
+    /// <param name="userId">The <c>ApplicationUser.Id</c> to grant - <see cref="IdentityUserDto.Id"/> from <see cref="CreateUserAsync"/>.</param>
+    /// <param name="eventId">The Event to scope the grant to.</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
+    /// <remarks>
+    /// Hits the same <see cref="InternalAuthorizationRoutes.ForUserGrants"/> endpoint
+    /// <c>ApiRoleGrantClient.CreateGrantAsync</c> (Web) calls in production, over this class's plain
+    /// <c>X-Internal-Key</c>-only client - the endpoint sits outside <c>/api</c>'s internal-JWT policy (see
+    /// <see cref="InternalAuthorizationRoutes"/>'s own remarks), so no bearer token is needed here.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">The grant request did not succeed.</exception>
+    public async Task GrantDirectorAsync(string userId, Guid eventId, CancellationToken cancellationToken)
+    {
+        var request = new CreateRoleGrantRequest { RoleId = RoleIds.Director, EventId = eventId };
+
+        using HttpResponseMessage response = await httpClient.PostAsJsonAsync(
+            InternalAuthorizationRoutes.ForUserGrants(userId), request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            await ThrowForFailureAsync("grant Director to", userId, response, cancellationToken);
+        }
+    }
+
     private static async Task ThrowForFailureAsync(
         string action, string subject, HttpResponseMessage response, CancellationToken cancellationToken)
     {

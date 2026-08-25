@@ -1,0 +1,355 @@
+@page "/dashboard/events/new"
+@page "/dashboard/events/{Id:guid}"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+@using System.ComponentModel.DataAnnotations
+@using System.Security.Claims
+@using VirtualLeadersGuide.Web.Authorization
+@using VirtualLeadersGuide.Web.Events
+
+@inject NavigationManager NavigationManager
+@inject ApiEventClient EventClient
+@inject NotificationService NotificationService
+
+<PageTitle>@(Id is null ? "New event" : "Event")</PageTitle>
+
+<RadzenComponents @rendermode="InteractiveServer" />
+
+@switch (state)
+{
+    case PageState.Denied:
+        <div class="vlg-denied">
+            <h1>You don't have access to this Event</h1>
+            <p>Ask an Admin to grant you access, or check you're signed in as the right person.</p>
+            <RadzenButton Text="Back to dashboard" Click="@(() => NavigationManager.NavigateTo("dashboard"))" />
+        </div>
+        break;
+
+    case PageState.Unavailable:
+        <div class="vlg-denied">
+            <h1>Something went wrong loading this Event</h1>
+            <p>The Event store didn't respond. Try again.</p>
+            <div class="vlg-button-row">
+                <RadzenButton Text="Try again" Click="@(() => NavigationManager.Refresh(forceReload: true))" />
+                <RadzenButton Text="Back to dashboard" ButtonStyle="ButtonStyle.Light"
+                              Click="@(() => NavigationManager.NavigateTo("dashboard"))" />
+            </div>
+        </div>
+        break;
+
+    case PageState.Director:
+        <p class="vlg-breadcrumb">MY EVENTS / @model!.Name?.ToUpperInvariant()</p>
+        <div class="vlg-page-header">
+            <div>
+                <h1>@model.Name</h1>
+                <span class="vlg-badge">VIEW ONLY</span>
+            </div>
+        </div>
+        <div class="vlg-readonly-field">
+            <span class="vlg-field-label">Public address</span>
+            <span>/e/@model.Slug</span>
+        </div>
+        <div class="vlg-readonly-field">
+            <span class="vlg-field-label">Passcode</span>
+            <span>@model.Passcode</span>
+        </div>
+        <p class="vlg-note">No fields, no Save. Need a change? Ask an Admin.</p>
+        break;
+
+    case PageState.Admin:
+        <p class="vlg-breadcrumb">EVENTS / @(Id is null ? "NEW" : model!.Name?.ToUpperInvariant())</p>
+        <div class="vlg-page-header">
+            <h1>@(Id is null ? "New event" : "Edit event")</h1>
+            <div class="vlg-button-row">
+                <RadzenButton Text="Cancel" ButtonStyle="ButtonStyle.Light" Disabled="@isSaving"
+                              Click="@(() => NavigationManager.NavigateTo("dashboard"))" />
+                <RadzenButton Text="@(Id is null ? "Create event" : "Save changes")"
+                              Disabled="@(isSaving || permissionLostMessage is not null)" Click="SaveAsync" />
+            </div>
+        </div>
+
+        @if (permissionLostMessage is not null)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" AllowClose="false" Text="@permissionLostMessage" />
+        }
+        @if (saveErrorMessage is not null)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" AllowClose="false" Text="@saveErrorMessage" />
+        }
+
+        <EditForm EditContext="editContext" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+            <ValidationSummary class="rz-messages-error" role="alert" />
+            <fieldset disabled="@(permissionLostMessage is not null)">
+                <div class="vlg-field">
+                    <label for="Name">Event name</label>
+                    <InputText id="Name" @bind-Value="model!.Name" class="rz-textbox rz-input-md" />
+                    <ValidationMessage For="() => model!.Name" class="rz-messages-error" />
+                </div>
+                <div class="vlg-field">
+                    <label for="Slug">Event address</label>
+                    <div class="vlg-slug-field">
+                        <span class="vlg-slug-prefix">/e/</span>
+                        <InputText id="Slug" @bind-Value="model!.Slug" class="rz-textbox rz-input-md" />
+                    </div>
+                    @if (Id is null)
+                    {
+                        <span class="vlg-hint">Leave blank to derive it from the name.</span>
+                    }
+                    else
+                    {
+                        <span class="vlg-hint">Changing this breaks links already printed in leader packets.</span>
+                    }
+                    <ValidationMessage For="() => model!.Slug" class="rz-messages-error" />
+                </div>
+                <div class="vlg-field">
+                    <label for="Passcode">Passcode</label>
+                    <InputText id="Passcode" @bind-Value="model!.Passcode" class="rz-textbox rz-input-md" />
+                    @if (Id is null)
+                    {
+                        <span class="vlg-hint">Leave blank to generate one.</span>
+                    }
+                    <ValidationMessage For="() => model!.Passcode" class="rz-messages-error" />
+                </div>
+            </fieldset>
+        </EditForm>
+        break;
+}
+
+@code {
+    /// <remarks>
+    /// <see langword="null"/> on <c>/dashboard/events/new</c>; set on <c>/dashboard/events/{Id:guid}</c>.
+    /// Deliberately a <see cref="Guid"/> route, not the slug the wireframe drew - keeps
+    /// <see cref="ApiEventClient.GetEventAsync"/>'s existing <see cref="EventReadOutcome.Forbidden"/> path
+    /// as the single source of "can't read this", rather than collapsing it into an empty-collection
+    /// slug lookup.
+    /// </remarks>
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
+    private enum PageState { Loading, Denied, Unavailable, Admin, Director }
+
+    private PageState state = PageState.Loading;
+    private EventFormModel? model;
+    private EditContext? editContext;
+    private ValidationMessageStore? messageStore;
+    private string? permissionLostMessage;
+    private string? saveErrorMessage;
+    private bool isSaving;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (AuthenticationStateTask is null)
+        {
+            return;
+        }
+
+        AuthenticationState authState = await AuthenticationStateTask;
+        if (!authState.User.Claims.Any(c => c.Type == ClaimTypes.Role))
+        {
+            NavigationManager.NavigateTo("Account/NoAccess");
+            return;
+        }
+
+        var accessView = new EventAccessView(authState.User);
+
+        if (Id is null)
+        {
+            // Load-time gate, not a save-time failure: a non-Admin was never going to be allowed to
+            // create, so there's no form worth rendering (see the plan's "/new gate" state).
+            if (!accessView.CanEditEventDetails)
+            {
+                state = PageState.Denied;
+                return;
+            }
+
+            model = new EventFormModel();
+            BuildEditContext();
+            state = PageState.Admin;
+            return;
+        }
+
+        EventReadOutcome outcome;
+        EventDto? dto;
+        try
+        {
+            (outcome, dto) = await EventClient.GetEventAsync(Id.Value, CancellationToken.None);
+        }
+        catch (EventDataUnavailableException)
+        {
+            // Distinct from PageState.Denied: this is "the Event store didn't answer," not "you can't
+            // read this Event" - an unhandled exception here would otherwise crash the whole circuit
+            // (Blazor Server's InteractiveServer render mode has no equivalent of a failed HTTP request
+            // page; an exception out of a lifecycle method takes the circuit down with it).
+            state = PageState.Unavailable;
+            return;
+        }
+
+        if (outcome != EventReadOutcome.Success || dto is null)
+        {
+            // Api's 403 for an out-of-scope Event (ADR-0031) and "no such Event" are indistinguishable
+            // here by design - the copy above doesn't claim to know which.
+            state = PageState.Denied;
+            return;
+        }
+
+        model = new EventFormModel { Name = dto.Name, Slug = dto.Slug, Passcode = dto.Passcode };
+
+        if (accessView.CanEditEventDetails)
+        {
+            BuildEditContext();
+            state = PageState.Admin;
+        }
+        else
+        {
+            state = PageState.Director;
+        }
+    }
+
+    private void BuildEditContext()
+    {
+        editContext = new EditContext(model!);
+        messageStore = new ValidationMessageStore(editContext);
+    }
+
+    private async Task SaveAsync()
+    {
+        isSaving = true;
+        saveErrorMessage = null;
+        messageStore?.Clear();
+        editContext?.NotifyValidationStateChanged();
+
+        try
+        {
+            if (Id is null)
+            {
+                await CreateAsync();
+            }
+            else
+            {
+                await UpdateAsync(Id.Value);
+            }
+        }
+        catch (EventDataUnavailableException)
+        {
+            // A transient Api/store outage, not a permission problem - unlike permissionLostMessage, the
+            // form stays enabled: the user's typed values are still good, retrying Save is the right next
+            // step, not signing in again. Uncaught, this would otherwise crash the circuit the same way
+            // OnParametersSetAsync's read failure would (see that method's remarks).
+            saveErrorMessage = "Something went wrong saving this Event. Try again.";
+        }
+
+        isSaving = false;
+    }
+
+    private async Task CreateAsync()
+    {
+        (EventWriteOutcome outcome, EventDto? created, IReadOnlyList<string> pointers) =
+            await EventClient.CreateAsync(model!.Name ?? string.Empty, CancellationToken.None);
+
+        if (outcome == EventWriteOutcome.Forbidden)
+        {
+            state = PageState.Denied;
+            return;
+        }
+
+        if (outcome == EventWriteOutcome.Conflict)
+        {
+            ApplyFieldErrors(pointers);
+            return;
+        }
+
+        string? slugOverride = NullIfBlank(model.Slug);
+        string? passcodeOverride = NullIfBlank(model.Passcode);
+
+        if (slugOverride is not null || passcodeOverride is not null)
+        {
+            // The Event now exists regardless of how this follow-up PATCH goes - navigate to it either
+            // way rather than reporting a failure that already half-happened. A conflict or transient
+            // failure here (e.g. a chosen slug collides, or the store hiccups) is left for the Admin to
+            // notice and fix from the edit page itself, since there's no field to attach the error to
+            // once we've navigated away from this form.
+            try
+            {
+                await EventClient.UpdateAsync(created!.Id, null, slugOverride, passcodeOverride, CancellationToken.None);
+            }
+            catch (EventDataUnavailableException)
+            {
+            }
+        }
+
+        NotificationService.Notify(NotificationSeverity.Success, "Event created");
+        NavigationManager.NavigateTo($"dashboard/events/{created!.Id}");
+    }
+
+    private async Task UpdateAsync(Guid id)
+    {
+        (EventWriteOutcome outcome, IReadOnlyList<string> pointers) = await EventClient.UpdateAsync(
+            id, model!.Name, NullIfBlank(model.Slug), NullIfBlank(model.Passcode), CancellationToken.None);
+
+        if (outcome == EventWriteOutcome.Forbidden)
+        {
+            // Claim-lag / mid-session demotion (ApplicationUserClaimsPrincipalFactory's remarks) - distinct
+            // from PageState.Denied, which is about an out-of-scope Event, not a since-revoked Admin grant.
+            // The form stays rendered, disabled, with whatever the user had typed still visible.
+            permissionLostMessage = "You no longer have permission to edit this Event.";
+            return;
+        }
+
+        if (outcome == EventWriteOutcome.Conflict)
+        {
+            ApplyFieldErrors(pointers);
+            return;
+        }
+
+        NotificationService.Notify(NotificationSeverity.Success, "Changes saved");
+    }
+
+    private void ApplyFieldErrors(IReadOnlyList<string> pointers)
+    {
+        if (messageStore is null || editContext is null)
+        {
+            return;
+        }
+
+        foreach (string pointer in pointers)
+        {
+            if (pointer.EndsWith("/name", StringComparison.Ordinal))
+            {
+                messageStore.Add(
+                    new FieldIdentifier(model!, nameof(EventFormModel.Name)),
+                    "This name is already in use by another Event.");
+            }
+            else if (pointer.EndsWith("/slug", StringComparison.Ordinal))
+            {
+                messageStore.Add(
+                    new FieldIdentifier(model!, nameof(EventFormModel.Slug)),
+                    "This address is already in use by another Event.");
+            }
+        }
+
+        editContext.NotifyValidationStateChanged();
+    }
+
+    private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+
+    /// <remarks>
+    /// <see cref="Slug"/>/<see cref="Passcode"/> stay unvalidated beyond presence - format is enforced by
+    /// Api's own CHECK constraint and uniqueness by its 409 (<see cref="ApplyFieldErrors"/>); duplicating
+    /// that here isn't this story's job.
+    /// </remarks>
+    private sealed class EventFormModel
+    {
+        [Required(ErrorMessage = "Enter a name.")]
+        [StringLength(200)]
+        public string? Name { get; set; }
+
+        public string? Slug { get; set; }
+
+        public string? Passcode { get; set; }
+    }
+}

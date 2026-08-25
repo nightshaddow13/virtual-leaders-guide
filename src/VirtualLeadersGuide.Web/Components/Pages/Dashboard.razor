@@ -1,22 +1,87 @@
 @page "/dashboard"
 @attribute [Authorize]
+@rendermode InteractiveServer
+
 @using System.Security.Claims
+@using VirtualLeadersGuide.Web.Authorization
+@using VirtualLeadersGuide.Web.Events
 
 @inject NavigationManager NavigationManager
+@inject ApiEventClient EventClient
 
 <PageTitle>Dashboard</PageTitle>
 
-<h1>Dashboard</h1>
-<p>Placeholder - P2-9 builds the real Admin/Director dashboard here.</p>
+@if (accessView is not null)
+{
+    <div class="vlg-page-header">
+        <div>
+            <h1>@(accessView.IsAdmin ? "Events" : "My events")</h1>
+            <p class="vlg-subhead">@(accessView.IsAdmin ? "ALL EVENTS" : "ASSIGNED TO YOU") &middot; @totalCount</p>
+        </div>
+        @if (accessView.IsAdmin)
+        {
+            <RadzenButton Text="+ New event" Click="@(() => NavigationManager.NavigateTo("dashboard/events/new"))" />
+        }
+    </div>
+
+    <RadzenDataGrid @ref="grid" TItem="EventDto" Data="@events" Count="@totalCount" LoadData="@LoadDataAsync"
+                     AllowPaging="true" PageSize="10" AllowSorting="true" IsLoading="@isLoading"
+                     EmptyText="@(accessView.IsAdmin ? "No Events yet." : "No Events are assigned to you yet.")">
+        <Columns>
+            <RadzenDataGridColumn TItem="EventDto" Property="@nameof(EventDto.Name)" Title="Name" />
+            <RadzenDataGridColumn TItem="EventDto" Property="@nameof(EventDto.Slug)" Title="Event address">
+                <Template Context="item">/e/@item.Slug</Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="EventDto" Sortable="false" Filterable="false" Width="90px" TextAlign="TextAlign.End">
+                <Template Context="item">
+                    <RadzenButton Text="@(accessView.IsAdmin ? "Edit" : "View")" ButtonStyle="ButtonStyle.Light"
+                                  Click="@(() => NavigationManager.NavigateTo($"dashboard/events/{item.Id}"))" />
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+
+    @if (!accessView.IsAdmin)
+    {
+        <p class="vlg-note">
+            Directors view Event details, they don't change them &mdash; no <strong>+ New event</strong>, no
+            editing the name, address, or passcode. Editing arrives later as Pages and Activities, scoped to
+            these Events.
+        </p>
+    }
+
+    @if (loadErrorMessage is not null)
+    {
+        <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" AllowClose="false" Text="@loadErrorMessage" />
+    }
+}
 
 @code {
     /// <remarks>
     /// <see cref="ClaimTypes.Role"/> claims come from <c>ApplicationUserClaimsPrincipalFactory</c> (P2-5,
     /// #14), stamped at sign-in from P2-3's <c>UserRole</c> grants. A user holding no grant still redirects
-    /// to <c>NoAccess</c>.
+    /// to <c>NoAccess</c>. <see cref="EventAccessView"/> then decides Admin vs. Director rendering from the
+    /// same claims - a hint the grid honors, not the authority (ADR-0031); <see cref="ApiEventClient"/>'s
+    /// collection call is itself scoped server-side regardless of what this page assumes.
     /// </remarks>
     [CascadingParameter]
     private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
+    private RadzenDataGrid<EventDto>? grid;
+    private EventAccessView? accessView;
+
+    /// <remarks>
+    /// Must start <see langword="null"/>, not an empty collection - <c>RadzenDataGrid</c> only invokes
+    /// <see cref="LoadDataAsync"/> automatically on first render when its bound <c>Data</c> is
+    /// <see langword="null"/>; a non-null (even empty) initial value reads as "the caller already supplied
+    /// the page's data" and the grid never calls back at all, leaving it permanently empty regardless of what
+    /// <see cref="ApiEventClient"/> actually holds.
+    /// </remarks>
+    private IEnumerable<EventDto>? events;
+
+    private int totalCount;
+    private bool isLoading;
+    private string? loadErrorMessage;
 
     protected override async Task OnInitializedAsync()
     {
@@ -31,6 +96,55 @@
         if (!hasAnyRole)
         {
             NavigationManager.NavigateTo("Account/NoAccess");
+            return;
         }
+
+        accessView = new EventAccessView(state.User);
+    }
+
+    /// <remarks>
+    /// Wrapped in try/catch deliberately: an uncaught exception out of a <c>RadzenDataGrid</c> event
+    /// callback crashes the whole Blazor Server circuit (there's no per-request failure page to fall back
+    /// to under <c>InteractiveServer</c>) - a transient Api outage should show an inline message, not take
+    /// the page down.
+    /// </remarks>
+    private async Task LoadDataAsync(LoadDataArgs args)
+    {
+        isLoading = true;
+        loadErrorMessage = null;
+
+        int pageSize = args.Top ?? 10;
+        int pageNumber = (args.Skip ?? 0) / pageSize + 1;
+        string? sort = ToJsonApiSort(args.Sorts);
+
+        try
+        {
+            (IReadOnlyList<EventDto> pageEvents, int total) =
+                await EventClient.GetEventsAsync(pageNumber, pageSize, sort, CancellationToken.None);
+
+            events = pageEvents;
+            totalCount = total;
+        }
+        catch (EventDataUnavailableException)
+        {
+            events = [];
+            totalCount = 0;
+            loadErrorMessage = "Something went wrong loading Events. Try refreshing the page.";
+        }
+
+        isLoading = false;
+    }
+
+    /// <remarks>Maps Radzen's <see cref="SortDescriptor"/> onto JSON:API's <c>sort=</c>/<c>sort=-</c> syntax.</remarks>
+    private static string? ToJsonApiSort(IEnumerable<SortDescriptor>? sorts)
+    {
+        SortDescriptor? first = sorts?.FirstOrDefault();
+        if (first?.Property is not { } property)
+        {
+            return null;
+        }
+
+        property = property.ToLowerInvariant();
+        return first.SortOrder == SortOrder.Descending ? $"-{property}" : property;
     }
 }
