@@ -19,25 +19,23 @@
 @switch (state)
 {
     case PageState.Denied:
-        <RadzenStack Orientation="Orientation.Vertical" AlignItems="AlignItems.Center" Gap="0.75rem"
-                     Style="padding: 2.5rem 1.5rem; text-align: center;">
-            <h1>You don't have access to this Event</h1>
-            <p>Ask an Admin to grant you access, or check you're signed in as the right person.</p>
-            <RadzenButton Text="Back to dashboard" Click="NavigateToDashboard" />
-        </RadzenStack>
+    {
+        RenderFragment actions = @<RadzenButton Text="Back to dashboard" Click="NavigateToDashboard" />;
+        @StatusPanel("You don't have access to this Event",
+                     "Ask an Admin to grant you access, or check you're signed in as the right person.", actions)
         break;
+    }
 
     case PageState.Unavailable:
-        <RadzenStack Orientation="Orientation.Vertical" AlignItems="AlignItems.Center" Gap="0.75rem"
-                     Style="padding: 2.5rem 1.5rem; text-align: center;">
-            <h1>Something went wrong loading this Event</h1>
-            <p>The Event store didn't respond. Try again.</p>
-            <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
+    {
+        RenderFragment actions =
+            @<RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
                 <RadzenButton Text="Try again" Click="@(() => NavigationManager.Refresh(forceReload: true))" />
                 <RadzenButton Text="Back to dashboard" ButtonStyle="ButtonStyle.Light" Click="NavigateToDashboard" />
-            </RadzenStack>
-        </RadzenStack>
+            </RadzenStack>;
+        @StatusPanel("Something went wrong loading this Event", "The Event store didn't respond. Try again.", actions)
         break;
+    }
 
     case PageState.Director:
         <RadzenBreadCrumb>
@@ -218,6 +216,19 @@
             state = PageState.Director;
         }
     }
+
+    /// <remarks>
+    /// Shared shape behind <see cref="PageState.Denied"/> and <see cref="PageState.Unavailable"/>, which
+    /// otherwise differ only in copy and how many buttons the caller wants - both are "there's nothing to
+    /// do on this page but leave," just for different reasons (no access vs. a transient outage).
+    /// </remarks>
+    private RenderFragment StatusPanel(string title, string message, RenderFragment actions) =>
+        @<RadzenStack Orientation="Orientation.Vertical" AlignItems="AlignItems.Center" Gap="0.75rem"
+                      Style="padding: 2.5rem 1.5rem; text-align: center;">
+            <h1>@title</h1>
+            <p>@message</p>
+            @actions
+        </RadzenStack>;
 
     private void BuildEditContext()
     {
