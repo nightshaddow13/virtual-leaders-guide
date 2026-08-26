@@ -32,14 +32,9 @@
             <RadzenDataGridColumn TItem="EventDto" Property="@nameof(EventDto.Slug)" Title="Event address">
                 <Template Context="item">/e/@item.Slug</Template>
             </RadzenDataGridColumn>
-            @* Width 76px, not the icon button's own ~44px: the grid renders with a fixed table layout
-               (rz-grid-table-fixed), so a column can never grow to fit its content - a column narrower
-               than the button clips it against the cell's padding box instead of just looking cramped.
-               76px leaves the centered button real breathing room on both sides. *@
-            <RadzenDataGridColumn TItem="EventDto" Sortable="false" Filterable="false" Width="76px" TextAlign="TextAlign.Center">
+            <RadzenDataGridColumn TItem="EventDto" Sortable="false" Filterable="false" Width="@ActionColumnWidth" TextAlign="TextAlign.Center">
                 <Template Context="item">
-                    @* Icon over words for a table row action - the standard for row actions going forward,
-                       not just this column (Material Symbols name, per RadzenButton's own Icon convention). *@
+                    @* Icon-only row action - see ADR-0037 for the convention this establishes. *@
                     <RadzenButton Icon="@(accessView.IsAdmin ? "edit" : "visibility")" ButtonStyle="ButtonStyle.Light"
                                   aria-label="@(accessView.IsAdmin ? "Edit" : "View")"
                                   Click="@(() => NavigationManager.NavigateTo($"dashboard/events/{item.Id}"))" />
@@ -73,6 +68,14 @@
     /// </remarks>
     [CascadingParameter]
     private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
+    /// <remarks>
+    /// Not the icon button's own ~44px: the grid renders with a fixed table layout
+    /// (<c>rz-grid-table-fixed</c>), so a column can never grow to fit its content - one narrower than the
+    /// button clips it against the cell's padding box instead of just looking cramped. 76px leaves the
+    /// centered button real breathing room on both sides.
+    /// </remarks>
+    private const string ActionColumnWidth = "76px";
 
     private RadzenDataGrid<EventDto>? grid;
     private EventAccessView? accessView;

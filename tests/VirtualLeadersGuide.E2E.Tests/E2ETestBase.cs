@@ -199,6 +199,24 @@ public abstract class E2ETestBase(AspireE2EFixture fixture) : PageTest
     }
 
     /// <remarks>
+    /// <see cref="AspireE2EFixture.AdminAllowlistedEmail"/> is one value shared by every test in this run
+    /// (ADR-0025 - one Aspire stack, one fixture instance), unlike every other account most tests create,
+    /// which is freshly guid-suffixed per call - so this checks for an existing account before creating
+    /// one, rather than assuming a fresh account the way most other seeding calls in this project do.
+    /// </remarks>
+    protected async Task SignInAsAdminAsync()
+    {
+        if (!await Fixture.IdentityApi.ExistsAsync(Fixture.AdminAllowlistedEmail, CancellationToken.None))
+        {
+            await Fixture.IdentityApi.CreateUserAsync(
+                Fixture.AdminAllowlistedEmail, TestCredentials.KnownPassword, CancellationToken.None);
+        }
+
+        await new LoginPage(Page).SignInAsync(
+            Fixture.WebBaseUrl, Fixture.AdminAllowlistedEmail, TestCredentials.KnownPassword);
+    }
+
+    /// <remarks>
     /// Swallows any exception into a <c>CAPTURE_ERRORS.txt</c> entry at the run root instead of letting it
     /// escape <see cref="DisposeAsync"/> - see ADR-0028 for why. Deliberately broader than
     /// <see cref="ResolveArtifactPath"/>'s own <c>TOO_LONG.txt</c> (a known, named failure mode); this is

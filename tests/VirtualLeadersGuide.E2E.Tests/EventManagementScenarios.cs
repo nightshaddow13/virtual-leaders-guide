@@ -53,9 +53,6 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
             await Page.Locator("#Passcode").FillAsync(newPasscode);
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" }).ClickAsync();
 
-            // A successful save navigates back to the list (EventEditor.razor's UpdateAsync) - wait for
-            // that URL change, not a bare ClickAsync, which only waits for the DOM click event to dispatch,
-            // not for the save's own round trip to actually complete server-side.
             await Expect(Page).ToHaveURLAsync(
                 new Uri(Fixture.WebBaseUrl, "dashboard").ToString(),
                 new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
@@ -80,12 +77,7 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
 
             await Expect(Page).ToHaveURLAsync(new Uri(Fixture.WebBaseUrl, "dashboard/events/new").ToString());
 
-            // Scoped to the Name field's own container, not a bare GetByText - leaving Slug blank makes it
-            // derive from Name, so it collides too and renders its own "already in use" message (both the
-            // per-field ValidationMessage and the form's ValidationSummary render each collision once more),
-            // and a bare text match resolves to multiple elements (Playwright strict-mode violation).
-            ILocator nameField = Page.Locator(".vlg-field").Filter(new LocatorFilterOptions { Has = Page.Locator("#Name") });
-            await Expect(nameField.GetByText("already in use by another Event")).ToBeVisibleAsync(
+            await Expect(FieldErrorLocator("Name").GetByText("already in use by another Event")).ToBeVisibleAsync(
                 new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
         });
 
@@ -100,14 +92,12 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
             await CreateEventAsync(unassignedName);
             await SignOutAsync();
 
-            IdentityUserDto director = await CreateAndSignInDirectorAsync(assignedEventId);
+            await CreateAndSignInDirectorAsync(assignedEventId);
 
             await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
 
             await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = "My events", Exact = true }))
                 .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
-            // The grid's own LoadData round trip is what actually proves the scoping - wait for its content,
-            // not just the static heading above it.
             await Expect(Page.GetByText(assignedName)).ToBeVisibleAsync(
                 new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
             await Expect(Page.GetByText(unassignedName)).Not.ToBeVisibleAsync();
@@ -118,8 +108,6 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
                 new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
             await Expect(Page.Locator("#Name")).Not.ToBeVisibleAsync();
             await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" })).Not.ToBeVisibleAsync();
-
-            _ = director;
         });
 
     [Fact(DisplayName = "Given a Director, when navigating directly to an Event they aren't assigned to, then they are denied")]
@@ -157,25 +145,6 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
         });
 
     /// <remarks>
-    /// <see cref="AspireE2EFixture.AdminAllowlistedEmail"/> is one value shared by every test in this run
-    /// (ADR-0025 - one Aspire stack, one fixture instance) - unlike every other account this class creates,
-    /// which is freshly guid-suffixed per call. Every test in this class needs an Admin, so this checks
-    /// before creating rather than assuming a fresh account the way <see cref="IdentityApiClient"/>'s own
-    /// header remarks otherwise call for.
-    /// </remarks>
-    private async Task SignInAsAdminAsync()
-    {
-        if (!await Fixture.IdentityApi.ExistsAsync(Fixture.AdminAllowlistedEmail, CancellationToken.None))
-        {
-            await Fixture.IdentityApi.CreateUserAsync(
-                Fixture.AdminAllowlistedEmail, TestCredentials.KnownPassword, CancellationToken.None);
-        }
-
-        await new LoginPage(Page).SignInAsync(
-            Fixture.WebBaseUrl, Fixture.AdminAllowlistedEmail, TestCredentials.KnownPassword);
-    }
-
-    /// <remarks>
     /// The Admin grid is never scoped (unlike a Director's) - it lists every Event this local dev machine's
     /// persistent SQL volume has ever accumulated across every past run of this suite
     /// (<see cref="AspireE2EFixture"/>'s own remarks: the data volume outlives any one run), paged 10 at a
@@ -183,7 +152,9 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
     /// depending on how many prior runs' Events already exist, so asserting against the grid's default
     /// first page - as opposed to a Director's grid, which only ever shows what that one test itself
     /// assigned - is not reliable. This pages forward through the grid's own pagination controls looking
-    /// for the target text, rather than assuming page 1.
+    /// for the target text, rather than assuming page 1. The final wait below, on whatever page the loop
+    /// stopped on, covers both "the grid's LoadData for this page hasn't settled yet" and "it's genuinely
+    /// missing."
     /// </remarks>
     private async Task AssertEventVisibleInGridAsync(string name)
     {
@@ -205,11 +176,19 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
             await nextPageButton.ClickAsync();
         }
 
-        // One last wait on the current (possibly still-loading, possibly final) page before failing -
-        // covers both "the grid's LoadData for this page hasn't settled yet" and "it's genuinely missing."
         await Expect(Page.GetByText(name)).ToBeVisibleAsync(
             new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
     }
+
+    /// <remarks>
+    /// Scoped to the field's own container, not a bare page-wide <c>GetByText</c> - a collision on
+    /// <c>Name</c> also collides <c>Slug</c> when it's left blank (Slug then derives from Name), which
+    /// renders its own "already in use" message, and both the per-field <c>ValidationMessage</c> and the
+    /// form's <c>ValidationSummary</c> render each collision once more - so an unscoped text match resolves
+    /// to multiple elements (a Playwright strict-mode violation) rather than the one field under test.
+    /// </remarks>
+    private ILocator FieldErrorLocator(string fieldId) =>
+        Page.Locator(".vlg-field").Filter(new LocatorFilterOptions { Has = Page.Locator($"#{fieldId}") });
 
     private async Task<IdentityUserDto> CreateAndSignInDirectorAsync(Guid eventId)
     {

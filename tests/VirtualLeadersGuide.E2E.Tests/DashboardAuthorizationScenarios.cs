@@ -47,24 +47,11 @@ public class DashboardAuthorizationScenarios(AspireE2EFixture fixture) : E2ETest
     public async Task GivenAnAllowlistedAdmin_WhenNavigatingToDashboard_ThenTheDashboardRenders() =>
         await RunAsync(async () =>
         {
-            // AdminAllowlistedEmail is shared across every class in this run (AspireE2EFixture's own
-            // remarks) - EventManagementScenarios's own Admin-signed-in tests may have already created it
-            // by the time this runs in the same collection, so this checks first rather than assuming a
-            // fresh account the way most of this project's other seeding calls do.
-            if (!await Fixture.IdentityApi.ExistsAsync(Fixture.AdminAllowlistedEmail, CancellationToken.None))
-            {
-                await Fixture.IdentityApi.CreateUserAsync(
-                    Fixture.AdminAllowlistedEmail, TestCredentials.KnownPassword, CancellationToken.None);
-            }
-
-            await new LoginPage(Page).SignInAsync(
-                Fixture.WebBaseUrl, Fixture.AdminAllowlistedEmail, TestCredentials.KnownPassword);
+            await SignInAsAdminAsync();
 
             await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
 
             await Expect(Page).ToHaveURLAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
-            // "Events", not "Dashboard" - P2-9 (#18) replaced the placeholder with the real Admin events
-            // list, whose <h1> is the noun for what's on the page, matching EventEditor.razor's own pattern.
             await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = "Events", Exact = true }))
                 .ToBeVisibleAsync();
         });

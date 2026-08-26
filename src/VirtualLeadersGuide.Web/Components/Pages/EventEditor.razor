@@ -140,6 +140,16 @@
     private string? saveErrorMessage;
     private bool isSaving;
 
+    /// <remarks>
+    /// Three decisions worth naming here: (1) <c>Id is null</c> is a load-time gate, not a save-time
+    /// failure - a non-Admin was never going to be allowed to create, so there's no form worth rendering.
+    /// (2) A caught <see cref="EventDataUnavailableException"/> lands on <see cref="PageState.Unavailable"/>,
+    /// not <see cref="PageState.Denied"/> - "the Event store didn't answer" versus "you can't read this
+    /// Event" - since an unhandled exception here would otherwise crash the whole circuit (Blazor Server's
+    /// <c>InteractiveServer</c> render mode has no equivalent of a failed HTTP request page). (3) Api's 403
+    /// for an out-of-scope Event (ADR-0031) and "no such Event" are indistinguishable here by design; the
+    /// <see cref="PageState.Denied"/> copy doesn't claim to know which.
+    /// </remarks>
     protected override async Task OnParametersSetAsync()
     {
         if (AuthenticationStateTask is null)
@@ -158,8 +168,6 @@
 
         if (Id is null)
         {
-            // Load-time gate, not a save-time failure: a non-Admin was never going to be allowed to
-            // create, so there's no form worth rendering (see the plan's "/new gate" state).
             if (!accessView.CanEditEventDetails)
             {
                 state = PageState.Denied;
@@ -180,18 +188,12 @@
         }
         catch (EventDataUnavailableException)
         {
-            // Distinct from PageState.Denied: this is "the Event store didn't answer," not "you can't
-            // read this Event" - an unhandled exception here would otherwise crash the whole circuit
-            // (Blazor Server's InteractiveServer render mode has no equivalent of a failed HTTP request
-            // page; an exception out of a lifecycle method takes the circuit down with it).
             state = PageState.Unavailable;
             return;
         }
 
         if (outcome != EventReadOutcome.Success || dto is null)
         {
-            // Api's 403 for an out-of-scope Event (ADR-0031) and "no such Event" are indistinguishable
-            // here by design - the copy above doesn't claim to know which.
             state = PageState.Denied;
             return;
         }
@@ -215,6 +217,13 @@
         messageStore = new ValidationMessageStore(editContext);
     }
 
+    /// <remarks>
+    /// A caught <see cref="EventDataUnavailableException"/> is a transient Api/store outage, not a
+    /// permission problem - unlike <see cref="permissionLostMessage"/>, the form stays enabled: the
+    /// user's typed values are still good, retrying Save is the right next step, not signing in again.
+    /// Uncaught, this would otherwise crash the circuit the same way <see cref="OnParametersSetAsync"/>'s
+    /// read failure would.
+    /// </remarks>
     private async Task SaveAsync()
     {
         isSaving = true;
@@ -235,16 +244,20 @@
         }
         catch (EventDataUnavailableException)
         {
-            // A transient Api/store outage, not a permission problem - unlike permissionLostMessage, the
-            // form stays enabled: the user's typed values are still good, retrying Save is the right next
-            // step, not signing in again. Uncaught, this would otherwise crash the circuit the same way
-            // OnParametersSetAsync's read failure would (see that method's remarks).
             saveErrorMessage = "Something went wrong saving this Event. Try again.";
         }
 
         isSaving = false;
     }
 
+    /// <remarks>
+    /// If a custom <see cref="EventFormModel.Slug"/>/<see cref="EventFormModel.Passcode"/> is supplied,
+    /// the Event already exists by the time the follow-up <see cref="ApiEventClient.UpdateAsync"/> runs -
+    /// this method navigates to it regardless of how that PATCH goes, rather than reporting a failure
+    /// that already half-happened. A conflict or transient failure there (e.g. a chosen slug collides, or
+    /// the store hiccups) is left for the Admin to notice and fix from the edit page itself, since
+    /// there's no field left to attach the error to once we've navigated away from this form.
+    /// </remarks>
     private async Task CreateAsync()
     {
         (EventWriteOutcome outcome, EventDto? created, IReadOnlyList<string> pointers) =
@@ -267,11 +280,6 @@
 
         if (slugOverride is not null || passcodeOverride is not null)
         {
-            // The Event now exists regardless of how this follow-up PATCH goes - navigate to it either
-            // way rather than reporting a failure that already half-happened. A conflict or transient
-            // failure here (e.g. a chosen slug collides, or the store hiccups) is left for the Admin to
-            // notice and fix from the edit page itself, since there's no field to attach the error to
-            // once we've navigated away from this form.
             try
             {
                 await EventClient.UpdateAsync(created!.Id, null, slugOverride, passcodeOverride, CancellationToken.None);
@@ -285,6 +293,15 @@
         NavigationManager.NavigateTo($"dashboard/events/{created!.Id}");
     }
 
+    /// <remarks>
+    /// A <see cref="EventWriteOutcome.Forbidden"/> outcome here is claim-lag / mid-session demotion
+    /// (<c>ApplicationUserClaimsPrincipalFactory</c>'s remarks) - distinct from <see cref="PageState.Denied"/>,
+    /// which is about an out-of-scope Event, not a since-revoked Admin grant. The form stays rendered,
+    /// disabled, with whatever the user had typed still visible. On success this navigates back to the
+    /// list rather than staying put: staying on the same URL after a successful save, with only a toast
+    /// to show for it, reads as the page having not responded at all. Matches <see cref="CreateAsync"/>'s
+    /// own post-save navigation, just to the list instead of the new Event's own page.
+    /// </remarks>
     private async Task UpdateAsync(Guid id)
     {
         (EventWriteOutcome outcome, IReadOnlyList<string> pointers) = await EventClient.UpdateAsync(
@@ -292,9 +309,6 @@
 
         if (outcome == EventWriteOutcome.Forbidden)
         {
-            // Claim-lag / mid-session demotion (ApplicationUserClaimsPrincipalFactory's remarks) - distinct
-            // from PageState.Denied, which is about an out-of-scope Event, not a since-revoked Admin grant.
-            // The form stays rendered, disabled, with whatever the user had typed still visible.
             permissionLostMessage = "You no longer have permission to edit this Event.";
             return;
         }
@@ -305,10 +319,6 @@
             return;
         }
 
-        // Navigates back to the list rather than staying put - staying on the same URL after a successful
-        // save, with only a toast to show for it, reads as the page having not responded at all (reported
-        // directly: "it hangs on the screen when it should navigate back to the event list"). Matches
-        // CreateAsync's own post-save navigation, just to the list instead of the new Event's own page.
         NotificationService.Notify(NotificationSeverity.Success, "Changes saved");
         NavigateToDashboard();
     }
