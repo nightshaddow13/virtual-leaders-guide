@@ -5,10 +5,9 @@ using VirtualLeadersGuide.Web.Authorization;
 namespace VirtualLeadersGuide.Web.Tests;
 
 /// <remarks>
-/// <see cref="GrantNothing_WhenADirectorClaimCarriesNoEventScope"/> pins ADR-0035: an unscoped Director
-/// claim - the Role held with no Event, established by Invite (P2-12, #43) - grants nothing here by
-/// design, mirroring <c>EventAccessPolicyShould</c>'s Api-side regression. A future reader must not "fix"
-/// this by treating a null-Event Director claim as platform-wide access.
+/// <see cref="GrantNothing_WhenADirectorClaimCarriesNoEventScope"/> mirrors <c>EventAccessPolicyShould</c>'s
+/// Api-side regression on the Web side - see that class's remarks for the full ADR-0035 rationale this
+/// pins.
 /// </remarks>
 public class EventAccessViewShould
 {
