@@ -19,54 +19,62 @@
 @switch (state)
 {
     case PageState.Denied:
-        <div class="vlg-denied">
+        <RadzenStack Orientation="Orientation.Vertical" AlignItems="AlignItems.Center" Gap="0.75rem"
+                     Style="padding: 2.5rem 1.5rem; text-align: center;">
             <h1>You don't have access to this Event</h1>
             <p>Ask an Admin to grant you access, or check you're signed in as the right person.</p>
             <RadzenButton Text="Back to dashboard" Click="NavigateToDashboard" />
-        </div>
+        </RadzenStack>
         break;
 
     case PageState.Unavailable:
-        <div class="vlg-denied">
+        <RadzenStack Orientation="Orientation.Vertical" AlignItems="AlignItems.Center" Gap="0.75rem"
+                     Style="padding: 2.5rem 1.5rem; text-align: center;">
             <h1>Something went wrong loading this Event</h1>
             <p>The Event store didn't respond. Try again.</p>
-            <div class="vlg-button-row">
+            <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
                 <RadzenButton Text="Try again" Click="@(() => NavigationManager.Refresh(forceReload: true))" />
                 <RadzenButton Text="Back to dashboard" ButtonStyle="ButtonStyle.Light" Click="NavigateToDashboard" />
-            </div>
-        </div>
+            </RadzenStack>
+        </RadzenStack>
         break;
 
     case PageState.Director:
-        <p class="vlg-breadcrumb">MY EVENTS / @model!.Name?.ToUpperInvariant()</p>
-        <div class="vlg-page-header">
-            <div>
-                <h1>@model.Name</h1>
-                <span class="vlg-badge">VIEW ONLY</span>
-            </div>
+        <RadzenBreadCrumb>
+            <RadzenBreadCrumbItem Text="MY EVENTS" Path="dashboard" />
+            <RadzenBreadCrumbItem Text="@model!.Name?.ToUpperInvariant()" />
+        </RadzenBreadCrumb>
+        <div style="margin-block-end: 1rem;">
+            <h1>@model!.Name</h1>
+            <RadzenBadge Text="VIEW ONLY" BadgeStyle="BadgeStyle.Light" Variant="Variant.Outlined" />
         </div>
         <div class="vlg-readonly-field">
-            <span class="vlg-field-label">Public address</span>
+            <RadzenText TextStyle="TextStyle.Overline">Public address</RadzenText>
             <span>/e/@model.Slug</span>
         </div>
         <div class="vlg-readonly-field">
-            <span class="vlg-field-label">Passcode</span>
+            <RadzenText TextStyle="TextStyle.Overline">Passcode</RadzenText>
             <span>@model.Passcode</span>
         </div>
-        <p class="vlg-note">No fields, no Save. Need a change? Ask an Admin.</p>
+        <RadzenAlert AlertStyle="AlertStyle.Info" Variant="Variant.Flat" AllowClose="false" Style="margin-block-start: 1rem;"
+                     Text="No fields, no Save. Need a change? Ask an Admin." />
         break;
 
     case PageState.Admin:
-        <p class="vlg-breadcrumb">EVENTS / @(Id is null ? "NEW" : model!.Name?.ToUpperInvariant())</p>
-        <div class="vlg-page-header">
+        <RadzenBreadCrumb>
+            <RadzenBreadCrumbItem Text="EVENTS" Path="dashboard" />
+            <RadzenBreadCrumbItem Text="@(Id is null ? "NEW" : model!.Name?.ToUpperInvariant())" />
+        </RadzenBreadCrumb>
+        <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween"
+                     AlignItems="AlignItems.End" Gap="1rem" Style="margin-block-end: 1rem;">
             <h1>@(Id is null ? "New event" : "Edit event")</h1>
-            <div class="vlg-button-row">
+            <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
                 <RadzenButton Text="Cancel" ButtonStyle="ButtonStyle.Light" Disabled="@isSaving"
                               Click="NavigateToDashboard" />
                 <RadzenButton Text="@(Id is null ? "Create event" : "Save changes")"
                               Disabled="@(isSaving || permissionLostMessage is not null)" Click="SaveAsync" />
-            </div>
-        </div>
+            </RadzenStack>
+        </RadzenStack>
 
         @if (permissionLostMessage is not null)
         {
@@ -94,11 +102,11 @@
                     </div>
                     @if (Id is null)
                     {
-                        <span class="vlg-hint">Leave blank to derive it from the name.</span>
+                        <RadzenText TextStyle="TextStyle.Caption" TagName="TagName.Div" Style="margin-block-start: 0.25rem;">Leave blank to derive it from the name.</RadzenText>
                     }
                     else
                     {
-                        <span class="vlg-hint">Changing this breaks links already printed in leader packets.</span>
+                        <RadzenText TextStyle="TextStyle.Caption" TagName="TagName.Div" Style="margin-block-start: 0.25rem;">Changing this breaks links already printed in leader packets.</RadzenText>
                     }
                     <ValidationMessage For="() => model!.Slug" class="rz-messages-error" />
                 </div>
@@ -107,7 +115,7 @@
                     <InputText id="Passcode" @bind-Value="model!.Passcode" class="rz-textbox rz-input-md" />
                     @if (Id is null)
                     {
-                        <span class="vlg-hint">Leave blank to generate one.</span>
+                        <RadzenText TextStyle="TextStyle.Caption" TagName="TagName.Div" Style="margin-block-start: 0.25rem;">Leave blank to generate one.</RadzenText>
                     }
                     <ValidationMessage For="() => model!.Passcode" class="rz-messages-error" />
                 </div>

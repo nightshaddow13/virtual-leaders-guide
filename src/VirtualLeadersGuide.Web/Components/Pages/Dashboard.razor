@@ -13,16 +13,17 @@
 
 @if (accessView is not null)
 {
-    <div class="vlg-page-header">
+    <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween"
+                 AlignItems="AlignItems.End" Gap="1rem" Style="margin-block-end: 1rem;">
         <div>
             <h1>@(accessView.IsAdmin ? "Events" : "My events")</h1>
-            <p class="vlg-subhead">@(accessView.IsAdmin ? "ALL EVENTS" : "ASSIGNED TO YOU") &middot; @totalCount</p>
+            <RadzenText TextStyle="TextStyle.Caption">@(accessView.IsAdmin ? "ALL EVENTS" : "ASSIGNED TO YOU") &middot; @totalCount</RadzenText>
         </div>
         @if (accessView.IsAdmin)
         {
             <RadzenButton Text="+ New event" Click="@(() => NavigationManager.NavigateTo("dashboard/events/new"))" />
         }
-    </div>
+    </RadzenStack>
 
     <RadzenDataGrid @ref="grid" TItem="EventDto" Data="@events" Count="@totalCount" LoadData="@LoadDataAsync"
                      AllowPaging="true" PageSize="10" AllowSorting="true" IsLoading="@isLoading"
@@ -45,11 +46,11 @@
 
     @if (!accessView.IsAdmin)
     {
-        <p class="vlg-note">
+        <RadzenAlert AlertStyle="AlertStyle.Info" Variant="Variant.Flat" AllowClose="false" Style="margin-block-start: 1rem;">
             Directors view Event details, they don't change them &mdash; no <strong>+ New event</strong>, no
             editing the name, address, or passcode. Editing arrives later as Pages and Activities, scoped to
             these Events.
-        </p>
+        </RadzenAlert>
     }
 
     @if (loadErrorMessage is not null)
