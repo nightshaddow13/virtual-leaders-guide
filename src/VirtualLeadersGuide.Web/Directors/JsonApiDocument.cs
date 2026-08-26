@@ -26,16 +26,19 @@ internal sealed class UserAttributesDto
     public bool? HasCredential { get; init; }
 }
 
+/// <summary>A single-resource JSON:API document - the request/response body for GET-single on <c>/api/users</c>.</summary>
 internal sealed class UserDocument
 {
     public required UserResourceObject Data { get; init; }
 }
 
+/// <summary>The response body for <c>GET /api/users</c>.</summary>
 internal sealed class UserCollectionDocument
 {
     public required List<UserResourceObject> Data { get; init; }
 }
 
+/// <summary>A <c>UserRole</c> resource - either a Role (unscoped) or a Grant (Event-scoped), per ADR-0035.</summary>
 internal sealed class RoleGrantResourceObject
 {
     public required string Type { get; init; }
@@ -55,11 +58,13 @@ internal sealed class RoleGrantAttributesDto
     public Guid? EventId { get; init; }
 }
 
+/// <summary>A single-resource JSON:API document - the request body for POST and the response body for GET-single/POST on <c>/api/roleGrants</c>.</summary>
 internal sealed class RoleGrantDocument
 {
     public required RoleGrantResourceObject Data { get; init; }
 }
 
+/// <summary>The response body for <c>GET /api/roleGrants</c>.</summary>
 internal sealed class RoleGrantCollectionDocument
 {
     public required List<RoleGrantResourceObject> Data { get; init; }
@@ -71,6 +76,7 @@ internal sealed class ErrorDocument
     public required List<ErrorObject> Errors { get; init; }
 }
 
+/// <summary>One JSON:API error - only <see cref="Title"/>/<see cref="Detail"/> are read here; unlike <c>Events.ErrorObject</c>, no caller needs the error's source pointer.</summary>
 internal sealed class ErrorObject
 {
     public string? Title { get; init; }

@@ -49,9 +49,13 @@ public sealed class ApplicationUserResourceDefinition : JsonApiResourceDefinitio
 
         if (!policy.CanRead)
         {
-            throw new JsonApiException(new ErrorObject(System.Net.HttpStatusCode.Forbidden) { Title = NotAdminTitle });
+            throw ForbiddenException(NotAdminTitle);
         }
 
         return existingFilter;
     }
+
+    /// <remarks>Matches <see cref="UserRoleResourceDefinition"/>'s own private helper of the same name/shape.</remarks>
+    private static JsonApiException ForbiddenException(string title) =>
+        new(new ErrorObject(System.Net.HttpStatusCode.Forbidden) { Title = title });
 }

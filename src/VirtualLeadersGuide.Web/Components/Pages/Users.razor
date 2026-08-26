@@ -47,7 +47,7 @@
                     <Template Context="row">@(row.DisplayName ?? "— not set yet")</Template>
                 </RadzenDataGridColumn>
                 <RadzenDataGridColumn TItem="UserRowDto" Sortable="false" Filterable="false" Title="Role">
-                    <Template Context="row">@RoleLabel(row)</Template>
+                    <Template Context="row">@row.RoleLabel</Template>
                 </RadzenDataGridColumn>
                 <RadzenDataGridColumn TItem="UserRowDto" Sortable="false" Filterable="false" Title="State">
                     <Template Context="row">@StateLabel(row)</Template>
@@ -154,8 +154,6 @@
 
         isLoading = false;
     }
-
-    private static string RoleLabel(UserRowDto row) => row.IsAdmin ? "Admin" : row.IsDirector ? "Director" : "—";
 
     private static string StateLabel(UserRowDto row) => row.HasCredential
         ? row.EventGrantCount > 0 ? $"Active · {row.EventGrantCount} events" : "Active · 0 events"

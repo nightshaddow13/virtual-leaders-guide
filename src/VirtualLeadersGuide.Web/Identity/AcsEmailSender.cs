@@ -28,10 +28,14 @@ public sealed class AcsEmailSender(IConfiguration configuration, ILogger<AcsEmai
         await SendAsync(email, "Reset your password",
             $"<p>Please reset your password by <a href='{resetLink}'>clicking here</a>.</p>", "password reset");
 
+    /// <inheritdoc/>
+    /// <remarks>Not implemented - see this type's own remarks for why nothing should ever call this.</remarks>
     public Task SendConfirmationLinkAsync(ApplicationUser user, string email, string confirmationLink) =>
         throw new NotSupportedException(
             "Email confirmation is not used in this app (RequireConfirmedAccount is false) - nothing should call this.");
 
+    /// <inheritdoc/>
+    /// <remarks>Not implemented - see this type's own remarks for why nothing should ever call this.</remarks>
     public Task SendPasswordResetCodeAsync(ApplicationUser user, string email, string resetCode) =>
         throw new NotSupportedException(
             "Code-based password reset is not used in this app - the Account pages use the link-based flow.");

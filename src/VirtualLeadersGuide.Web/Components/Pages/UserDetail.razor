@@ -51,7 +51,7 @@
         </div>
         <div class="vlg-readonly-field">
             <RadzenText TextStyle="TextStyle.Overline">Role</RadzenText>
-            <span>@(user.IsAdmin ? "Admin" : user.IsDirector ? "Director" : "—")</span>
+            <span>@user.RoleLabel</span>
         </div>
         <div class="vlg-readonly-field">
             <RadzenText TextStyle="TextStyle.Overline">Events</RadzenText>

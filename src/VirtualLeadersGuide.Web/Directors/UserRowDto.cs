@@ -26,4 +26,7 @@ public sealed class UserRowDto
 
     /// <summary>The count of Event-scoped Director Grants this User holds - zero for an unscoped Director.</summary>
     public required int EventGrantCount { get; init; }
+
+    /// <summary>"Admin"/"Director"/"—", for the Users screen's ROLE column and the user-detail page alike.</summary>
+    public string RoleLabel => IsAdmin ? "Admin" : IsDirector ? "Director" : "—";
 }
