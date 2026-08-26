@@ -40,14 +40,33 @@ public sealed class EmailFileSink : IDisposable
     /// No matching email appeared within the wait budget. The message lists every file actually present, the
     /// same "make the failure actionable" approach <see cref="AspireE2EFixture"/> takes for its own probes.
     /// </exception>
-    public async Task<SentEmailDto> WaitForEmailAsync(string toEmail, CancellationToken cancellationToken)
+    public Task<SentEmailDto> WaitForEmailAsync(string toEmail, CancellationToken cancellationToken) =>
+        WaitForEmailAsync(toEmail, excluding: null, cancellationToken);
+
+    /// <summary>
+    /// Polls <see cref="Directory"/> until an email addressed to <paramref name="toEmail"/> appears whose
+    /// <see cref="SentEmailDto.Payload"/> differs from <paramref name="excluding"/>'s.
+    /// </summary>
+    /// <param name="toEmail">The recipient to match, case-insensitively, against <see cref="SentEmailDto.To"/>.</param>
+    /// <param name="excluding">
+    /// A previously-seen email to a resend to <paramref name="toEmail"/> - directory enumeration order has
+    /// no relationship to send time, so the plain <see cref="WaitForEmailAsync(string, CancellationToken)"/>
+    /// overload's "first match by recipient" can keep resolving to this same earlier file forever instead
+    /// of a genuinely new one.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the wait early.</param>
+    /// <exception cref="TimeoutException">
+    /// No matching email appeared within the wait budget. The message lists every file actually present, the
+    /// same "make the failure actionable" approach <see cref="AspireE2EFixture"/> takes for its own probes.
+    /// </exception>
+    public async Task<SentEmailDto> WaitForEmailAsync(string toEmail, SentEmailDto? excluding, CancellationToken cancellationToken)
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(WaitTimeout);
 
         while (true)
         {
-            SentEmailDto? match = TryFindEmailFor(toEmail);
+            SentEmailDto? match = TryFindEmailFor(toEmail, excluding?.Payload);
             if (match is not null)
             {
                 return match;
@@ -61,8 +80,8 @@ public sealed class EmailFileSink : IDisposable
             {
                 IEnumerable<string> present = EnumerateEmailFiles().Select(Path.GetFileName)!;
                 throw new TimeoutException(
-                    $"No email for '{toEmail}' appeared under {Directory} within {WaitTimeout}. " +
-                    $"Files present: [{string.Join(", ", present)}].");
+                    $"No email for '{toEmail}'{(excluding is null ? "" : " other than one already seen")} " +
+                    $"appeared under {Directory} within {WaitTimeout}. Files present: [{string.Join(", ", present)}].");
             }
         }
     }
@@ -72,7 +91,7 @@ public sealed class EmailFileSink : IDisposable
     /// <see cref="Directory"/> - a point-in-time check, not a wait. See <see cref="WaitForEmailAsync"/> for
     /// why this alone can't prove a negative; callers need a happens-before first.
     /// </summary>
-    public bool HasEmailFor(string toEmail) => TryFindEmailFor(toEmail) is not null;
+    public bool HasEmailFor(string toEmail) => TryFindEmailFor(toEmail, excludingPayload: null) is not null;
 
     /// <inheritdoc/>
     /// <remarks>Best-effort - a locked file here would only be evidence, never the cause of a real test failure.</remarks>
@@ -90,12 +109,14 @@ public sealed class EmailFileSink : IDisposable
         }
     }
 
-    private SentEmailDto? TryFindEmailFor(string toEmail)
+    private SentEmailDto? TryFindEmailFor(string toEmail, string? excludingPayload)
     {
         foreach (string path in EnumerateEmailFiles())
         {
             SentEmailDto? email = TryReadEmail(path);
-            if (email is not null && string.Equals(email.To, toEmail, StringComparison.OrdinalIgnoreCase))
+            if (email is not null
+                && string.Equals(email.To, toEmail, StringComparison.OrdinalIgnoreCase)
+                && email.Payload != excludingPayload)
             {
                 return email;
             }

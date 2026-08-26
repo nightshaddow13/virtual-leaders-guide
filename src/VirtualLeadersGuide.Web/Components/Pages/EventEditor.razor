@@ -21,23 +21,20 @@
 @switch (state)
 {
     case PageState.Denied:
-    {
-        RenderFragment actions = @<RadzenButton Text="Back to dashboard" Click="NavigateToDashboard" />;
-        @StatusPanel("You don't have access to this Event",
-                     "Ask an Admin to grant you access, or check you're signed in as the right person.", actions)
+        <StatusPanel Title="You don't have access to this Event"
+                     Message="Ask an Admin to grant you access, or check you're signed in as the right person.">
+            <RadzenButton Text="Back to dashboard" Click="NavigateToDashboard" />
+        </StatusPanel>
         break;
-    }
 
     case PageState.Unavailable:
-    {
-        RenderFragment actions =
-            @<RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
+        <StatusPanel Title="Something went wrong loading this Event" Message="The Event store didn't respond. Try again.">
+            <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
                 <RadzenButton Text="Try again" Click="@(() => NavigationManager.Refresh(forceReload: true))" />
                 <RadzenButton Text="Back to dashboard" ButtonStyle="ButtonStyle.Light" Click="NavigateToDashboard" />
-            </RadzenStack>;
-        @StatusPanel("Something went wrong loading this Event", "The Event store didn't respond. Try again.", actions)
+            </RadzenStack>
+        </StatusPanel>
         break;
-    }
 
     case PageState.Director:
         <RadzenBreadCrumb>
@@ -272,18 +269,6 @@
         }
     }
 
-    /// <remarks>
-    /// Shared shape behind <see cref="PageState.Denied"/> and <see cref="PageState.Unavailable"/>, which
-    /// otherwise differ only in copy and how many buttons the caller wants - both are "there's nothing to
-    /// do on this page but leave," just for different reasons (no access vs. a transient outage).
-    /// </remarks>
-    private RenderFragment StatusPanel(string title, string message, RenderFragment actions) =>
-        @<RadzenStack Orientation="Orientation.Vertical" AlignItems="AlignItems.Center" Gap="0.75rem"
-                      Style="padding: 2.5rem 1.5rem; text-align: center;">
-            <h1>@title</h1>
-            <p>@message</p>
-            @actions
-        </RadzenStack>;
 
     private void BuildEditContext()
     {

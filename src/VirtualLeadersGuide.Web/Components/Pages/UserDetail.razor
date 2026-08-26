@@ -18,12 +18,10 @@
 @switch (state)
 {
     case PageState.Denied:
-    {
-        RenderFragment actions = @<RadzenButton Text="Back to Users" Click="NavigateToUsers" />;
-        @StatusPanel("You don't have access to this page",
-                     "Only Admins can manage Users, or this User doesn't exist.", actions)
+        <StatusPanel Title="You don't have access to this page" Message="Only Admins can manage Users, or this User doesn't exist.">
+            <RadzenButton Text="Back to Users" Click="NavigateToUsers" />
+        </StatusPanel>
         break;
-    }
 
     case PageState.Ready:
         <RadzenBreadCrumb>
@@ -158,14 +156,6 @@
         errorMessage = "Couldn't revoke the invite - refresh and try again.";
         isBusy = false;
     }
-
-    private RenderFragment StatusPanel(string title, string message, RenderFragment actions) =>
-        @<RadzenStack Orientation="Orientation.Vertical" AlignItems="AlignItems.Center" Gap="0.75rem"
-                      Style="padding: 2.5rem 1.5rem; text-align: center;">
-            <h1>@title</h1>
-            <p>@message</p>
-            @actions
-        </RadzenStack>;
 
     private void NavigateToUsers() => NavigationManager.NavigateTo("dashboard/users", forceLoad: true);
 }

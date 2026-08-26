@@ -35,10 +35,7 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
             await SearchUsersAsync(email);
             await Expect(Page.GetByText(email)).ToBeVisibleAsync(
                 new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
-            // Scoped to the grid: the STATE filter dropdown has its own "Invited" option in the DOM
-            // (Radzen keeps a closed popup's option list present, just hidden), which a bare GetByText
-            // also matches - a strict-mode violation.
-            await Expect(Page.GetByRole(AriaRole.Grid).GetByText("Invited")).ToBeVisibleAsync();
+            await AssertGridStateVisibleAsync("Invited");
         });
 
     [Fact(DisplayName = "Given an invited Director, when they complete account setup, then they can sign in and see an empty Events list")]
@@ -56,10 +53,7 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
             await SubmitSetupAsync(TestCredentials.KnownPassword);
             await Expect(Page).ToHaveURLAsync(new Uri(Fixture.WebBaseUrl, "Account/Login").ToString());
 
-            await new LoginPage(Page).SignInAsync(Fixture.WebBaseUrl, email, TestCredentials.KnownPassword);
-            // SignInAsync doesn't request a return URL - sign-in lands on Home, same as
-            // EventManagementScenarios' own CreateAndSignInDirectorAsync usage.
-            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
+            await SignInAndGoToDashboardAsync(email, TestCredentials.KnownPassword);
 
             await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = "My events", Exact = true }))
                 .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
@@ -86,14 +80,11 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
             await SignInAsAdminAsync();
             await Page.GotoAsync(EventEditorUrl(eventId));
             await AddDirectorToEventAsync(email);
-            // .First, not a strict single match: Radzen's dropdown keeps its closed popup's option list in
-            // the DOM, which also carries this email's text alongside the Directors list' own entry.
             await Expect(Page.GetByText(email).First).ToBeVisibleAsync(
                 new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
 
             await SignOutAsync();
-            await new LoginPage(Page).SignInAsync(Fixture.WebBaseUrl, email, TestCredentials.KnownPassword);
-            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
+            await SignInAndGoToDashboardAsync(email, TestCredentials.KnownPassword);
 
             await Expect(Page.GetByText(eventName)).ToBeVisibleAsync(
                 new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
@@ -133,7 +124,7 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Open" }).ClickAsync();
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Resend email" }).ClickAsync();
 
-            SentEmailDto secondInvite = await WaitForASecondEmailAsync(email, firstInvite);
+            SentEmailDto secondInvite = await Fixture.EmailSink.WaitForEmailAsync(email, firstInvite, CancellationToken.None);
 
             await SignOutAsync();
             await Page.GotoAsync(firstInvite.Payload);
@@ -179,21 +170,6 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
         string barrierEmail = $"e2e-invite-barrier-{Guid.NewGuid():n}@example.test";
         await OpenInviteDialogAndSendAsync(barrierEmail, displayName: null);
         await Fixture.EmailSink.WaitForEmailAsync(barrierEmail, CancellationToken.None);
-    }
-
-    private async Task<SentEmailDto> WaitForASecondEmailAsync(string email, SentEmailDto firstInvite)
-    {
-        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        while (true)
-        {
-            SentEmailDto candidate = await Fixture.EmailSink.WaitForEmailAsync(email, deadline.Token);
-            if (candidate.SentAtUtc > firstInvite.SentAtUtc)
-            {
-                return candidate;
-            }
-
-            await Task.Delay(TimeSpan.FromMilliseconds(200), deadline.Token);
-        }
     }
 
     private async Task OpenInviteDialogAsync()
@@ -244,6 +220,14 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
             new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
     }
 
+    /// <remarks>
+    /// Scoped to the grid's own role, not a bare <c>GetByText</c> - the STATE filter dropdown keeps its
+    /// closed popup's own <paramref name="state"/> option in the DOM (Radzen hides rather than removes it),
+    /// which a page-wide text match also resolves to, a strict-mode violation.
+    /// </remarks>
+    private async Task AssertGridStateVisibleAsync(string state) =>
+        await Expect(Page.GetByRole(AriaRole.Grid).GetByText(state)).ToBeVisibleAsync();
+
     private async Task SubmitSetupAsync(string password)
     {
         await Page.Locator("#Input\\.Password").FillAsync(password);
@@ -254,10 +238,9 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
     /// <remarks>
     /// Radzen's dropdown renders its option list in a popup keyed by visible text - <c>EventEditor.razor</c>'s
     /// picker uses each candidate's email as <c>TextProperty</c> (ADR-0035), so the option's accessible name
-    /// is the email itself. The closing <c>Escape</c> matters beyond tidiness: the popup's own list item and
-    /// the dropdown's selected-value label both carry the same text, so a caller asserting on that email
-    /// afterward (e.g. "it now appears among this Event's Directors") gets a strict-mode violation - two
-    /// matching elements - unless the popup has actually closed first.
+    /// is the email itself. <c>Escape</c> closes the popup, but its matching option stays in the DOM (just
+    /// hidden) even after that - a caller asserting the email now appears among this Event's Directors still
+    /// gets a strict-mode violation (two matches) unless it targets <c>.First</c> rather than a single match.
     /// </remarks>
     private async Task AddDirectorToEventAsync(string directorEmail)
     {
@@ -271,6 +254,17 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
     {
         await Page.GotoAsync(Fixture.WebBaseUrl.ToString());
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Sign out" }).ClickAsync();
+    }
+
+    /// <remarks>
+    /// <see cref="LoginPage.SignInAsync"/> doesn't request a return URL, so sign-in lands on Home - the
+    /// explicit navigation afterward matches <c>EventManagementScenarios</c>' own
+    /// <c>CreateAndSignInDirectorAsync</c> usage.
+    /// </remarks>
+    private async Task SignInAndGoToDashboardAsync(string email, string password)
+    {
+        await new LoginPage(Page).SignInAsync(Fixture.WebBaseUrl, email, password);
+        await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
     }
 
     /// <remarks>Copy of <c>EventManagementScenarios.CreateEventAsync</c> - see its remarks for the timeout reasoning.</remarks>

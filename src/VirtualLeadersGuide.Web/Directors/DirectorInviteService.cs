@@ -54,6 +54,12 @@ public sealed class DirectorInviteService(
     /// <see cref="InviteOutcome.AlreadyOnPlatform"/> if the email already belongs to a User (AC 4) - the
     /// caller should route to <see cref="LookUpAsync"/>'s result instead of retrying this.
     /// </returns>
+    /// <remarks>
+    /// A concurrent invite for the same email can lose the race between the <see cref="UserManager{TUser}.FindByEmailAsync"/>
+    /// check above and <see cref="UserManager{TUser}.CreateAsync(TUser)"/> below - <c>ApiUserStore.CreateAsync</c>
+    /// surfaces that as a duplicate-username failure, which this method also reports as
+    /// <see cref="InviteOutcome.AlreadyOnPlatform"/> rather than <see cref="InviteOutcome.StoreUnavailable"/>.
+    /// </remarks>
     public async Task<InviteOutcome> InviteAsync(
         string email, string? displayName, CancellationToken cancellationToken)
     {
@@ -73,8 +79,6 @@ public sealed class DirectorInviteService(
         IdentityResult createResult = await userManager.CreateAsync(user);
         if (!createResult.Succeeded)
         {
-            // A concurrent invite for the same email can lose the race between the FindByEmailAsync check
-            // above and this call - ApiUserStore.CreateAsync surfaces that as a duplicate-username failure.
             return createResult.Errors.Any(error => error.Code == "DuplicateUserName")
                 ? InviteOutcome.AlreadyOnPlatform
                 : InviteOutcome.StoreUnavailable;

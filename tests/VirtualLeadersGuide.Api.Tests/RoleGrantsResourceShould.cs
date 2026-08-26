@@ -15,6 +15,9 @@ namespace VirtualLeadersGuide.Api.Tests;
 /// <see cref="ApiWebApplicationFactory.CreateUserClient"/>, never an X-Internal-Key-only client). Unlike
 /// <see cref="EventsResourceShould"/>, a non-Admin caller gets 403 on every shape including
 /// <c>GetCollection</c> - see <c>UserRoleResourceDefinition</c>'s remarks and ADR-0033.
+/// <see cref="SucceedWithCreated_WhenAdminCreatesAPlatformWideDirectorGrant_ForPost"/> pins ADR-0035: a
+/// Director grant with no <c>EventId</c> is the unscoped Role row an Invite (P2-12, #43) establishes - a
+/// normal, permanent state, not a special case this resource needs to reject.
 /// </remarks>
 public class RoleGrantsResourceShould : IAsyncLifetime
 {
@@ -54,10 +57,6 @@ public class RoleGrantsResourceShould : IAsyncLifetime
         Assert.Equal(@event.Id.ToString(), attributes.GetProperty("eventId").GetString());
     }
 
-    /// <remarks>
-    /// Pins ADR-0035: a Director grant with no <c>EventId</c> is the unscoped Role row an Invite (P2-12,
-    /// #43) establishes - a normal, permanent state, not a special case this resource needs to reject.
-    /// </remarks>
     [Fact]
     public async Task SucceedWithCreated_WhenAdminCreatesAPlatformWideDirectorGrant_ForPost()
     {

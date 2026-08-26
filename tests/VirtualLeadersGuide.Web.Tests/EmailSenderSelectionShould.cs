@@ -15,6 +15,8 @@ namespace VirtualLeadersGuide.Web.Tests;
 /// <c>ConnectionStrings:blobs</c>, see <see cref="DashboardShould"/>'s remarks - these have to be set as
 /// environment variables before the <see cref="WebApplicationFactory{TEntryPoint}"/> itself is constructed,
 /// not merely before <c>.Services</c> is first touched. <see cref="BuildFactory"/> centralizes that ordering.
+/// The two <c>...AsInviteSender...</c> tests (P2-12, #43) pin that <see cref="IInviteEmailSender"/> follows
+/// the same provider fork as <see cref="IEmailSender{TUser}"/>.
 /// </remarks>
 public class EmailSenderSelectionShould : IAsyncLifetime
 {
@@ -69,7 +71,6 @@ public class EmailSenderSelectionShould : IAsyncLifetime
         Assert.IsType<FileSinkEmailSender>(sender);
     }
 
-    /// <remarks>P2-12 (#43): <see cref="IInviteEmailSender"/> follows the same provider fork as <see cref="IEmailSender{TUser}"/>.</remarks>
     [Fact]
     public void ResolveAcsEmailSenderAsInviteSender_WhenProviderIsUnset_ForAddConfiguredEmailSender()
     {
@@ -81,7 +82,6 @@ public class EmailSenderSelectionShould : IAsyncLifetime
         Assert.IsType<AcsEmailSender>(sender);
     }
 
-    /// <remarks>P2-12 (#43): <see cref="IInviteEmailSender"/> follows the same provider fork as <see cref="IEmailSender{TUser}"/>.</remarks>
     [Fact]
     public void ResolveFileSinkEmailSenderAsInviteSender_WhenProviderIsFileSinkAndAllowed_ForAddConfiguredEmailSender()
     {
