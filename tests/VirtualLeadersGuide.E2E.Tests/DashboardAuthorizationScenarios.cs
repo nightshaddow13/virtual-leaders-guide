@@ -47,16 +47,12 @@ public class DashboardAuthorizationScenarios(AspireE2EFixture fixture) : E2ETest
     public async Task GivenAnAllowlistedAdmin_WhenNavigatingToDashboard_ThenTheDashboardRenders() =>
         await RunAsync(async () =>
         {
-            await Fixture.IdentityApi.CreateUserAsync(
-                Fixture.AdminAllowlistedEmail, TestCredentials.KnownPassword, CancellationToken.None);
-
-            await new LoginPage(Page).SignInAsync(
-                Fixture.WebBaseUrl, Fixture.AdminAllowlistedEmail, TestCredentials.KnownPassword);
+            await SignInAsAdminAsync();
 
             await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
 
             await Expect(Page).ToHaveURLAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
-            await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = "Dashboard", Exact = true }))
+            await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = "Events", Exact = true }))
                 .ToBeVisibleAsync();
         });
 }

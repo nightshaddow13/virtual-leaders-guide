@@ -7,6 +7,7 @@ using VirtualLeadersGuide.Web;
 using VirtualLeadersGuide.Web.Authorization;
 using VirtualLeadersGuide.Web.Components;
 using VirtualLeadersGuide.Web.Components.Account;
+using VirtualLeadersGuide.Web.Events;
 using VirtualLeadersGuide.Web.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -46,6 +47,7 @@ builder.Services.AddScoped<AdminAllowlistSynchronizer>();
 
 builder.Services.AddScoped<InternalJwtProvider>();
 builder.Services.AddScoped<InternalApiClient>();
+builder.Services.AddScoped<ApiEventClient>();
 
 AddWebDataProtection(builder);
 

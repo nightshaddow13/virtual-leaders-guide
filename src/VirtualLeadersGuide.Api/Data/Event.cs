@@ -71,8 +71,8 @@ public class Event : Identifiable<Guid>
     /// Event; nothing populates this automatically on your behalf (see that type's remarks for why). Stored
     /// encrypted-at-rest (ADR-0009, ADR-0026) via a <see cref="DataProtectionStringConverter"/> - see that
     /// type's remarks for why a DB constraint can't validate this column's plaintext shape the way
-    /// <see cref="Name"/> and <see cref="Slug"/> are validated. Viewable and editable over <c>/api/events</c>
-    /// (CONTEXT.md: "editable by an Admin/Director") but not creatable
+    /// <see cref="Name"/> and <see cref="Slug"/> are validated. Viewable by anyone who can read the Event,
+    /// editable only by an Admin (ADR-0031; CONTEXT.md's Passcode entry) but not creatable
     /// (<see cref="AttrCapabilities.AllowCreate"/> deliberately absent below) - a client never invents its
     /// own Passcode; a POST always gets a freshly generated one (<see cref="EventResourceDefinition"/>),
     /// matching CONTEXT.md's "auto-generated the moment an Event is created". Not filterable/sortable either

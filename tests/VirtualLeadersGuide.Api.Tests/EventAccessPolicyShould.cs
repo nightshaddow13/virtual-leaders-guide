@@ -24,7 +24,7 @@ public class EventAccessPolicyShould
     }
 
     [Fact]
-    public void GrantOnlyTheAssignedEvent_WhenTheCallerHoldsAScopedDirectorClaim()
+    public void GrantReadOnlyOnTheAssignedEvent_WhenTheCallerHoldsAScopedDirectorClaim()
     {
         var eventId = Guid.NewGuid();
         var policy = new EventAccessPolicy(PrincipalWith(RoleClaimValue.Format(
@@ -34,7 +34,7 @@ public class EventAccessPolicyShould
         Assert.False(policy.CanCreate);
         Assert.False(policy.CanDelete);
         Assert.True(policy.CanRead(eventId));
-        Assert.True(policy.CanUpdate(eventId));
+        Assert.False(policy.CanUpdate(eventId));
         Assert.False(policy.CanRead(Guid.NewGuid()));
     }
 

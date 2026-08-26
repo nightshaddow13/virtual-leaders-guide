@@ -11,10 +11,10 @@ namespace VirtualLeadersGuide.Api.Authorization;
 /// <remarks>
 /// Pure and claims-only, deliberately: no database round-trip re-checks assignment (ADR-0007's amendment) -
 /// a Director's <see cref="AssignedEventIds"/> can lag a grant/revocation by up to the token's lifetime,
-/// which is the accepted trade-off, not a bug here. Mirrors CONTEXT.md's Admin/Director entries: Admin is
-/// a superset that can create/edit/delete any Event; Director gets read/edit on only the Events they're
-/// assigned to, never create or delete. Claim parsing itself is <see cref="RoleClaims.Parse"/>, shared with
-/// <see cref="RoleGrantAccessPolicy"/> (P2-8, #17) rather than duplicated here.
+/// which is the accepted trade-off, not a bug here. <see cref="CanUpdate"/> is Admin-only - see ADR-0031
+/// for why a Director's grant scopes them to an Event for reading, not editing. Claim parsing itself is
+/// <see cref="RoleClaims.Parse"/>, shared with <see cref="RoleGrantAccessPolicy"/> (P2-8, #17) rather than
+/// duplicated here.
 /// </remarks>
 public sealed class EventAccessPolicy
 {
@@ -53,8 +53,15 @@ public sealed class EventAccessPolicy
     /// <summary>Whether this caller may read the Event identified by <paramref name="eventId"/>.</summary>
     public bool CanRead(Guid eventId) => _isAdmin || _assignedEventIds.Contains(eventId);
 
-    /// <summary>Whether this caller may update the Event identified by <paramref name="eventId"/>.</summary>
-    public bool CanUpdate(Guid eventId) => _isAdmin || _assignedEventIds.Contains(eventId);
+    /// <summary>
+    /// Whether this caller may update the Event identified by <paramref name="eventId"/> - Admin-only
+    /// (ADR-0031); a Director's assignment grants read, never write, access to Event details.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="eventId"/> is unused - kept for signature symmetry with <see cref="CanRead"/> and in
+    /// case a future story reintroduces per-Event nuance to Director updates.
+    /// </remarks>
+    public bool CanUpdate(Guid eventId) => _isAdmin;
 
     /// <summary>Whether this caller may create a new Event - Admin-only (CONTEXT.md's Director entry).</summary>
     public bool CanCreate => _isAdmin;

@@ -98,7 +98,7 @@ public class EventsResourceShould : IAsyncLifetime
     }
 
     [Fact]
-    public async Task SucceedWithNoContent_WhenAnAssignedDirectorUpdatesTheirEvent_ForPatch()
+    public async Task RejectWithForbidden_WhenAnAssignedDirectorUpdatesTheirEvent_ForPatch()
     {
         Event @event = await _factory.CreateEventAsync();
         using HttpClient client = DirectorClient(@event.Id);
@@ -113,7 +113,7 @@ public class EventsResourceShould : IAsyncLifetime
 
         HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/events/{@event.Id}", body);
 
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Fact]

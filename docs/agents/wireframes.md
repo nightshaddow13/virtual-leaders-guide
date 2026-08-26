@@ -14,23 +14,35 @@ or your draft they've confirmed — is what the plan should build against.
 
 ## Where wireframes live, and how to read them
 
-Wireframes and design tokens for this project live in the user's Claude Design project **"Virtual Leaders
-Guide"** (`projectId c79dcd66-8d26-45ac-ae9e-7c09add75d91`, a `PROJECT_TYPE_DESIGN_SYSTEM` project). Individual
-sketches are files in that project — e.g. `Main Page Wireframes.dc.html` — and `styles.css` holds the actual
-`--vlg-*` color/radius/shadow tokens; read both, not just the sketch, before building anything the tokens
-would govern.
+Wireframes and design tokens for this project are split across **two** Claude Design projects — check both
+before concluding a section doesn't exist:
+
+- **"Virtual Leaders Guide"** (`projectId c79dcd66-8d26-45ac-ae9e-7c09add75d91`, a `PROJECT_TYPE_DESIGN_SYSTEM`
+  project). Holds `styles.css` (the actual `--vlg-*` color/radius/shadow tokens), `color/Palette.html`, and a
+  `Main Page Wireframes.dc.html` containing early turns only.
+- **"Website main page wireframe"** (`projectId ec317c69-508a-4c2b-aed0-273eca9abe92`, a plain
+  `PROJECT_TYPE_PROJECT`, **not** a design system). Its own, separately-numbered `Main Page Wireframes.dc.html`
+  holds later turns. `list_projects` never returns this one (see below), so reach it by id directly.
+
+Both files share a name and near-identical boilerplate, so reading only the design-system copy looks like a
+complete answer while silently missing whatever's in the second project. Read `styles.css` too, not just a
+sketch, before building anything the tokens would govern.
 
 **Read them with the `DesignSync` tool, not `WebFetch`.** `claude.ai/design/p/...` URLs are behind the user's
 login and come back `403` to `WebFetch`; `DesignSync` goes through that login. Three read methods are all you
 need, and none of them prompts for permission:
 
-- `get_project` — confirm you're pointed at the right project.
+- `get_project` — confirm you're pointed at the right project. Works on a project id even when
+  `list_projects` doesn't return it.
 - `list_files` — see what sketches and token files exist.
-- `get_file` — read one file's content.
+- `get_file` — read one file's content. A `.dc.html` canvas can run large (~75KB) with many turns; extract
+  the one `<section class="dv-turn" id="tN">` you need rather than reading the whole file into context.
 
-`list_projects` only surfaces `PROJECT_TYPE_DESIGN_SYSTEM` projects the user is tracking — a project shared ad
-hoc mid-session may not appear there and may not be current. Confirm via `get_project`/`updatedAt` rather than
-assuming a shared link is the canonical one; don't guess from a URL alone.
+`list_projects` only surfaces `PROJECT_TYPE_DESIGN_SYSTEM` projects the user is tracking — it will never list
+"Website main page wireframe" above, and a project shared ad hoc mid-session may not appear there either. A
+stale-looking `updatedAt` on the project you *did* find is not evidence a section is missing elsewhere — it
+just means that project wasn't the one most recently edited. If the user says a section exists that you can't
+find, try the second project's id above (or ask for its URL) before telling them it's missing.
 
 Never call `finalize_plan`, `write_files`, or `delete_files` while planning: reading a wireframe is a read-only
 act, and the design project is the user's source of truth, not an artefact the planner maintains.

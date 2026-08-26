@@ -5,13 +5,13 @@ status: collection/single asymmetry generalized by ADR-0033 (a caller whose visi
 # Event authorization is enforced in a JsonApiDotNetCore resource definition, not a controller
 
 P2-7 (#16) needed Admin/Director scoping on `/api/events`: an Admin gets full CRUD over every Event; a
-Director gets read/update on only the Events they're assigned to (from the internal JWT's role claims,
-ADR-0007/ADR-0017), and never create or delete. The ticket itself asked us to confirm this still fits
-ADR-0004's "zero hand-written controllers" framing before building it.
+Director gets read-only access to only the Events they're assigned to (from the internal JWT's role
+claims, ADR-0007/ADR-0017), and never create, update, or delete. The ticket itself asked us to confirm
+this still fits ADR-0004's "zero hand-written controllers" framing before building it.
 
 We decided the scoping lives in `EventResourceDefinition`, a `JsonApiResourceDefinition<Event, Guid>` -
-`OnApplyFilter` narrows what a Director's `GET` can see, and `OnWritingAsync` authorizes every write. This is
-a JsonApiDotNetCore extension point that plugs into the same generated pipeline ADR-0004 chose, not a
+`OnApplyFilter` narrows what a Director's `GET` can see, and `OnWritingAsync` authorizes every write. This
+is a JsonApiDotNetCore extension point that plugs into the same generated pipeline ADR-0004 chose, not a
 hand-written controller or ASP.NET Core middleware sitting in front of it - ADR-0004's "zero hand-written
 controllers" is about not writing per-entity controller classes, and a resource definition is exactly the
 declarative, model-driven extension point that framing anticipates, the same way `[Attr]`/`[Resource]`
@@ -30,6 +30,14 @@ Two further choices fell out of building it:
 The two produce genuinely different information-leak postures for the same underlying "you can't see this"
 fact, and that asymmetry is deliberate, not an inconsistency to fix later.
 
+Event details (Name, Slug, Passcode) are Admin-only to write. A Director's grant scopes them to an Event
+for reading, not editing - `EventAccessPolicy.CanUpdate` returns `IsAdmin` regardless of the Event id, so
+`OnWritingAsync` rejects every Director `PATCH` the same way it already rejected `POST`/`DELETE`. This
+reflects CONTEXT.md's Director entry: the Role scopes a User to an Event, but what they may write on any
+given Event-scoped resource is a question that resource answers for itself, not something "Director"
+grants generically. Event details are the first resource to answer that question; future Event-scoped
+resources (e.g. Pages, Activities) each make their own call.
+
 ## Considered options
 
 - An ASP.NET Core authorization policy/filter in front of the generated routes - rejected: it would need to
@@ -40,6 +48,11 @@ fact, and that asymmetry is deliberate, not an inconsistency to fix later.
 - Making the collection case 403-on-any-non-Admin-filter instead of silently narrowing it - rejected: JSON:API
   list endpoints are conventionally scoped by filtering, and a blanket 403 would break `GET /api/events` for
   every legitimate Director, not just deny an out-of-scope one.
+- Keeping Director `PATCH` access on Event details, scoped to their assigned Events - this is what P2-7
+  originally shipped and what this ADR described until P2-9 (#18). Reconsidered because it makes an Admin
+  a bottleneck for every other Event-scoped write a Director will eventually need (Pages, Activities), and
+  narrowing it to a flat "Director never writes Event details, full stop" is simpler to reason about than
+  a per-field or per-Event carve-out would have been.
 
 ## Consequences
 
@@ -49,3 +62,7 @@ middleware/filter layer a reader would need to know to go looking for. The 403/4
 determined caller can enumerate real Event ids by probing `/api/events/{guid}` even without read access to
 any of them - accepted, since the ticket's acceptance criteria require the 403 response on that path
 specifically, and Event ids are Guids, not sequential or guessable.
+
+An assigned Director gets 403 on `PATCH /api/events/{id}`, identical to the 403 an unassigned Director
+already got - the response doesn't distinguish "wrong Event" from "right Event, no write access." Only an
+Admin can create, update, or delete an Event; a Director's dashboard is read-only for Event details.
