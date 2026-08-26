@@ -148,7 +148,12 @@ public sealed class DirectorInviteService(
     /// Mirrors <c>ForgotPassword.razor</c>'s own link-generation: <c>GenerateUserTokenAsync</c> (the
     /// <c>"Invite"</c> provider, not <c>GeneratePasswordResetTokenAsync</c>) -&gt; Base64Url -&gt;
     /// <c>/setup</c> query string -&gt; HTML-encoded before handing it to the sender, the same discipline
-    /// that makes <c>AcsEmailSender</c>'s single-quoted <c>href</c> interpolation safe.
+    /// that makes <c>AcsEmailSender</c>'s single-quoted <c>href</c> interpolation safe. Unlike
+    /// <c>ForgotPassword.razor</c>'s link, this one also carries <c>u</c> (the User's id) - verifying a
+    /// token requires the specific <see cref="ApplicationUser"/> it was minted for
+    /// (<c>VerifyUserTokenAsync</c> takes the user, not just the token), and unlike password-reset there's
+    /// no session/cookie identifying who's clicking; the invitee has never signed in. This is also what
+    /// lets <c>SetupAccount.razor</c> show the invited email without asking the invitee to retype it.
     /// </remarks>
     private async Task SendInviteEmailAsync(ApplicationUser user)
     {
@@ -156,7 +161,7 @@ public sealed class DirectorInviteService(
         string code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
         string setupLink = navigationManager.GetUriWithQueryParameters(
             navigationManager.ToAbsoluteUri("/setup").AbsoluteUri,
-            new Dictionary<string, object?> { ["t"] = code });
+            new Dictionary<string, object?> { ["u"] = user.Id, ["t"] = code });
 
         await emailSender.SendDirectorInviteAsync(user, user.Email!, HtmlEncoder.Default.Encode(setupLink));
     }
