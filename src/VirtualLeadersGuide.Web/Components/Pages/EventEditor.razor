@@ -22,7 +22,7 @@
         <div class="vlg-denied">
             <h1>You don't have access to this Event</h1>
             <p>Ask an Admin to grant you access, or check you're signed in as the right person.</p>
-            <RadzenButton Text="Back to dashboard" Click="@(() => NavigationManager.NavigateTo("dashboard"))" />
+            <RadzenButton Text="Back to dashboard" Click="NavigateToDashboard" />
         </div>
         break;
 
@@ -32,8 +32,7 @@
             <p>The Event store didn't respond. Try again.</p>
             <div class="vlg-button-row">
                 <RadzenButton Text="Try again" Click="@(() => NavigationManager.Refresh(forceReload: true))" />
-                <RadzenButton Text="Back to dashboard" ButtonStyle="ButtonStyle.Light"
-                              Click="@(() => NavigationManager.NavigateTo("dashboard"))" />
+                <RadzenButton Text="Back to dashboard" ButtonStyle="ButtonStyle.Light" Click="NavigateToDashboard" />
             </div>
         </div>
         break;
@@ -63,7 +62,7 @@
             <h1>@(Id is null ? "New event" : "Edit event")</h1>
             <div class="vlg-button-row">
                 <RadzenButton Text="Cancel" ButtonStyle="ButtonStyle.Light" Disabled="@isSaving"
-                              Click="@(() => NavigationManager.NavigateTo("dashboard"))" />
+                              Click="NavigateToDashboard" />
                 <RadzenButton Text="@(Id is null ? "Create event" : "Save changes")"
                               Disabled="@(isSaving || permissionLostMessage is not null)" Click="SaveAsync" />
             </div>
@@ -311,8 +310,20 @@
         // directly: "it hangs on the screen when it should navigate back to the event list"). Matches
         // CreateAsync's own post-save navigation, just to the list instead of the new Event's own page.
         NotificationService.Notify(NotificationSeverity.Success, "Changes saved");
-        NavigationManager.NavigateTo("dashboard");
+        NavigateToDashboard();
     }
+
+    /// <remarks>
+    /// <c>forceLoad: true</c> - a plain <c>NavigationManager.NavigateTo("dashboard")</c> here reliably left
+    /// the browser sitting on this same URL, form still fully populated, no error shown, no navigation at
+    /// all (confirmed both by a live repro and by <c>EventManagementScenarios</c> failing this exact way).
+    /// The difference from <see cref="CreateAsync"/>'s own in-circuit navigate (which works) is that this
+    /// one crosses into a *different* component - <c>Dashboard.razor</c>, which still prerenders by default
+    /// (ADR-0036), unlike this page. Blazor's client-side circuit router doesn't reliably complete an
+    /// in-circuit navigation across that render-mode mismatch; <c>forceLoad</c> sidesteps it entirely with a
+    /// real browser navigation instead of asking the existing circuit to swap components.
+    /// </remarks>
+    private void NavigateToDashboard() => NavigationManager.NavigateTo("dashboard", forceLoad: true);
 
     private void ApplyFieldErrors(IReadOnlyList<string> pointers)
     {

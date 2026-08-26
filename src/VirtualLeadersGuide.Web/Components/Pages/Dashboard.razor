@@ -37,7 +37,7 @@
                     @* Icon over words for a table row action - the standard for row actions going forward,
                        not just this column (Material Symbols name, per RadzenButton's own Icon convention). *@
                     <RadzenButton Icon="@(accessView.IsAdmin ? "edit" : "visibility")" ButtonStyle="ButtonStyle.Light"
-                                  aria-label="@(accessView.IsAdmin ? "Edit" : "View")"
+                                  class="vlg-row-action" aria-label="@(accessView.IsAdmin ? "Edit" : "View")"
                                   Click="@(() => NavigationManager.NavigateTo($"dashboard/events/{item.Id}"))" />
                 </Template>
             </RadzenDataGridColumn>
