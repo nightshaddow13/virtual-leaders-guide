@@ -69,6 +69,30 @@ public class EmailSenderSelectionShould : IAsyncLifetime
         Assert.IsType<FileSinkEmailSender>(sender);
     }
 
+    /// <remarks>P2-12 (#43): <see cref="IInviteEmailSender"/> follows the same provider fork as <see cref="IEmailSender{TUser}"/>.</remarks>
+    [Fact]
+    public void ResolveAcsEmailSenderAsInviteSender_WhenProviderIsUnset_ForAddConfiguredEmailSender()
+    {
+        using WebApplicationFactory<Program> factory = BuildFactory(provider: null, fileSinkAllowed: null);
+        using IServiceScope scope = factory.Services.CreateScope();
+
+        var sender = scope.ServiceProvider.GetRequiredService<IInviteEmailSender>();
+
+        Assert.IsType<AcsEmailSender>(sender);
+    }
+
+    /// <remarks>P2-12 (#43): <see cref="IInviteEmailSender"/> follows the same provider fork as <see cref="IEmailSender{TUser}"/>.</remarks>
+    [Fact]
+    public void ResolveFileSinkEmailSenderAsInviteSender_WhenProviderIsFileSinkAndAllowed_ForAddConfiguredEmailSender()
+    {
+        using WebApplicationFactory<Program> factory = BuildFactory(provider: "FileSink", fileSinkAllowed: true);
+        using IServiceScope scope = factory.Services.CreateScope();
+
+        var sender = scope.ServiceProvider.GetRequiredService<IInviteEmailSender>();
+
+        Assert.IsType<FileSinkEmailSender>(sender);
+    }
+
     [Fact]
     public void ThrowOnBuild_WhenProviderIsFileSinkButNotAllowed_ForAddConfiguredEmailSender()
     {
