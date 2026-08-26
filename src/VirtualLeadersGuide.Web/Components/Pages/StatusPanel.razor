@@ -1,0 +1,21 @@
+@* Shared shape behind a page's "there's nothing to do here but leave" states - originally duplicated
+   across EventEditor.razor, Users.razor, and UserDetail.razor (a Denied panel plus, on EventEditor, an
+   Unavailable one), which otherwise differed only in copy and how many buttons the caller wants. *@
+
+<RadzenStack Orientation="Orientation.Vertical" AlignItems="AlignItems.Center" Gap="0.75rem"
+             Style="padding: 2.5rem 1.5rem; text-align: center;">
+    <h1>@Title</h1>
+    <p>@Message</p>
+    @ChildContent
+</RadzenStack>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = "";
+
+    [Parameter, EditorRequired]
+    public string Message { get; set; } = "";
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

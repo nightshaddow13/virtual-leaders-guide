@@ -3,8 +3,9 @@ using Microsoft.AspNetCore.Identity;
 namespace VirtualLeadersGuide.Web.Identity;
 
 /// <summary>
-/// Registers the <see cref="IEmailSender{TUser}"/> named by <c>Email:Provider</c> - <see cref="AcsEmailSender"/>
-/// (default) or <see cref="FileSinkEmailSender"/> - as a fail-closed config fork (P2.1-4, #62; ADR-0032).
+/// Registers the <see cref="IEmailSender{TUser}"/> (and <see cref="IInviteEmailSender"/>, P2-12/#43) named
+/// by <c>Email:Provider</c> - <see cref="AcsEmailSender"/> (default) or <see cref="FileSinkEmailSender"/> -
+/// as a fail-closed config fork (P2.1-4, #62; ADR-0032).
 /// </summary>
 public static class EmailSenderRegistration
 {
@@ -26,7 +27,9 @@ public static class EmailSenderRegistration
 
         if (string.IsNullOrEmpty(provider) || string.Equals(provider, AcsProvider, StringComparison.OrdinalIgnoreCase))
         {
-            builder.Services.AddScoped<IEmailSender<ApplicationUser>, AcsEmailSender>();
+            builder.Services.AddScoped<AcsEmailSender>();
+            builder.Services.AddScoped<IEmailSender<ApplicationUser>>(sp => sp.GetRequiredService<AcsEmailSender>());
+            builder.Services.AddScoped<IInviteEmailSender>(sp => sp.GetRequiredService<AcsEmailSender>());
             return;
         }
 
@@ -44,7 +47,9 @@ public static class EmailSenderRegistration
                     $"{ProviderKey}={FileSinkProvider} is not allowed under the Production environment.");
             }
 
-            builder.Services.AddScoped<IEmailSender<ApplicationUser>, FileSinkEmailSender>();
+            builder.Services.AddScoped<FileSinkEmailSender>();
+            builder.Services.AddScoped<IEmailSender<ApplicationUser>>(sp => sp.GetRequiredService<FileSinkEmailSender>());
+            builder.Services.AddScoped<IInviteEmailSender>(sp => sp.GetRequiredService<FileSinkEmailSender>());
             return;
         }
 

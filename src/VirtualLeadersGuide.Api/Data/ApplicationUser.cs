@@ -17,6 +17,18 @@ public class ApplicationUser : IdentityUser, IIdentifiable<string>
     [Attr]
     public string? DisplayName { get; set; }
 
+    /// <summary>
+    /// Whether this User has ever set a password - <see langword="false"/> for a pending Invite (P2-12,
+    /// #43), <see langword="true"/> once activated.
+    /// </summary>
+    /// <remarks>
+    /// Derived, not stored - a boolean projection of <see cref="IdentityUser.PasswordHash"/> that the P2-12
+    /// Users screen needs (to render INVITED vs. ACTIVE) without exposing the hash itself, which stays
+    /// unmarked and therefore unreachable through <c>/api</c> per ADR-0024's containment guarantee.
+    /// </remarks>
+    [Attr]
+    public bool HasCredential => !string.IsNullOrEmpty(PasswordHash);
+
     /// <remarks>
     /// Re-declared here purely to attach <c>[Attr]</c> — JsonApiDotNetCore's resource-graph scan doesn't
     /// pick up attributes on a base class's own property, so the base <see cref="IdentityUser.Email"/> isn't

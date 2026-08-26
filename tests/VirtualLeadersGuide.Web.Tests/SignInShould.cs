@@ -147,8 +147,9 @@ public class SignInShould : IAsyncLifetime
 
 /// <remarks>
 /// A tiny in-memory identity store speaking the same wire shape as <c>InternalIdentityEndpoints</c> (Api),
-/// keyed by id, with normalized-name/email lookups - just enough of the real endpoint surface for
-/// <c>UserManager</c>/<c>SignInManager</c> to complete a password sign-in against.
+/// keyed by id, with normalized-name/email lookups - enough of the real endpoint surface for
+/// <c>UserManager</c>/<c>SignInManager</c> to complete a password sign-in against, and (Create/Delete, added
+/// for P2-12/#43's <c>DirectorInviteServiceShould</c>) a full invite/revoke lifecycle.
 /// </remarks>
 internal sealed class FakeIdentityApiHandler : HttpMessageHandler
 {
@@ -197,8 +198,31 @@ internal sealed class FakeIdentityApiHandler : HttpMessageHandler
             return Task.FromResult(JsonResponse(HttpStatusCode.OK, updated));
         }
 
+        if (request.Method == HttpMethod.Post && path == "/internal/identity/users")
+        {
+            var created = request.Content!.ReadFromJsonAsync<IdentityUserDto>(cancellationToken)
+                .GetAwaiter().GetResult()!;
+
+            if (_usersById.Values.Any(u => u.NormalizedUserName == created.NormalizedUserName))
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Conflict));
+            }
+
+            _usersById[created.Id] = created;
+            return Task.FromResult(JsonResponse(HttpStatusCode.Created, created));
+        }
+
+        if (request.Method == HttpMethod.Delete && path.StartsWith("/internal/identity/users/", StringComparison.Ordinal))
+        {
+            string id = Uri.UnescapeDataString(path["/internal/identity/users/".Length..]);
+            return Task.FromResult(new HttpResponseMessage(
+                _usersById.Remove(id) ? HttpStatusCode.NoContent : HttpStatusCode.NotFound));
+        }
+
         return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
     }
+
+    public bool Contains(string id) => _usersById.ContainsKey(id);
 
     private HttpResponseMessage FindOrNotFound(Func<IdentityUserDto, bool> predicate)
     {

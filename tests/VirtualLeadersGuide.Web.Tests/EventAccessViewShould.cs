@@ -4,6 +4,11 @@ using VirtualLeadersGuide.Web.Authorization;
 
 namespace VirtualLeadersGuide.Web.Tests;
 
+/// <remarks>
+/// <see cref="GrantNothing_WhenADirectorClaimCarriesNoEventScope"/> mirrors <c>EventAccessPolicyShould</c>'s
+/// Api-side regression on the Web side - see that class's remarks for the full ADR-0035 rationale this
+/// pins.
+/// </remarks>
 public class EventAccessViewShould
 {
     [Fact]
@@ -49,6 +54,17 @@ public class EventAccessViewShould
 
         Assert.Equal(new[] { firstEventId, secondEventId }.Order(), view.AssignedEventIds.Order());
         Assert.False(view.CanEditEventDetails);
+    }
+
+    [Fact]
+    public void GrantNothing_WhenADirectorClaimCarriesNoEventScope()
+    {
+        var view = new EventAccessView(PrincipalWith(RoleNames.Director));
+
+        Assert.False(view.IsAdmin);
+        Assert.False(view.CanEditEventDetails);
+        Assert.Empty(view.AssignedEventIds);
+        Assert.False(view.CanReadEvent(Guid.NewGuid()));
     }
 
     [Fact]

@@ -7,6 +7,7 @@ using VirtualLeadersGuide.Web;
 using VirtualLeadersGuide.Web.Authorization;
 using VirtualLeadersGuide.Web.Components;
 using VirtualLeadersGuide.Web.Components.Account;
+using VirtualLeadersGuide.Web.Directors;
 using VirtualLeadersGuide.Web.Events;
 using VirtualLeadersGuide.Web.Identity;
 
@@ -35,6 +36,7 @@ builder.Services.AddIdentityCore<ApplicationUser>(options => options.SignIn.Requ
     .AddUserStore<ApiUserStore>()
     .AddSignInManager()
     .AddDefaultTokenProviders()
+    .AddTokenProvider<InviteTokenProvider>("Invite")
     .AddClaimsPrincipalFactory<ApplicationUserClaimsPrincipalFactory>();
 
 builder.AddConfiguredEmailSender();
@@ -48,6 +50,8 @@ builder.Services.AddScoped<AdminAllowlistSynchronizer>();
 builder.Services.AddScoped<InternalJwtProvider>();
 builder.Services.AddScoped<InternalApiClient>();
 builder.Services.AddScoped<ApiEventClient>();
+builder.Services.AddScoped<ApiDirectorClient>();
+builder.Services.AddScoped<DirectorInviteService>();
 
 AddWebDataProtection(builder);
 

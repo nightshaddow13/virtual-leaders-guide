@@ -15,6 +15,8 @@ namespace VirtualLeadersGuide.Web.Tests;
 /// <c>ConnectionStrings:blobs</c>, see <see cref="DashboardShould"/>'s remarks - these have to be set as
 /// environment variables before the <see cref="WebApplicationFactory{TEntryPoint}"/> itself is constructed,
 /// not merely before <c>.Services</c> is first touched. <see cref="BuildFactory"/> centralizes that ordering.
+/// The two <c>...AsInviteSender...</c> tests (P2-12, #43) pin that <see cref="IInviteEmailSender"/> follows
+/// the same provider fork as <see cref="IEmailSender{TUser}"/>.
 /// </remarks>
 public class EmailSenderSelectionShould : IAsyncLifetime
 {
@@ -65,6 +67,28 @@ public class EmailSenderSelectionShould : IAsyncLifetime
         using IServiceScope scope = factory.Services.CreateScope();
 
         var sender = scope.ServiceProvider.GetRequiredService<IEmailSender<ApplicationUser>>();
+
+        Assert.IsType<FileSinkEmailSender>(sender);
+    }
+
+    [Fact]
+    public void ResolveAcsEmailSenderAsInviteSender_WhenProviderIsUnset_ForAddConfiguredEmailSender()
+    {
+        using WebApplicationFactory<Program> factory = BuildFactory(provider: null, fileSinkAllowed: null);
+        using IServiceScope scope = factory.Services.CreateScope();
+
+        var sender = scope.ServiceProvider.GetRequiredService<IInviteEmailSender>();
+
+        Assert.IsType<AcsEmailSender>(sender);
+    }
+
+    [Fact]
+    public void ResolveFileSinkEmailSenderAsInviteSender_WhenProviderIsFileSinkAndAllowed_ForAddConfiguredEmailSender()
+    {
+        using WebApplicationFactory<Program> factory = BuildFactory(provider: "FileSink", fileSinkAllowed: true);
+        using IServiceScope scope = factory.Services.CreateScope();
+
+        var sender = scope.ServiceProvider.GetRequiredService<IInviteEmailSender>();
 
         Assert.IsType<FileSinkEmailSender>(sender);
     }

@@ -1,0 +1,161 @@
+@page "/dashboard/users/{Id}"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+@using System.Security.Claims
+@using VirtualLeadersGuide.Web.Authorization
+@using VirtualLeadersGuide.Web.Directors
+
+@inject NavigationManager NavigationManager
+@inject ApiDirectorClient DirectorClient
+@inject DirectorInviteService InviteService
+@inject NotificationService NotificationService
+
+<PageTitle>@(user?.Email ?? "User")</PageTitle>
+
+<RadzenComponents @rendermode="InteractiveServer" />
+
+@switch (state)
+{
+    case PageState.Denied:
+        <StatusPanel Title="You don't have access to this page" Message="Only Admins can manage Users, or this User doesn't exist.">
+            <RadzenButton Text="Back to Users" Click="NavigateToUsers" />
+        </StatusPanel>
+        break;
+
+    case PageState.Ready:
+        <RadzenBreadCrumb>
+            <RadzenBreadCrumbItem Text="USERS" Path="dashboard/users" />
+            <RadzenBreadCrumbItem Text="@user!.Email?.ToUpperInvariant()" />
+        </RadzenBreadCrumb>
+
+        <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween"
+                     AlignItems="AlignItems.Center" Gap="1rem" Style="margin-block: 1rem;">
+            <h1>@(user!.DisplayName ?? user.Email)</h1>
+            <RadzenBadge Text="@(user.HasCredential ? "ACTIVE" : "INVITED")"
+                         BadgeStyle="@(user.HasCredential ? BadgeStyle.Success : BadgeStyle.Warning)" Variant="Variant.Outlined" />
+        </RadzenStack>
+
+        @if (statusMessage is not null)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Success" Variant="Variant.Flat" AllowClose="false" Style="margin-block-end: 1rem;" Text="@statusMessage" />
+        }
+        @if (errorMessage is not null)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" AllowClose="false" Style="margin-block-end: 1rem;" Text="@errorMessage" />
+        }
+
+        <div class="vlg-readonly-field">
+            <RadzenText TextStyle="TextStyle.Overline">Credential</RadzenText>
+            <span>@(user!.HasCredential ? "Set" : "Not set")</span>
+        </div>
+        <div class="vlg-readonly-field">
+            <RadzenText TextStyle="TextStyle.Overline">Role</RadzenText>
+            <span>@user.RoleLabel</span>
+        </div>
+        <div class="vlg-readonly-field">
+            <RadzenText TextStyle="TextStyle.Overline">Events</RadzenText>
+            <span>@(user.EventGrantCount > 0 ? $"{user.EventGrantCount} assigned" : "None assigned")</span>
+        </div>
+
+        @if (!user.HasCredential)
+        {
+            <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" Style="margin-block-start: 1.5rem;">
+                <RadzenButton Text="Resend email" ButtonStyle="ButtonStyle.Light" Click="ResendAsync" Disabled="@isBusy" />
+                <RadzenButton Text="Revoke invite" ButtonStyle="ButtonStyle.Danger" Click="RevokeAsync" Disabled="@isBusy" />
+            </RadzenStack>
+            <RadzenText TextStyle="TextStyle.Caption" TagName="TagName.Div" Style="margin-block-start: 0.5rem;">
+                Assign Events from the Event's own Directors section, not from here (ADR-0035).
+            </RadzenText>
+        }
+        break;
+}
+
+@code {
+    /// <remarks>
+    /// "LINK EXPIRES" (frame 3c) is deliberately omitted - it needs an invited-at timestamp this ticket
+    /// doesn't store (deferred to #101); every other field on the wireframe's card is derivable today.
+    /// </remarks>
+    [Parameter]
+    public string Id { get; set; } = "";
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
+    private enum PageState { Loading, Denied, Ready }
+
+    private PageState state = PageState.Loading;
+    private UserRowDto? user;
+    private string? statusMessage;
+    private string? errorMessage;
+    private bool isBusy;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (AuthenticationStateTask is null)
+        {
+            return;
+        }
+
+        AuthenticationState authState = await AuthenticationStateTask;
+        if (!new EventAccessView(authState.User).IsAdmin)
+        {
+            state = PageState.Denied;
+            return;
+        }
+
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        try
+        {
+            user = await DirectorClient.GetUserAsync(Id, CancellationToken.None);
+        }
+        catch (DirectorDataUnavailableException)
+        {
+            user = null;
+        }
+
+        state = user is null ? PageState.Denied : PageState.Ready;
+    }
+
+    private async Task ResendAsync()
+    {
+        isBusy = true;
+        statusMessage = null;
+        errorMessage = null;
+
+        ResendOutcome outcome = await InviteService.ResendAsync(Id, CancellationToken.None);
+        statusMessage = outcome switch
+        {
+            ResendOutcome.Sent => "Invite resent.",
+            _ => null
+        };
+        if (outcome != ResendOutcome.Sent)
+        {
+            errorMessage = "Couldn't resend the invite - refresh and try again.";
+        }
+
+        isBusy = false;
+    }
+
+    private async Task RevokeAsync()
+    {
+        isBusy = true;
+
+        RevokeOutcome outcome = await InviteService.RevokeAsync(Id, CancellationToken.None);
+        if (outcome == RevokeOutcome.Revoked)
+        {
+            NotificationService.Notify(NotificationSeverity.Success, "Invite revoked");
+            NavigateToUsers();
+            return;
+        }
+
+        errorMessage = "Couldn't revoke the invite - refresh and try again.";
+        isBusy = false;
+    }
+
+    private void NavigateToUsers() => NavigationManager.NavigateTo("dashboard/users", forceLoad: true);
+}

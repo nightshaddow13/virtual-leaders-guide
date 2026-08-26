@@ -16,10 +16,12 @@ namespace VirtualLeadersGuide.Web.Identity;
 /// are not behaviourally equivalent. Writes <see cref="SentEmailDto.Payload"/> as received, per that
 /// property's own "verbatim" contract - a test process navigating a captured link needs the real value, not
 /// ciphertext only Web's own key ring (unreachable across the process boundary this sender exists to route
-/// around) could undo.
+/// around) could undo. Also implements <see cref="IInviteEmailSender"/> (P2-12, #43) so
+/// <c>DirectorInviteScenarios</c> can intercept an invite the same way <c>PasswordResetScenarios</c>
+/// intercepts a reset link.
 /// </remarks>
 public sealed class FileSinkEmailSender(IConfiguration configuration, ILogger<FileSinkEmailSender> logger)
-    : IEmailSender<ApplicationUser>
+    : IEmailSender<ApplicationUser>, IInviteEmailSender
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
@@ -40,6 +42,10 @@ public sealed class FileSinkEmailSender(IConfiguration configuration, ILogger<Fi
     /// <inheritdoc/>
     public Task SendPasswordResetCodeAsync(ApplicationUser user, string email, string resetCode) =>
         WriteAsync(email, "Your password reset code", SentEmailKinds.PasswordResetCode, resetCode);
+
+    /// <inheritdoc/>
+    public Task SendDirectorInviteAsync(ApplicationUser user, string email, string setupLink) =>
+        WriteAsync(email, "You've been invited as a Director", SentEmailKinds.DirectorInvite, setupLink);
 
     /// <remarks>
     /// Writes to a <c>.tmp</c> file first, then <see cref="File.Move(string, string)"/>s it into place, so a
