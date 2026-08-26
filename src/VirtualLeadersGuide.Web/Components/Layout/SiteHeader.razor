@@ -16,6 +16,14 @@
             <AuthorizeView>
                 <Authorized>
                     <nav class="vlg-account-actions" aria-label="Account">
+                        <AuthorizeView Roles="Admin" Context="adminContext">
+                            <Authorized>
+                                <NavLink class="rz-button rz-button-sm rz-variant-text rz-base rz-shade-default"
+                                         href="dashboard/users">
+                                    <span class="rz-button-box"><span class="rz-button-text">Users</span></span>
+                                </NavLink>
+                            </Authorized>
+                        </AuthorizeView>
                         <NavLink class="rz-button rz-button-sm rz-variant-text rz-base rz-shade-default"
                                  href="Account/Manage">
                             <span class="rz-button-box"><span class="rz-button-text">Manage account</span></span>

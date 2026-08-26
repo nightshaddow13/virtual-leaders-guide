@@ -6,10 +6,12 @@
 @using System.ComponentModel.DataAnnotations
 @using System.Security.Claims
 @using VirtualLeadersGuide.Web.Authorization
+@using VirtualLeadersGuide.Web.Directors
 @using VirtualLeadersGuide.Web.Events
 
 @inject NavigationManager NavigationManager
 @inject ApiEventClient EventClient
+@inject ApiDirectorClient DirectorClient
 @inject NotificationService NotificationService
 
 <PageTitle>@(Id is null ? "New event" : "Event")</PageTitle>
@@ -119,6 +121,52 @@
                 </div>
             </fieldset>
         </EditForm>
+
+        @if (Id is not null)
+        {
+            <RadzenStack Orientation="Orientation.Vertical" Gap="0.5rem" Style="margin-block-start: 2rem;">
+                <h2>Directors</h2>
+
+                @if (directorsForEvent is { Count: 0 })
+                {
+                    <RadzenText TextStyle="TextStyle.Body2">No Directors are assigned to this Event yet.</RadzenText>
+                }
+                else if (directorsForEvent is not null)
+                {
+                    @foreach (UserRowDto director in directorsForEvent)
+                    {
+                        <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween"
+                                     AlignItems="AlignItems.Center" Gap="0.5rem">
+                            <span>@(director.DisplayName ?? director.Email)</span>
+                            <RadzenBadge Text="@(director.HasCredential ? "ACTIVE" : "INVITED")"
+                                         BadgeStyle="@(director.HasCredential ? BadgeStyle.Success : BadgeStyle.Warning)" Variant="Variant.Outlined" />
+                        </RadzenStack>
+                    }
+                }
+
+                @if (directorErrorMessage is not null)
+                {
+                    <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" AllowClose="false" Text="@directorErrorMessage" />
+                }
+
+                @if (candidateDirectors is { Count: > 0 })
+                {
+                    <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" AlignItems="AlignItems.End" Style="margin-block-start: 0.5rem;">
+                        <RadzenDropDown TValue="string" Data="@candidateDirectors" @bind-Value="selectedDirectorUserId"
+                                        TextProperty="@nameof(UserRowDto.Email)" ValueProperty="@nameof(UserRowDto.Id)"
+                                        Placeholder="Add an existing Director" Style="min-width: 260px;" />
+                        <RadzenButton Text="Add" Click="AddDirectorAsync" Disabled="@(string.IsNullOrEmpty(selectedDirectorUserId) || isAddingDirector)" />
+                    </RadzenStack>
+                }
+                else if (candidateDirectors is not null)
+                {
+                    <RadzenText TextStyle="TextStyle.Caption">
+                        Every current Director already holds this Event, or no one holds the Director Role yet -
+                        invite one from the <a href="dashboard/users">Users</a> screen.
+                    </RadzenText>
+                }
+            </RadzenStack>
+        }
         break;
 }
 
@@ -145,6 +193,12 @@
     private string? permissionLostMessage;
     private string? saveErrorMessage;
     private bool isSaving;
+
+    private List<UserRowDto>? directorsForEvent;
+    private List<UserRowDto>? candidateDirectors;
+    private string? selectedDirectorUserId;
+    private bool isAddingDirector;
+    private string? directorErrorMessage;
 
     /// <remarks>
     /// Three decisions worth naming here: (1) <c>Id is null</c> is a load-time gate, not a save-time
@@ -210,6 +264,7 @@
         {
             BuildEditContext();
             state = PageState.Admin;
+            await LoadDirectorsAsync();
         }
         else
         {
@@ -353,6 +408,67 @@
     /// real browser navigation instead of asking the existing circuit to swap components.
     /// </remarks>
     private void NavigateToDashboard() => NavigationManager.NavigateTo("dashboard", forceLoad: true);
+
+    /// <remarks>
+    /// Directors are added from the Event, never the reverse (ADR-0035) - this is the only place in the app
+    /// that writes an Event-scoped Grant. <see cref="candidateDirectors"/> excludes anyone already in
+    /// <see cref="directorsForEvent"/>, so the dropdown only ever offers a Director who isn't already
+    /// assigned here.
+    /// </remarks>
+    private async Task LoadDirectorsAsync()
+    {
+        directorErrorMessage = null;
+
+        try
+        {
+            directorsForEvent = [.. await DirectorClient.GetDirectorsForEventAsync(Id!.Value, CancellationToken.None)];
+
+            (IReadOnlyList<UserRowDto> allUsers, _) =
+                await DirectorClient.GetUsersAsync(1, 1000, null, null, CancellationToken.None);
+
+            var assignedIds = directorsForEvent.Select(director => director.Id).ToHashSet();
+            candidateDirectors = [.. allUsers.Where(u => u.IsDirector && !assignedIds.Contains(u.Id))];
+        }
+        catch (DirectorDataUnavailableException)
+        {
+            directorsForEvent = [];
+            candidateDirectors = [];
+            directorErrorMessage = "Something went wrong loading Directors. Try refreshing the page.";
+        }
+    }
+
+    private async Task AddDirectorAsync()
+    {
+        if (string.IsNullOrEmpty(selectedDirectorUserId))
+        {
+            return;
+        }
+
+        isAddingDirector = true;
+        directorErrorMessage = null;
+
+        try
+        {
+            GrantWriteOutcome outcome = await DirectorClient.GrantEventAccessAsync(
+                selectedDirectorUserId, Id!.Value, CancellationToken.None);
+
+            if (outcome is GrantWriteOutcome.Created or GrantWriteOutcome.AlreadyGranted)
+            {
+                selectedDirectorUserId = null;
+                await LoadDirectorsAsync();
+            }
+            else
+            {
+                directorErrorMessage = "Couldn't add that Director - refresh and try again.";
+            }
+        }
+        catch (DirectorDataUnavailableException)
+        {
+            directorErrorMessage = "Couldn't add that Director - refresh and try again.";
+        }
+
+        isAddingDirector = false;
+    }
 
     private void ApplyFieldErrors(IReadOnlyList<string> pointers)
     {
