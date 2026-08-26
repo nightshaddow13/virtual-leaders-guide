@@ -50,16 +50,29 @@ refers to that password-related state on the same row, not a separate one — se
 _Avoid_: Account, Identity, Credential (as a separate concept — it's columns on this row, not another row)
 
 **Role**:
-A grant a User holds — either platform-wide (Admin) or scoped to a specific Event (Director, and future
-Event-scoped roles). One User may hold several Roles at once, scoped to different Events. Stored as a
-UserRole row, exposed to Admins at `/api/roleGrants`.
+A standing capability a User holds, independent of any Event — Admin or Director. Holding a Role is a fact
+about the person, established once and never re-derived from anything else they hold. For Admin, holding
+the Role already *is* full access to every Event, always — there's no further step. For Director, holding
+the Role by itself grants nothing (see Director's _unscoped_ state) — actual access to a particular Event
+comes from a separate Grant, layered on top. One User holds at most one Role-row per Role. Stored as a
+`UserRole` row — the same table Grants use (see ADR-0035 for why the table/endpoint name predates this
+split).
 _Avoid_: Permission, Group. "Staff" is UI copy only (e.g. the public site's "Staff sign in" affordance,
-meaning "anyone with an Admin or Director grant") — it is not a Role and must not appear as one in code, an
-API shape, or a claim.
+meaning "anyone holding the Admin or Director Role") — it is not a Role and must not appear as one in code,
+an API shape, or a claim.
+
+**Grant**:
+An Event-scoped extension of a held Role's authority onto one specific Event. Applies only to Director (and
+future Event-scoped roles) — never Admin, whose Role already covers every Event with no separate step. A
+Director may hold any number of Grants, including zero. Made by an Admin, from the Event being granted —
+never the reverse — and only to a User who already holds the Director Role (see Invite for how that's
+established). Stored as a `UserRole` row with a non-null `EventId`, exposed to Admins at `/api/roleGrants`.
+_Avoid_: Assignment, Permission.
 
 **Admin**:
-A platform-wide Role: can create, edit, and delete any Event's content, regardless of Director assignment —
-a superset of what a Director can do.
+A platform-wide Role: holding it already is full access — can create, edit, and delete any Event's content,
+always, regardless of Director assignment, with no separate Grant step (see Role). A superset of what a
+Director can do.
 _Avoid_: Owner, SuperUser
 
 **Admin allowlist**:
@@ -69,18 +82,23 @@ database — emptying the list demotes every Admin, with no special-casing to pr
 _Avoid_: Whitelist, seed list, bootstrap list (this isn't a one-time seed — it's re-checked every login)
 
 **Director**:
-A Role scoping a User to one or more specific Events — not a platform-wide Role. Grants read access to those
-Events; what a Director may *write* is decided per resource, not inherited from the Role itself — Event
-details (Name, Slug, Passcode) are Admin-only to edit (ADR-0031). An Event can have multiple Directors, and one
-Director can be granted access to multiple Events. The grant is made by an Admin, either by choosing an
-existing User or via Invite.
+A Role a User holds independent of any Event (see Role). Holding it alone grants nothing — a Director with
+no Grants at all is **unscoped**, a normal and permanent state, not a waiting room (e.g. someone invited but
+never assigned to an Event). Read access to a specific Event comes only from a Grant for that Event; what a
+Director may *write* is decided per resource, not inherited from the Role itself — Event details (Name,
+Slug, Passcode) are Admin-only to edit (ADR-0031). An Event can have multiple Directors, and one Director
+can hold Grants for multiple Events. The Role itself is established exactly one way, by Invite; Grants are
+added afterwards, from the Event, never the reverse (ADR-0035).
 _Avoid_: Organizer, Admin (these are for the platform-level or generic role — Director is specifically
-event-scoped)
+event-scoped). Platform-wide (reserved for Admin's Role, which behaves oppositely to an unscoped Director —
+holding it grants everything, not nothing).
 
 **Invite**:
-A Role grant an Admin creates for someone by email before that person has ever signed in, delivered via an
-app-sent email with a password-setup link — not a copyable link for the Admin to relay. Resolves into an
-active grant the moment that person sets their password.
+An Admin creates a User by email before that person has ever signed in, and grants them the Director Role
+immediately, unscoped (see Director) — delivered via an app-sent email with a password-setup link, not a
+copyable link for the Admin to relay. Setting a password doesn't change what Role or Grants the person
+holds; it only lets them sign in to exercise them. An Admin can revoke an un-activated Invite outright,
+deleting the User and anything (the Role, any Grants assigned before activation) attached to it.
 _Avoid_: Invitation link, copy-link invite
 
 **Leaders Guide**:
