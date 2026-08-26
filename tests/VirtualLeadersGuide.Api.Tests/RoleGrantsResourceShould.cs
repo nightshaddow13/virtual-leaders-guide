@@ -54,6 +54,29 @@ public class RoleGrantsResourceShould : IAsyncLifetime
         Assert.Equal(@event.Id.ToString(), attributes.GetProperty("eventId").GetString());
     }
 
+    /// <remarks>
+    /// Pins ADR-0035: a Director grant with no <c>EventId</c> is the unscoped Role row an Invite (P2-12,
+    /// #43) establishes - a normal, permanent state, not a special case this resource needs to reject.
+    /// </remarks>
+    [Fact]
+    public async Task SucceedWithCreated_WhenAdminCreatesAPlatformWideDirectorGrant_ForPost()
+    {
+        ApplicationUser user = await _factory.CreateUserAsync();
+        using HttpClient client = AdminClient();
+        var body = new
+        {
+            data = new { type = "roleGrants", attributes = new { userId = user.Id, roleId = RoleIds.Director } }
+        };
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Post, "/api/roleGrants", body);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        JsonElement attributes = await AttributesOfAsync(response);
+        Assert.Equal(user.Id, attributes.GetProperty("userId").GetString());
+        Assert.Equal(RoleIds.Director, attributes.GetProperty("roleId").GetInt32());
+        Assert.True(attributes.GetProperty("eventId").ValueKind is JsonValueKind.Null);
+    }
+
     [Fact]
     public async Task SucceedWithOk_WhenAdminReadsAnAdminRoleGrant_ForGetSingle()
     {

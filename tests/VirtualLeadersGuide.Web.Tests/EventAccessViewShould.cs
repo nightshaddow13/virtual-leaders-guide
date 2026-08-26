@@ -51,6 +51,23 @@ public class EventAccessViewShould
         Assert.False(view.CanEditEventDetails);
     }
 
+    /// <remarks>
+    /// Pins ADR-0035: an unscoped Director claim - the Role held with no Event, established by Invite
+    /// (P2-12, #43) - grants nothing here by design, mirroring <c>EventAccessPolicyShould</c>'s Api-side
+    /// regression. A future reader must not "fix" this by treating a null-Event Director claim as
+    /// platform-wide access.
+    /// </remarks>
+    [Fact]
+    public void GrantNothing_WhenADirectorClaimCarriesNoEventScope()
+    {
+        var view = new EventAccessView(PrincipalWith(RoleNames.Director));
+
+        Assert.False(view.IsAdmin);
+        Assert.False(view.CanEditEventDetails);
+        Assert.Empty(view.AssignedEventIds);
+        Assert.False(view.CanReadEvent(Guid.NewGuid()));
+    }
+
     [Fact]
     public void GrantNothing_WhenTheCallerHoldsNoRoleClaims()
     {
