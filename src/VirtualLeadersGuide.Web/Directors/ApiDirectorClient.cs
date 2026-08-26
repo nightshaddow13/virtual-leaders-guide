@@ -105,12 +105,8 @@ public sealed class ApiDirectorClient(InternalApiClient apiClient)
     public async Task<IReadOnlyList<UserRowDto>> GetDirectorsForEventAsync(Guid eventId, CancellationToken cancellationToken)
     {
         string filter = $"and(equals(eventId,'{eventId}'),equals(roleId,'{RoleIds.Director}'))";
-        using var request = NewRequest(HttpMethod.Get,
-            $"{RoleGrantsPath}?filter={Uri.EscapeDataString(filter)}&page[size]={MaxFetch}");
-        using HttpResponseMessage response = await SendAsync(request, cancellationToken);
-
-        EnsureExpectedStatus(response, HttpStatusCode.OK);
-        RoleGrantCollectionDocument grantsDocument = await ReadAsync<RoleGrantCollectionDocument>(response, cancellationToken);
+        RoleGrantCollectionDocument grantsDocument = await FetchAsync<RoleGrantCollectionDocument>(
+            $"{RoleGrantsPath}?filter={Uri.EscapeDataString(filter)}&page[size]={MaxFetch}", cancellationToken);
         List<string> userIds = [.. grantsDocument.Data
             .Select(resource => resource.Attributes!.UserId).OfType<string>().Distinct()];
 
@@ -161,56 +157,49 @@ public sealed class ApiDirectorClient(InternalApiClient apiClient)
 
     private async Task<IReadOnlyList<UserRowDto>> GetAllUsersJoinedAsync(CancellationToken cancellationToken)
     {
-        using var usersRequest = NewRequest(HttpMethod.Get, $"{UsersPath}?page[size]={MaxFetch}");
-        using HttpResponseMessage usersResponse = await SendAsync(usersRequest, cancellationToken);
-        EnsureExpectedStatus(usersResponse, HttpStatusCode.OK);
-        UserCollectionDocument usersDocument = await ReadAsync<UserCollectionDocument>(usersResponse, cancellationToken);
+        UserCollectionDocument usersDocument = await FetchAsync<UserCollectionDocument>(
+            $"{UsersPath}?page[size]={MaxFetch}", cancellationToken);
+        RoleGrantCollectionDocument grantsDocument = await FetchAsync<RoleGrantCollectionDocument>(
+            $"{RoleGrantsPath}?page[size]={MaxFetch}", cancellationToken);
 
-        using var grantsRequest = NewRequest(HttpMethod.Get, $"{RoleGrantsPath}?page[size]={MaxFetch}");
-        using HttpResponseMessage grantsResponse = await SendAsync(grantsRequest, cancellationToken);
-        EnsureExpectedStatus(grantsResponse, HttpStatusCode.OK);
-        RoleGrantCollectionDocument grantsDocument = await ReadAsync<RoleGrantCollectionDocument>(grantsResponse, cancellationToken);
-
-        var grantsByUserId = grantsDocument.Data
-            .Select(resource => resource.Attributes!)
-            .Where(attributes => attributes.UserId is not null)
-            .ToLookup(attributes => attributes.UserId!);
-
-        return [.. usersDocument.Data.Select(user => ToRow(user, grantsByUserId[user.Id!]))];
+        return JoinUsersWithGrants(usersDocument, grantsDocument.Data.Select(resource => resource.Attributes!));
     }
 
     private async Task<IReadOnlyList<RoleGrantAttributesDto>> GetGrantsForUsersAsync(
         IReadOnlyList<string> userIds, CancellationToken cancellationToken)
     {
-        string filter = userIds.Count == 1
-            ? $"equals(userId,'{userIds[0]}')"
-            : $"any(userId,{string.Join(",", userIds.Select(id => $"'{id}'"))})";
-
-        using var request = NewRequest(HttpMethod.Get,
-            $"{RoleGrantsPath}?filter={Uri.EscapeDataString(filter)}&page[size]={MaxFetch}");
-        using HttpResponseMessage response = await SendAsync(request, cancellationToken);
-
-        EnsureExpectedStatus(response, HttpStatusCode.OK);
-        RoleGrantCollectionDocument document = await ReadAsync<RoleGrantCollectionDocument>(response, cancellationToken);
+        string filter = BuildIdFilter("userId", userIds);
+        RoleGrantCollectionDocument document = await FetchAsync<RoleGrantCollectionDocument>(
+            $"{RoleGrantsPath}?filter={Uri.EscapeDataString(filter)}&page[size]={MaxFetch}", cancellationToken);
         return [.. document.Data.Select(resource => resource.Attributes!)];
     }
 
     private async Task<IReadOnlyList<UserRowDto>> GetUsersByIdAsync(
         IReadOnlyList<string> userIds, CancellationToken cancellationToken)
     {
-        string filter = userIds.Count == 1
-            ? $"equals(id,'{userIds[0]}')"
-            : $"any(id,{string.Join(",", userIds.Select(id => $"'{id}'"))})";
-
-        using var usersRequest = NewRequest(HttpMethod.Get,
-            $"{UsersPath}?filter={Uri.EscapeDataString(filter)}&page[size]={MaxFetch}");
-        using HttpResponseMessage usersResponse = await SendAsync(usersRequest, cancellationToken);
-        EnsureExpectedStatus(usersResponse, HttpStatusCode.OK);
-        UserCollectionDocument usersDocument = await ReadAsync<UserCollectionDocument>(usersResponse, cancellationToken);
+        string filter = BuildIdFilter("id", userIds);
+        UserCollectionDocument usersDocument = await FetchAsync<UserCollectionDocument>(
+            $"{UsersPath}?filter={Uri.EscapeDataString(filter)}&page[size]={MaxFetch}", cancellationToken);
 
         IReadOnlyList<RoleGrantAttributesDto> grants = await GetGrantsForUsersAsync(userIds, cancellationToken);
-        var grantsByUserId = grants.Where(g => g.UserId is not null).ToLookup(g => g.UserId!);
+        return JoinUsersWithGrants(usersDocument, grants);
+    }
 
+    /// <remarks>
+    /// Shared by <see cref="GetGrantsForUsersAsync"/> (filters <c>roleGrants</c> on <c>userId</c>) and
+    /// <see cref="GetUsersByIdAsync"/> (filters <c>users</c> on <c>id</c>) - JSON:API's <c>any()</c> operator
+    /// only accepts 2+ values, so a single id still needs the plain <c>equals()</c> form.
+    /// </remarks>
+    private static string BuildIdFilter(string field, IReadOnlyList<string> ids) =>
+        ids.Count == 1
+            ? $"equals({field},'{ids[0]}')"
+            : $"any({field},{string.Join(",", ids.Select(id => $"'{id}'"))})";
+
+    /// <summary>The fetch-users, fetch-grants, join-by-user-id shape common to <see cref="GetAllUsersJoinedAsync"/> and <see cref="GetUsersByIdAsync"/>, differing only in how each already scoped its two fetches.</summary>
+    private static IReadOnlyList<UserRowDto> JoinUsersWithGrants(
+        UserCollectionDocument usersDocument, IEnumerable<RoleGrantAttributesDto> grants)
+    {
+        var grantsByUserId = grants.Where(g => g.UserId is not null).ToLookup(g => g.UserId!);
         return [.. usersDocument.Data.Select(user => ToRow(user, grantsByUserId[user.Id!]))];
     }
 
@@ -254,6 +243,15 @@ public sealed class ApiDirectorClient(InternalApiClient apiClient)
         {
             throw new DirectorDataUnavailableException("The Director store (Api) is unreachable.", ex);
         }
+    }
+
+    /// <summary>The GET-then-expect-200-then-deserialize shape shared by every read in this class other than <see cref="GetUserAsync"/>, which needs to inspect the status before deciding.</summary>
+    private async Task<T> FetchAsync<T>(string uri, CancellationToken cancellationToken)
+    {
+        using var request = NewRequest(HttpMethod.Get, uri);
+        using HttpResponseMessage response = await SendAsync(request, cancellationToken);
+        EnsureExpectedStatus(response, HttpStatusCode.OK);
+        return await ReadAsync<T>(response, cancellationToken);
     }
 
     private static void EnsureExpectedStatus(HttpResponseMessage response, HttpStatusCode expected)

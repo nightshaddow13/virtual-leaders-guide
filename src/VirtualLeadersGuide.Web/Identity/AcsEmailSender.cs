@@ -23,6 +23,7 @@ namespace VirtualLeadersGuide.Web.Identity;
 public sealed class AcsEmailSender(IConfiguration configuration, ILogger<AcsEmailSender> logger)
     : IEmailSender<ApplicationUser>, IInviteEmailSender
 {
+    /// <inheritdoc/>
     public async Task SendPasswordResetLinkAsync(ApplicationUser user, string email, string resetLink) =>
         await SendAsync(email, "Reset your password",
             $"<p>Please reset your password by <a href='{resetLink}'>clicking here</a>.</p>", "password reset");
