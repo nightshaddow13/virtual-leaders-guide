@@ -33,6 +33,7 @@ builder.Services.AddJsonApi<VirtualLeadersGuideDbContext>(options =>
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddResourceDefinition<EventResourceDefinition>();
 builder.Services.AddResourceDefinition<UserRoleResourceDefinition>();
+builder.Services.AddResourceDefinition<ApplicationUserResourceDefinition>();
 
 var app = builder.Build();
 
