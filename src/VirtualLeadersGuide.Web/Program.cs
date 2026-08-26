@@ -35,6 +35,7 @@ builder.Services.AddIdentityCore<ApplicationUser>(options => options.SignIn.Requ
     .AddUserStore<ApiUserStore>()
     .AddSignInManager()
     .AddDefaultTokenProviders()
+    .AddTokenProvider<InviteTokenProvider>("Invite")
     .AddClaimsPrincipalFactory<ApplicationUserClaimsPrincipalFactory>();
 
 builder.AddConfiguredEmailSender();
