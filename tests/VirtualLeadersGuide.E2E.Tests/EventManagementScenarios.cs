@@ -53,10 +53,12 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
             await Page.Locator("#Passcode").FillAsync(newPasscode);
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" }).ClickAsync();
 
-            // Wait for the save's own round trip to actually complete server-side before reloading - a
-            // bare ClickAsync only waits for the DOM click event to dispatch, not for SaveAsync to finish.
-            await Expect(Page.GetByText("Changes saved")).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            // A successful save navigates back to the list (EventEditor.razor's UpdateAsync) - wait for
+            // that URL change, not a bare ClickAsync, which only waits for the DOM click event to dispatch,
+            // not for the save's own round trip to actually complete server-side.
+            await Expect(Page).ToHaveURLAsync(
+                new Uri(Fixture.WebBaseUrl, "dashboard").ToString(),
+                new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
 
             await Page.GotoAsync(EventEditorUrl(eventId));
             await Expect(Page.Locator("#Name")).ToHaveValueAsync(renamedTo);

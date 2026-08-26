@@ -306,7 +306,12 @@
             return;
         }
 
+        // Navigates back to the list rather than staying put - staying on the same URL after a successful
+        // save, with only a toast to show for it, reads as the page having not responded at all (reported
+        // directly: "it hangs on the screen when it should navigate back to the event list"). Matches
+        // CreateAsync's own post-save navigation, just to the list instead of the new Event's own page.
         NotificationService.Notify(NotificationSeverity.Success, "Changes saved");
+        NavigationManager.NavigateTo("dashboard");
     }
 
     private void ApplyFieldErrors(IReadOnlyList<string> pointers)
