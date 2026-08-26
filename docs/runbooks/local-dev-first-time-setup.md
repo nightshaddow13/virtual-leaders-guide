@@ -16,8 +16,10 @@ dotnet user-secrets set "Parameters:internal-api-key" "local-dev-key" --project 
 
 # Signs/validates the internal JWT Web mints to forward a signed-in user's identity to Api (P2-5, #14,
 # ADR-0007) - a separate secret from internal-api-key above, since the two answer different trust questions.
-# Any string works locally; it just has to match on both sides, same as internal-api-key.
-dotnet user-secrets set "Parameters:internal-jwt-key" "local-dev-jwt-key" --project src/VirtualLeadersGuide.AppHost
+# Must be at least 32 bytes - HMAC-SHA256's enforced minimum key size (Microsoft.IdentityModel.Tokens throws
+# IDX10720 otherwise, the moment anything actually mints a token with it). Otherwise any string works
+# locally; it just has to match on both sides, same as internal-api-key.
+dotnet user-secrets set "Parameters:internal-jwt-key" "local-dev-jwt-signing-key-at-least-32-bytes-long" --project src/VirtualLeadersGuide.AppHost
 ```
 
 For `acs-connection-string` (Azure Communication Services Email, [P2-1](p2-1-acs-email-provisioning.md)):
