@@ -55,7 +55,7 @@ public sealed class AcsEmailSender(IConfiguration configuration, ILogger<AcsEmai
 
         EmailSendOperation operation = await client.SendAsync(WaitUntil.Completed, message);
         logger.LogInformation(
-            "Sent {LogDescription} email to {Email}, operation id {OperationId}, status {Status}.",
-            logDescription, email, operation.Id, operation.Value.Status);
+            "Sent {LogDescription} email, operation id {OperationId}, status {Status}.",
+            logDescription, operation.Id, operation.Value.Status);
     }
 }
