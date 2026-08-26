@@ -33,11 +33,7 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
             await CreateEventAsync(name);
 
             await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
-            // Same InteractiveTimeoutMs rationale as every other assertion in this class (see this class's
-            // own remarks) - missed here originally, this is the grid's own LoadData round trip after a
-            // fresh navigation, not a bare DOM check.
-            await Expect(Page.GetByText(name)).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await AssertEventVisibleInGridAsync(name);
         });
 
     [Fact(DisplayName = "Given an existing Event, when an Admin edits its name, address, and passcode, then the changes persist")]
@@ -175,6 +171,42 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
 
         await new LoginPage(Page).SignInAsync(
             Fixture.WebBaseUrl, Fixture.AdminAllowlistedEmail, TestCredentials.KnownPassword);
+    }
+
+    /// <remarks>
+    /// The Admin grid is never scoped (unlike a Director's) - it lists every Event this local dev machine's
+    /// persistent SQL volume has ever accumulated across every past run of this suite
+    /// (<see cref="AspireE2EFixture"/>'s own remarks: the data volume outlives any one run), paged 10 at a
+    /// time with no search box (out of scope for P2-9, #18). A freshly created Event can land on any page
+    /// depending on how many prior runs' Events already exist, so asserting against the grid's default
+    /// first page - as opposed to a Director's grid, which only ever shows what that one test itself
+    /// assigned - is not reliable. This pages forward through the grid's own pagination controls looking
+    /// for the target text, rather than assuming page 1.
+    /// </remarks>
+    private async Task AssertEventVisibleInGridAsync(string name)
+    {
+        const int maxPages = 50;
+
+        for (int page = 1; page <= maxPages; page++)
+        {
+            if (await Page.GetByText(name).CountAsync() > 0)
+            {
+                return;
+            }
+
+            ILocator nextPageButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Go to next page." });
+            if (!await nextPageButton.IsEnabledAsync())
+            {
+                break;
+            }
+
+            await nextPageButton.ClickAsync();
+        }
+
+        // One last wait on the current (possibly still-loading, possibly final) page before failing -
+        // covers both "the grid's LoadData for this page hasn't settled yet" and "it's genuinely missing."
+        await Expect(Page.GetByText(name)).ToBeVisibleAsync(
+            new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
     }
 
     private async Task<IdentityUserDto> CreateAndSignInDirectorAsync(Guid eventId)
