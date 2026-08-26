@@ -76,11 +76,18 @@
     /// </remarks>
     private const string ActionColumnWidth = "76px";
 
-    private static readonly IReadOnlyList<(string Key, string Text)> StateFilterOptionsSource =
+    /// <remarks>
+    /// A real class, not a named tuple - <c>RadzenDropDown</c>'s <c>ValueProperty</c>/<c>TextProperty</c>
+    /// resolve via reflection over actual properties, which a <see cref="ValueTuple{T1,T2}"/> doesn't expose
+    /// under its element names (only <c>Item1</c>/<c>Item2</c> fields survive to runtime).
+    /// </remarks>
+    private sealed record StateFilterOption(string Key, string Text);
+
+    private static readonly IReadOnlyList<StateFilterOption> StateFilterOptionsSource =
     [
-        ("All", "All"),
-        ("Active", "Active"),
-        ("Invited", "Invited")
+        new("All", "All"),
+        new("Active", "Active"),
+        new("Invited", "Invited")
     ];
 
     [CascadingParameter]
@@ -97,7 +104,7 @@
     private string searchText = "";
     private string stateFilterKey = "All";
 
-    private IEnumerable<(string Key, string Text)> stateFilterOptions => StateFilterOptionsSource;
+    private IEnumerable<StateFilterOption> stateFilterOptions => StateFilterOptionsSource;
 
     /// <remarks>
     /// Admin-only, unlike <see cref="Pages.Dashboard"/>'s any-role check - a Director has no business on

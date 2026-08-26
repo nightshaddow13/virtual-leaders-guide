@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using VirtualLeadersGuide.Identity.Contracts;
 using VirtualLeadersGuide.Web.Authorization;
 using VirtualLeadersGuide.Web.Identity;
@@ -35,6 +37,16 @@ public sealed class ApiDirectorClient(InternalApiClient apiClient)
     private const string RoleGrantsPath = "/api/roleGrants";
     private const string UsersResourceType = "users";
     private const string RoleGrantsResourceType = "roleGrants";
+
+    /// <remarks>
+    /// Matches <c>Events.ApiEventClient</c>'s own options - without <c>WhenWritingNull</c>, a create request
+    /// serializes <see cref="RoleGrantResourceObject.Id"/> (always null on a POST) as an explicit
+    /// <c>"id":null</c>, which Api's JsonApiDotNetCore pipeline rejects rather than treating as omitted.
+    /// </remarks>
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
 
     /// <remarks>
     /// One page covers this app's expected scale (ADR-0024) - see this type's own remarks for why a true
@@ -224,7 +236,7 @@ public sealed class ApiDirectorClient(InternalApiClient apiClient)
 
         if (body is not null)
         {
-            request.Content = JsonContent.Create(body);
+            request.Content = JsonContent.Create(body, options: JsonOptions);
             request.Content.Headers.ContentType = new MediaTypeHeaderValue(JsonApiMediaType);
         }
 
@@ -255,5 +267,5 @@ public sealed class ApiDirectorClient(InternalApiClient apiClient)
     }
 
     private static async Task<T> ReadAsync<T>(HttpResponseMessage response, CancellationToken cancellationToken) =>
-        (await response.Content.ReadFromJsonAsync<T>(cancellationToken))!;
+        (await response.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken))!;
 }
