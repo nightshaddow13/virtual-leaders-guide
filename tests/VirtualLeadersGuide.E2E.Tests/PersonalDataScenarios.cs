@@ -21,9 +21,8 @@ public class PersonalDataScenarios(AspireE2EFixture fixture) : E2ETestBase(fixtu
     public async Task GivenASignedInUser_WhenTheyDownloadTheirPersonalData_ThenAPersonalDataJsonFileForThatUserIsDownloaded() =>
         await RunAsync(async () =>
         {
-            string email = $"e2e-download-personal-data-{Guid.NewGuid():n}@example.test";
-            IdentityUserDto user = await Fixture.IdentityApi.CreateUserAsync(
-                email, TestCredentials.KnownPassword, CancellationToken.None);
+            IdentityUserDto user = await CreateTrackedUserAsync("e2e-download-personal-data", CancellationToken.None);
+            string email = user.Email!;
 
             await new LoginPage(Page).SignInAsync(Fixture.WebBaseUrl, email, TestCredentials.KnownPassword);
             await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "Account/Manage/PersonalData").ToString());
@@ -45,8 +44,8 @@ public class PersonalDataScenarios(AspireE2EFixture fixture) : E2ETestBase(fixtu
     public async Task GivenASignedInUser_WhenTheyDeleteTheirPersonalDataWithTheCorrectPassword_ThenTheirAccountNoLongerExistsAndTheyAreSignedOut() =>
         await RunAsync(async () =>
         {
-            string email = $"e2e-delete-personal-data-{Guid.NewGuid():n}@example.test";
-            await Fixture.IdentityApi.CreateUserAsync(email, TestCredentials.KnownPassword, CancellationToken.None);
+            IdentityUserDto user = await CreateTrackedUserAsync("e2e-delete-personal-data", CancellationToken.None);
+            string email = user.Email!;
 
             await new LoginPage(Page).SignInAsync(Fixture.WebBaseUrl, email, TestCredentials.KnownPassword);
             await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "Account/Manage/DeletePersonalData").ToString());

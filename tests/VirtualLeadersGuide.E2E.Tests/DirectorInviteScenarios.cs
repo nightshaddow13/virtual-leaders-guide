@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 using VirtualLeadersGuide.Identity.Contracts;
 
@@ -11,7 +10,10 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// <see cref="AspireE2EFixture.EmailSink"/> intercepts the invite email the same way
 /// <see cref="PasswordResetScenarios"/> intercepts a reset link. <c>IdentityApiClient.GrantDirectorAsync</c>
 /// (added for P2-9, #18) is deliberately unused here - the point of these scenarios is that the invite UI
-/// itself creates the Role/Grant rows, not a seeding shortcut.
+/// itself creates the Role/Grant rows, not a seeding shortcut. Every invited User is tracked for cleanup via
+/// <see cref="E2ETestBase.TrackUserByEmailAsync"/> right after the invite email lands, since the UI (not
+/// <see cref="IdentityApiClient.CreateUserAsync"/>) is what creates the row - a revoked invite's own delete
+/// makes a second, tracked delete a tolerated no-op, not a double-delete failure (ADR-0039).
 /// </remarks>
 [Collection(nameof(AspireE2ECollection))]
 public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
@@ -27,15 +29,14 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
             string email = $"e2e-invite-{Guid.NewGuid():n}@example.test";
 
             await OpenInviteDialogAndSendAsync(email, displayName: "Dana Okafor");
+            await TrackUserByEmailAsync(email);
 
             SentEmailDto inviteEmail = await Fixture.EmailSink.WaitForEmailAsync(email, CancellationToken.None);
             Assert.Equal(SentEmailKinds.DirectorInvite, inviteEmail.Kind);
             Assert.Contains("/setup?", inviteEmail.Payload, StringComparison.Ordinal);
 
             await SearchUsersAsync(email);
-            await Expect(Page.GetByText(email)).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
-            await AssertGridStateVisibleAsync("Invited");
+            await AssertUserRowStateAsync(email, "Invited");
         });
 
     [Fact(DisplayName = "Given an invited Director, when they complete account setup, then they can sign in and see an empty Events list")]
@@ -45,6 +46,7 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
             await SignInAsAdminAsync();
             string email = $"e2e-invite-setup-{Guid.NewGuid():n}@example.test";
             await OpenInviteDialogAndSendAsync(email, displayName: null);
+            await TrackUserByEmailAsync(email);
 
             SentEmailDto inviteEmail = await Fixture.EmailSink.WaitForEmailAsync(email, CancellationToken.None);
             await SignOutAsync();
@@ -67,10 +69,10 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
         {
             await SignInAsAdminAsync();
             string email = $"e2e-invite-assign-{Guid.NewGuid():n}@example.test";
-            string eventName = $"Spring Kickoff {Guid.NewGuid():n}";
 
-            Guid eventId = await CreateEventAsync(eventName);
+            (Guid eventId, string eventName) = await CreateEventAsync("Spring Kickoff");
             await OpenInviteDialogAndSendAsync(email, displayName: null);
+            await TrackUserByEmailAsync(email);
             SentEmailDto inviteEmail = await Fixture.EmailSink.WaitForEmailAsync(email, CancellationToken.None);
 
             await SignOutAsync();
@@ -95,11 +97,10 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
         await RunAsync(async () =>
         {
             await SignInAsAdminAsync();
-            string email = $"e2e-invite-duplicate-{Guid.NewGuid():n}@example.test";
-            await Fixture.IdentityApi.CreateUserAsync(email, TestCredentials.KnownPassword, CancellationToken.None);
+            IdentityUserDto existing = await CreateTrackedUserAsync("e2e-invite-duplicate", CancellationToken.None);
 
             await OpenInviteDialogAsync();
-            await Page.Locator("#Email").FillAsync(email);
+            await Page.Locator("#Email").FillAsync(existing.Email!);
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Continue" }).ClickAsync();
 
             await Expect(Page.GetByText("already exists")).ToBeVisibleAsync(
@@ -108,7 +109,7 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
                 .ToBeVisibleAsync();
 
             await EstablishNoEmailWasWrittenHappensBeforeAsync();
-            Assert.False(Fixture.EmailSink.HasEmailFor(email));
+            Assert.False(Fixture.EmailSink.HasEmailFor(existing.Email!));
         });
 
     [Fact(DisplayName = "Given a pending invite, when an Admin resends it, then a second email arrives and the first link no longer works")]
@@ -118,10 +119,11 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
             await SignInAsAdminAsync();
             string email = $"e2e-invite-resend-{Guid.NewGuid():n}@example.test";
             await OpenInviteDialogAndSendAsync(email, displayName: null);
+            await TrackUserByEmailAsync(email);
             SentEmailDto firstInvite = await Fixture.EmailSink.WaitForEmailAsync(email, CancellationToken.None);
 
             await SearchUsersAsync(email);
-            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Open" }).ClickAsync();
+            await OpenUserRowAsync(email);
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Resend email" }).ClickAsync();
 
             SentEmailDto secondInvite = await Fixture.EmailSink.WaitForEmailAsync(email, firstInvite, CancellationToken.None);
@@ -143,10 +145,11 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
             await SignInAsAdminAsync();
             string email = $"e2e-invite-revoke-{Guid.NewGuid():n}@example.test";
             await OpenInviteDialogAndSendAsync(email, displayName: null);
+            await TrackUserByEmailAsync(email);
             SentEmailDto inviteEmail = await Fixture.EmailSink.WaitForEmailAsync(email, CancellationToken.None);
 
             await SearchUsersAsync(email);
-            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Open" }).ClickAsync();
+            await OpenUserRowAsync(email);
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Revoke invite" }).ClickAsync();
 
             await Expect(Page).ToHaveURLAsync(
@@ -169,6 +172,7 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
     {
         string barrierEmail = $"e2e-invite-barrier-{Guid.NewGuid():n}@example.test";
         await OpenInviteDialogAndSendAsync(barrierEmail, displayName: null);
+        await TrackUserByEmailAsync(barrierEmail);
         await Fixture.EmailSink.WaitForEmailAsync(barrierEmail, CancellationToken.None);
     }
 
@@ -221,12 +225,30 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
     }
 
     /// <remarks>
-    /// Scoped to the grid's own role, not a bare <c>GetByText</c> - the STATE filter dropdown keeps its
-    /// closed popup's own <paramref name="state"/> option in the DOM (Radzen hides rather than removes it),
-    /// which a page-wide text match also resolves to, a strict-mode violation.
+    /// Scoped to the one row containing <paramref name="email"/>, not the grid as a whole - since ADR-0039,
+    /// <see cref="AspireE2EFixture.InvitedEmail"/> sits permanently in the grid with the same "Invited" state
+    /// text this method checks for, and <see cref="SearchUsersAsync"/>'s own "wait for the target text to
+    /// appear" only proves that row is rendered, not that Radzen's own async filter reload has finished
+    /// removing every other row yet - a bare grid-wide <c>GetByText(state)</c> can catch that still-settling
+    /// window and see two matches. Row-scoping sidesteps the race entirely rather than trying to out-wait it.
     /// </remarks>
-    private async Task AssertGridStateVisibleAsync(string state) =>
-        await Expect(Page.GetByRole(AriaRole.Grid).GetByText(state)).ToBeVisibleAsync();
+    private async Task AssertUserRowStateAsync(string email, string state) =>
+        await Expect(UserRowLocator(email).GetByText(state)).ToBeVisibleAsync(
+            new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+
+    /// <summary>Clicks the "Open" button in the one row containing <paramref name="email"/>.</summary>
+    /// <remarks>
+    /// Same race as <see cref="AssertUserRowStateAsync"/>'s own remarks explain, but worse here: <c>ClickAsync</c>
+    /// evaluates its locator once and throws immediately on ambiguity, unlike an <c>Expect(...).ToBeVisibleAsync()</c>
+    /// assertion, which retries until the page settles or its timeout expires. A bare page-wide "Open" button
+    /// locator is now reliably ambiguous - every fixture account's own row renders one too - not just
+    /// occasionally, since ADR-0039 made those rows permanent.
+    /// </remarks>
+    private async Task OpenUserRowAsync(string email) =>
+        await UserRowLocator(email).GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Open" }).ClickAsync();
+
+    private ILocator UserRowLocator(string email) =>
+        Page.GetByRole(AriaRole.Row).Filter(new LocatorFilterOptions { HasText = email });
 
     private async Task SubmitSetupAsync(string password)
     {
@@ -250,12 +272,6 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Add" }).ClickAsync();
     }
 
-    private async Task SignOutAsync()
-    {
-        await Page.GotoAsync(Fixture.WebBaseUrl.ToString());
-        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Sign out" }).ClickAsync();
-    }
-
     /// <remarks>
     /// <see cref="LoginPage.SignInAsync"/> doesn't request a return URL, so sign-in lands on Home - the
     /// explicit navigation afterward matches <c>EventManagementScenarios</c>' own
@@ -266,19 +282,4 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
         await new LoginPage(Page).SignInAsync(Fixture.WebBaseUrl, email, password);
         await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
     }
-
-    /// <remarks>Copy of <c>EventManagementScenarios.CreateEventAsync</c> - see its remarks for the timeout reasoning.</remarks>
-    private async Task<Guid> CreateEventAsync(string name)
-    {
-        await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard/events/new").ToString());
-        await Page.Locator("#Name").FillAsync(name);
-        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create event" }).ClickAsync();
-        await Expect(Page).ToHaveURLAsync(
-            new Regex(@"dashboard/events/[0-9a-f-]{36}$"), new PageAssertionsToHaveURLOptions { Timeout = 20_000 });
-
-        string path = new Uri(Page.Url).AbsolutePath;
-        return Guid.Parse(path[(path.LastIndexOf('/') + 1)..]);
-    }
-
-    private string EventEditorUrl(Guid eventId) => new Uri(Fixture.WebBaseUrl, $"dashboard/events/{eventId}").ToString();
 }

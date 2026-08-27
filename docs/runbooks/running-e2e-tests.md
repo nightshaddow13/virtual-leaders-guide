@@ -8,7 +8,7 @@ The suite also forces `Email__Provider=FileSink` onto `web`, so no password-rese
 Azure Communication Services during a run - see
 [ADR-0032](../adr/0032-web-email-sender-is-config-selected-for-test-interception.md). Emails land as JSON
 files in a run-scoped temp directory (`AspireE2EFixture.EmailSink`), not under `artifacts/`, and are copied
-into a failed test's own artifact folder (Section 5) rather than left in temp.
+into a failed test's own artifact folder (Section 6) rather than left in temp.
 
 ## 1. Prerequisites
 
@@ -28,7 +28,7 @@ with `Executable doesn't exist at ...`.
 
 ## 2. Optional: install PowerShell 7 (`pwsh`)
 
-Nothing else in this runbook requires it - Section 3's browser install and Section 6's trace viewing
+Nothing else in this runbook requires it - Section 3's browser install and Section 7's trace viewing
 both work without it, via workarounds that don't. Install it anyway if you'd rather use Playwright's own
 generated `playwright.ps1` script (`install`, `show-trace`, `codegen`, ...) instead:
 
@@ -37,7 +37,7 @@ winget install --id Microsoft.PowerShell --source winget
 ```
 
 Restart your terminal afterward so `pwsh` is picked up on `PATH` (`pwsh -Version` to confirm). Once
-installed, Section 3's browser install and Section 6's trace viewing can both use `playwright.ps1`
+installed, Section 3's browser install and Section 7's trace viewing can both use `playwright.ps1`
 directly instead of their workarounds - see each section.
 
 ## 3. Install Playwright's browsers (first time only)
@@ -61,13 +61,13 @@ pwsh tests/VirtualLeadersGuide.E2E.Tests/bin/Debug/net10.0/playwright.ps1 instal
 ```
 
 Either way, this downloads Chromium, its headless-shell variant, and ffmpeg (needed for video capture -
-see Section 5) into `%LOCALAPPDATA%\ms-playwright`. Re-run it if a `dotnet test` run starts failing every
+see Section 6) into `%LOCALAPPDATA%\ms-playwright`. Re-run it if a `dotnet test` run starts failing every
 test with `Executable doesn't exist at ...chrome-headless-shell.exe` - the cache can end up stale or
 partially populated (e.g. after a package upgrade) without any other symptom.
 
 If you'd rather work from `bin/Debug/net10.0` directly (e.g. `cd tests/VirtualLeadersGuide.E2E.Tests/bin/Debug/net10.0`
-first), every path below and in Section 6 needs the same prefix stripped off - `playwright.ps1` and
-`.playwright\...` instead of the full `tests/...` path, and `artifacts/e2e` (Section 6's search root)
+first), every path below and in Section 7 needs the same prefix stripped off - `playwright.ps1` and
+`.playwright\...` instead of the full `tests/...` path, and `artifacts/e2e` (Section 7's search root)
 becomes `../../../../../artifacts/e2e` (five levels back up to the repo root).
 
 ## 4. Run the suite
@@ -80,7 +80,29 @@ Expect this to take a couple of minutes - `AspireE2EFixture` boots the whole sta
 run (container pulls on a cold cache add more). Every test shares that one boot via
 `AspireE2ECollection`, so they run sequentially, not in parallel.
 
-## 5. Where failure artifacts land
+## 5. Test data
+
+The suite maintains a fixed set of fixture data across every run - four accounts
+(`e2e-admin@example.test`, `e2e-director@example.test`, `e2e-norole@example.test`,
+`e2e-invited@example.test`, all sharing the password in `TestCredentials.KnownPassword`) and one retained
+Event (`e2e-retained-event`) - and deletes everything else it creates, including a crashed or killed run's
+leftovers, via a run-end sweep in `AspireE2EFixture.DisposeAsync`. See
+[ADR-0039](../adr/0039-e2e-tests-clean-up-after-themselves.md) for the full retention table and why. Anything
+outside the `@example.test` domain (a real account you made by hand) is never touched.
+
+Set `VLG_E2E_KEEP_DATA=1` before running to skip per-test cleanup and the run-end sweep, for inspecting a
+real post-run database instead of only a `trace.zip`:
+
+```powershell
+$env:VLG_E2E_KEEP_DATA = "1"
+dotnet test tests/VirtualLeadersGuide.E2E.Tests
+```
+
+If the fixture data ever ends up corrupted (e.g. a manual edit, or a run killed before the fixture itself
+finished seeding), delete the four accounts and the retained Event by hand - the next run re-seeds them
+idempotently.
+
+## 6. Where failure artifacts land
 
 Every failed test leaves `trace.zip`, `screenshot.png`, `video.webm`, `page.html`, and an `emails/` folder
 (any JSON files the file-sink email sender had written by the time the test failed) under:
@@ -104,7 +126,7 @@ folder, if something about capturing a specific file didn't go to plan:
 
 [Windows long-path support]: https://learn.microsoft.com/windows/win32/fileio/maximum-file-path-limitation
 
-## 6. Viewing a trace
+## 7. Viewing a trace
 
 `trace.zip` is a Playwright trace: a time-travel view of every action, a screenshot filmstrip, the
 network log, and the console log for that one test run.
@@ -119,7 +141,7 @@ $trace = Get-ChildItem artifacts/e2e -Filter trace.zip -Recurse | Sort-Object La
 pwsh tests/VirtualLeadersGuide.E2E.Tests/bin/Debug/net10.0/playwright.ps1 show-trace $trace.FullName
 ```
 
-## 7. Allure reporting
+## 8. Allure reporting
 
 Not currently wired up - `Allure.Xunit`'s reporter doesn't activate under `dotnet test` in this
 environment (tracked as [#71](https://github.com/nightshaddow13/virtual-leaders-guide/issues/71), with
