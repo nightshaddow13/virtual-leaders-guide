@@ -1,4 +1,3 @@
-using System.Reflection;
 using Aspire.Hosting;
 using VirtualLeadersGuide.Identity.Contracts;
 
@@ -61,7 +60,7 @@ public sealed class AspireE2EFixture : IAsyncLifetime
     /// file beats inventing a second timestamped-folder scheme alongside <c>E2ETestBase</c>'s own <c>RunRoot</c>
     /// (which this class has no access to - it's private to that type, and computed independently).
     /// </remarks>
-    private static readonly string SweepLogDirectory = ResolveArtifactRoot();
+    private static readonly string SweepLogDirectory = E2EArtifactRoot.Resolve();
 
     private DistributedApplication _app = null!;
     private HttpClient _probeClient = null!;
@@ -506,17 +505,6 @@ public sealed class AspireE2EFixture : IAsyncLifetime
 
             await Task.Delay(ProbePollInterval, cancellationToken);
         }
-    }
-
-    /// <remarks>Same recipe as <c>E2ETestBase.ResolveArtifactRoot</c> - duplicated rather than shared, since that one is private to its own type.</remarks>
-    private static string ResolveArtifactRoot()
-    {
-        string? root = typeof(AspireE2EFixture).Assembly
-            .GetCustomAttributes<AssemblyMetadataAttribute>()
-            .FirstOrDefault(attribute => attribute.Key == "E2EArtifactRoot")?.Value;
-
-        return root ?? throw new InvalidOperationException(
-            "E2EArtifactRoot AssemblyMetadata is missing - check VirtualLeadersGuide.E2E.Tests.csproj wasn't edited to drop it.");
     }
 
     private static string BuildFailureMessage(string reason) =>

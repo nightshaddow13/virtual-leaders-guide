@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using Microsoft.Playwright;
@@ -38,7 +37,7 @@ public abstract class E2ETestBase(AspireE2EFixture fixture) : PageTest
     /// initializers run in textual declaration order, so <see cref="RunRoot"/>'s initializer needs this one
     /// to have already run.
     /// </remarks>
-    private static string ArtifactRoot { get; } = ResolveArtifactRoot();
+    private static string ArtifactRoot { get; } = E2EArtifactRoot.Resolve();
 
     /// <remarks>
     /// One folder per *run*, not per test: a static field initializer runs exactly once per test-assembly
@@ -293,6 +292,7 @@ public abstract class E2ETestBase(AspireE2EFixture fixture) : PageTest
     /// Event apart from anything a developer made by hand (ADR-0039) - without the prefix, that filter would
     /// never match anything this suite creates.
     /// </param>
+    /// <returns>The created Event's id, and its full (already <c>e2e-</c>-prefixed and guid-suffixed) Name.</returns>
     /// <remarks>
     /// The URL-change assertion below carries a longer-than-default timeout - <c>/dashboard/events/new</c>
     /// is an <c>InteractiveServer</c> page (ADR-0034), so a click has to survive a real SignalR round trip,
@@ -316,8 +316,10 @@ public abstract class E2ETestBase(AspireE2EFixture fixture) : PageTest
     }
 
     /// <summary>The URL of an Event's editor page, given its id.</summary>
+    /// <param name="eventId">The Event to link to.</param>
     protected string EventEditorUrl(Guid eventId) => new Uri(Fixture.WebBaseUrl, $"dashboard/events/{eventId}").ToString();
 
+    /// <summary>Signs the current session out via the site header's real sign-out form.</summary>
     /// <remarks>
     /// The only sign-out affordance is the header's real <c>POST Account/Logout</c> form
     /// (<c>SignOutForm.razor</c>) - clicking it, rather than clearing cookies directly, exercises the same
@@ -448,15 +450,5 @@ public abstract class E2ETestBase(AspireE2EFixture fixture) : PageTest
             Path.Combine(RunRoot, "TOO_LONG.txt"),
             $"{fileName} for {Path.GetFileName(testDir)} would exceed the path-length limit: {path}{Environment.NewLine}");
         return null;
-    }
-
-    private static string ResolveArtifactRoot()
-    {
-        string? root = typeof(E2ETestBase).Assembly
-            .GetCustomAttributes<AssemblyMetadataAttribute>()
-            .FirstOrDefault(attribute => attribute.Key == "E2EArtifactRoot")?.Value;
-
-        return root ?? throw new InvalidOperationException(
-            "E2EArtifactRoot AssemblyMetadata is missing - check VirtualLeadersGuide.E2E.Tests.csproj wasn't edited to drop it.");
     }
 }

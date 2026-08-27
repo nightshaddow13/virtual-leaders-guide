@@ -25,6 +25,7 @@ internal static class InternalAdminJwt
     /// The same signing key <c>Api</c> validates against for this run - <see cref="AspireE2EFixture"/>'s own
     /// <c>InternalJwtKey</c> constant.
     /// </param>
+    /// <returns>A signed, encoded JWT ready to use as a bearer token.</returns>
     public static string Mint(string signingKey)
     {
         var claims = new List<Claim>

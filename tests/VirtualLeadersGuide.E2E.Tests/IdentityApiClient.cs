@@ -185,6 +185,7 @@ public sealed class IdentityApiClient(HttpClient httpClient)
     /// </summary>
     /// <param name="userId">The <c>ApplicationUser.Id</c> to read grants for.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
+    /// <returns>Every Role/Grant row currently held, as <c>Api</c> returned them.</returns>
     /// <exception cref="InvalidOperationException">The read request did not succeed.</exception>
     public async Task<IReadOnlyList<RoleGrantDto>> GetGrantsAsync(string userId, CancellationToken cancellationToken)
     {

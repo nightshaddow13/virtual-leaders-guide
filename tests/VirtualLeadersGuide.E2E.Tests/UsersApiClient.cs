@@ -1,6 +1,4 @@
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Text.Json;
 using VirtualLeadersGuide.Identity.Contracts;
 
 namespace VirtualLeadersGuide.E2E.Tests;
@@ -15,36 +13,29 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// Unlike <see cref="IdentityApiClient"/>, <c>/api/users</c> sits behind
 /// <see cref="InternalJwtDefaults.PolicyName"/> and is Admin-only (<c>ApplicationUserAccessPolicy.CanRead</c>)
 /// - see <see cref="EventsApiClient"/>'s own remarks for the same shape; this class shares its
-/// <see cref="InternalAdminJwt"/> minting recipe.
+/// <see cref="AdminJsonApiClientBase"/> request plumbing and <see cref="InternalAdminJwt"/> minting recipe.
 /// </remarks>
 public sealed class UsersApiClient(HttpClient httpClient, string internalJwtSigningKey)
+    : AdminJsonApiClientBase(httpClient, internalJwtSigningKey)
 {
     private const string UsersPath = "/api/users";
-    private const string JsonApiMediaType = "application/vnd.api+json";
-
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>
     /// Every User's email ending in <c>@example.test</c> - the reserved TLD (RFC 6761) every account this
     /// suite creates uses, and the only domain the run-end sweep is ever allowed to touch (ADR-0039).
     /// </summary>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
+    /// <returns>Every matching email, across all pages.</returns>
     /// <exception cref="InvalidOperationException">The list request did not succeed.</exception>
     public async Task<IReadOnlyList<string>> ListExampleTestEmailsAsync(CancellationToken cancellationToken)
     {
-        string uri = $"{UsersPath}?filter=endsWith(email,'@example.test')&page[size]=9999";
-        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(JsonApiMediaType));
-        request.Headers.Authorization =
-            new AuthenticationHeaderValue("Bearer", InternalAdminJwt.Mint(internalJwtSigningKey));
+        string uri = BuildUnpagedCollectionUri(UsersPath, "endsWith(email,'@example.test')");
+        using HttpRequestMessage request = NewRequest(HttpMethod.Get, uri);
 
-        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+        using HttpResponseMessage response = await SendAsync(request, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            string body = await response.Content.ReadAsStringAsync(cancellationToken);
-            throw new InvalidOperationException(
-                "UsersApiClient failed to list @example.test Users: " +
-                $"{(int)response.StatusCode} {response.StatusCode}. {body}");
+            await ThrowForFailureAsync("list", "@example.test Users", response, cancellationToken);
         }
 
         UserCollectionDocument document =
