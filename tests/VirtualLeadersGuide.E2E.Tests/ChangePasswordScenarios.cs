@@ -1,4 +1,5 @@
 using Microsoft.Playwright;
+using VirtualLeadersGuide.Identity.Contracts;
 
 namespace VirtualLeadersGuide.E2E.Tests;
 
@@ -14,15 +15,15 @@ public class ChangePasswordScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
     public async Task GivenASignedInUser_WhenTheyChangeTheirPassword_ThenTheyCanSignInWithTheNewPasswordButNotTheOldOne() =>
         await RunAsync(async () =>
         {
-            string email = $"e2e-change-password-{Guid.NewGuid():n}@example.test";
-            await Fixture.IdentityApi.CreateUserAsync(email, TestCredentials.KnownPassword, CancellationToken.None);
+            IdentityUserDto user = await CreateTrackedUserAsync("e2e-change-password", CancellationToken.None);
+            string email = user.Email!;
 
             await new LoginPage(Page).SignInAsync(Fixture.WebBaseUrl, email, TestCredentials.KnownPassword);
             await SubmitChangePasswordAsync(TestCredentials.KnownPassword, TestCredentials.RotatedPassword);
 
             await Expect(Page.GetByText("Your password has been changed")).ToBeVisibleAsync();
 
-            await SignOutAsync();
+            await ClickSignOutOnCurrentPageAsync();
 
             await new LoginPage(Page).SignInAsync(Fixture.WebBaseUrl, email, TestCredentials.RotatedPassword);
             await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Sign out" }))
@@ -42,12 +43,13 @@ public class ChangePasswordScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
     }
 
     /// <remarks>
-    /// Load-bearing, not cleanup: <c>ChangePassword.razor</c> calls <c>RefreshSignInAsync</c> on success, so
-    /// the pre-change session survives the change. Without signing out here first, re-signing-in with the
-    /// rotated password would find "Sign out" visible off that *pre-existing* cookie even if the change had
-    /// silently failed - a false pass. <see cref="PasswordResetScenarios"/> doesn't need this because it
-    /// starts signed out.
+    /// Deliberately not named/shaped like <see cref="E2ETestBase.SignOutAsync"/> - that one navigates home
+    /// first, which isn't safe here. Load-bearing, not cleanup: <c>ChangePassword.razor</c> calls
+    /// <c>RefreshSignInAsync</c> on success, so the pre-change session survives the change. Without signing
+    /// out here first, re-signing-in with the rotated password would find "Sign out" visible off that
+    /// *pre-existing* cookie even if the change had silently failed - a false pass.
+    /// <see cref="PasswordResetScenarios"/> doesn't need this because it starts signed out.
     /// </remarks>
-    private async Task SignOutAsync() =>
+    private async Task ClickSignOutOnCurrentPageAsync() =>
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Sign out" }).ClickAsync();
 }

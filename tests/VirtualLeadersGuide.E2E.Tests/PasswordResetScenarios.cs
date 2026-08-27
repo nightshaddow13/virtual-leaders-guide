@@ -17,8 +17,8 @@ public class PasswordResetScenarios(AspireE2EFixture fixture) : E2ETestBase(fixt
     public async Task GivenAConfirmedUser_WhenTheyCompleteTheForgotPasswordFlow_ThenTheyCanSignInWithTheNewPasswordButNotTheOldOne() =>
         await RunAsync(async () =>
         {
-            string email = $"e2e-password-reset-{Guid.NewGuid():n}@example.test";
-            await Fixture.IdentityApi.CreateUserAsync(email, TestCredentials.KnownPassword, CancellationToken.None);
+            IdentityUserDto user = await CreateTrackedUserAsync("e2e-password-reset", CancellationToken.None);
+            string email = user.Email!;
 
             await SubmitForgotPasswordAsync(email);
             await Expect(Page).ToHaveURLAsync(new Uri(Fixture.WebBaseUrl, "Account/ForgotPasswordConfirmation").ToString());
@@ -62,10 +62,9 @@ public class PasswordResetScenarios(AspireE2EFixture fixture) : E2ETestBase(fixt
     /// </remarks>
     private async Task EstablishNoEmailWasWrittenHappensBeforeAsync()
     {
-        string knownEmail = $"e2e-password-reset-barrier-{Guid.NewGuid():n}@example.test";
-        await Fixture.IdentityApi.CreateUserAsync(knownEmail, TestCredentials.KnownPassword, CancellationToken.None);
-        await SubmitForgotPasswordAsync(knownEmail);
-        await Fixture.EmailSink.WaitForEmailAsync(knownEmail, CancellationToken.None);
+        IdentityUserDto knownUser = await CreateTrackedUserAsync("e2e-password-reset-barrier", CancellationToken.None);
+        await SubmitForgotPasswordAsync(knownUser.Email!);
+        await Fixture.EmailSink.WaitForEmailAsync(knownUser.Email!, CancellationToken.None);
     }
 
     private async Task SubmitForgotPasswordAsync(string email)

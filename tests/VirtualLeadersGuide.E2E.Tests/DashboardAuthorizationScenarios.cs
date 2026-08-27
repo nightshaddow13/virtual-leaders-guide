@@ -7,7 +7,9 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// Exercises all three states of <c>/dashboard</c>'s own authorization gate (P2.1-2, #60) - anonymous,
 /// signed in with no role, and signed in as an allowlisted Admin (P2-4, #13) - as opposed to
 /// <see cref="LoginPageScenarios"/>, which is scoped to the Login form's own behavior (ADR-0029 narrows
-/// ADR-0012). See <see cref="LoginPageScenarios"/>'s remarks for the split rationale.
+/// ADR-0012). See <see cref="LoginPageScenarios"/>'s remarks for the split rationale. The no-role case signs
+/// in as the fixture <see cref="AspireE2EFixture.NoRoleEmail"/> account rather than a throwaway one - nothing
+/// here mutates account state, so there's nothing to isolate (ADR-0039).
 /// </remarks>
 [Collection(nameof(AspireE2ECollection))]
 public class DashboardAuthorizationScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
@@ -33,10 +35,8 @@ public class DashboardAuthorizationScenarios(AspireE2EFixture fixture) : E2ETest
     public async Task GivenANoRoleUser_WhenNavigatingToDashboard_ThenItRedirectsToNoAccess() =>
         await RunAsync(async () =>
         {
-            string email = $"e2e-no-role-{Guid.NewGuid():n}@example.test";
-            await Fixture.IdentityApi.CreateUserAsync(email, TestCredentials.KnownPassword, CancellationToken.None);
-
-            await new LoginPage(Page).SignInAsync(Fixture.WebBaseUrl, email, TestCredentials.KnownPassword);
+            await new LoginPage(Page).SignInAsync(
+                Fixture.WebBaseUrl, AspireE2EFixture.NoRoleEmail, TestCredentials.KnownPassword);
 
             await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
 

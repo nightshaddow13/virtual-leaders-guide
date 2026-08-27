@@ -36,11 +36,10 @@ public class LoginPageScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
     public async Task GivenValidCredentials_WhenSubmittingTheLoginFormWithAReturnUrl_ThenItRedirectsToThatReturnUrl() =>
         await RunAsync(async () =>
         {
-            string email = $"e2e-valid-login-{Guid.NewGuid():n}@example.test";
-            await Fixture.IdentityApi.CreateUserAsync(email, TestCredentials.KnownPassword, CancellationToken.None);
+            IdentityUserDto user = await CreateTrackedUserAsync("e2e-valid-login", CancellationToken.None);
 
             await new LoginPage(Page).SignInAsync(
-                Fixture.WebBaseUrl, email, TestCredentials.KnownPassword, returnUrl: AuthorizeOnlyNoRoleCheckPath);
+                Fixture.WebBaseUrl, user.Email!, TestCredentials.KnownPassword, returnUrl: AuthorizeOnlyNoRoleCheckPath);
 
             await Expect(Page).ToHaveURLAsync(
                 new Uri(Fixture.WebBaseUrl, AuthorizeOnlyNoRoleCheckPath.TrimStart('/')).ToString());
@@ -58,10 +57,9 @@ public class LoginPageScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
     public async Task GivenAWrongPassword_WhenSubmittingTheLoginForm_ThenAnInvalidLoginErrorIsShown() =>
         await RunAsync(async () =>
         {
-            string email = $"e2e-wrong-password-{Guid.NewGuid():n}@example.test";
-            await Fixture.IdentityApi.CreateUserAsync(email, TestCredentials.KnownPassword, CancellationToken.None);
+            IdentityUserDto user = await CreateTrackedUserAsync("e2e-wrong-password", CancellationToken.None);
 
-            await new LoginPage(Page).SignInAsync(Fixture.WebBaseUrl, email, "wrong-password");
+            await new LoginPage(Page).SignInAsync(Fixture.WebBaseUrl, user.Email!, "wrong-password");
 
             await Expect(Page.GetByText("Error: Invalid login attempt.")).ToBeVisibleAsync();
         });
@@ -70,13 +68,11 @@ public class LoginPageScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
     public async Task GivenALockedOutAccount_WhenSubmittingTheLoginForm_ThenItRedirectsToAccountLockout() =>
         await RunAsync(async () =>
         {
-            string email = $"e2e-locked-out-{Guid.NewGuid():n}@example.test";
-            IdentityUserDto user = await Fixture.IdentityApi.CreateUserAsync(
-                email, TestCredentials.KnownPassword, CancellationToken.None);
+            IdentityUserDto user = await CreateTrackedUserAsync("e2e-locked-out", CancellationToken.None);
             await Fixture.IdentityApi.LockOutAsync(
                 user, DateTimeOffset.UtcNow.AddMinutes(30), CancellationToken.None);
 
-            await new LoginPage(Page).SignInAsync(Fixture.WebBaseUrl, email, TestCredentials.KnownPassword);
+            await new LoginPage(Page).SignInAsync(Fixture.WebBaseUrl, user.Email!, TestCredentials.KnownPassword);
 
             await Expect(Page).ToHaveURLAsync(new Uri(Fixture.WebBaseUrl, "Account/Lockout").ToString());
         });

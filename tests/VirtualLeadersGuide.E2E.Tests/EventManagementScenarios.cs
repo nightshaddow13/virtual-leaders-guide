@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 using VirtualLeadersGuide.Identity.Contracts;
 
@@ -11,6 +10,9 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// <see cref="IdentityApiClient"/> seeds Identity, since the whole point of these scenarios is that the
 /// create flow itself works. <see cref="IdentityApiClient.GrantDirectorAsync"/> is the one exception
 /// (assigning a Director), since driving the Users screen that would do this doesn't exist yet (P2-10, #19).
+/// Every Director here is its own throwaway account, not <see cref="AspireE2EFixture.DirectorEmail"/> - see
+/// ADR-0039 for why a test whose subject is "what can this Director see" stays isolated even where nothing
+/// today would technically break by sharing.
 /// </remarks>
 [Collection(nameof(AspireE2ECollection))]
 public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
@@ -28,12 +30,11 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
         await RunAsync(async () =>
         {
             await SignInAsAdminAsync();
-            string name = $"Summer Camporee {Guid.NewGuid():n}";
-
-            await CreateEventAsync(name);
+            (_, string name) = await CreateEventAsync("Summer Camporee");
 
             await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
-            await AssertEventVisibleInGridAsync(name);
+            await Expect(Page.GetByText(name)).ToBeVisibleAsync(
+                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
         });
 
     [Fact(DisplayName = "Given an existing Event, when an Admin edits its name, address, and passcode, then the changes persist")]
@@ -41,10 +42,10 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
         await RunAsync(async () =>
         {
             await SignInAsAdminAsync();
-            Guid eventId = await CreateEventAsync($"Fall Webelos Woods {Guid.NewGuid():n}");
+            (Guid eventId, _) = await CreateEventAsync("Fall Webelos Woods");
 
-            string renamedTo = $"Renamed {Guid.NewGuid():n}";
-            string newSlug = $"renamed-{Guid.NewGuid():n}";
+            string renamedTo = $"e2e-Renamed {Guid.NewGuid():n}";
+            string newSlug = $"e2e-renamed-{Guid.NewGuid():n}";
             string newPasscode = $"Testcode{Guid.NewGuid():n}";
 
             await Page.GotoAsync(EventEditorUrl(eventId));
@@ -68,8 +69,7 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
         await RunAsync(async () =>
         {
             await SignInAsAdminAsync();
-            string name = $"Winter Klondike {Guid.NewGuid():n}";
-            await CreateEventAsync(name);
+            (_, string name) = await CreateEventAsync("Winter Klondike");
 
             await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard/events/new").ToString());
             await Page.Locator("#Name").FillAsync(name);
@@ -86,10 +86,8 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
         await RunAsync(async () =>
         {
             await SignInAsAdminAsync();
-            string assignedName = $"Spring Klondike {Guid.NewGuid():n}";
-            string unassignedName = $"Not Assigned {Guid.NewGuid():n}";
-            Guid assignedEventId = await CreateEventAsync(assignedName);
-            await CreateEventAsync(unassignedName);
+            (Guid assignedEventId, string assignedName) = await CreateEventAsync("Spring Klondike");
+            (_, string unassignedName) = await CreateEventAsync("Not Assigned");
             await SignOutAsync();
 
             await CreateAndSignInDirectorAsync(assignedEventId);
@@ -115,8 +113,8 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
         await RunAsync(async () =>
         {
             await SignInAsAdminAsync();
-            Guid assignedEventId = await CreateEventAsync($"Assigned {Guid.NewGuid():n}");
-            Guid unassignedEventId = await CreateEventAsync($"Unassigned {Guid.NewGuid():n}");
+            (Guid assignedEventId, _) = await CreateEventAsync("Assigned");
+            (Guid unassignedEventId, _) = await CreateEventAsync("Unassigned");
             await SignOutAsync();
 
             await CreateAndSignInDirectorAsync(assignedEventId);
@@ -132,7 +130,7 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
         await RunAsync(async () =>
         {
             await SignInAsAdminAsync();
-            Guid assignedEventId = await CreateEventAsync($"Assigned {Guid.NewGuid():n}");
+            (Guid assignedEventId, _) = await CreateEventAsync("Assigned");
             await SignOutAsync();
 
             await CreateAndSignInDirectorAsync(assignedEventId);
@@ -143,42 +141,6 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
                 new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
             await Expect(Page.Locator("#Name")).Not.ToBeVisibleAsync();
         });
-
-    /// <remarks>
-    /// The Admin grid is never scoped (unlike a Director's) - it lists every Event this local dev machine's
-    /// persistent SQL volume has ever accumulated across every past run of this suite
-    /// (<see cref="AspireE2EFixture"/>'s own remarks: the data volume outlives any one run), paged 10 at a
-    /// time with no search box (out of scope for P2-9, #18). A freshly created Event can land on any page
-    /// depending on how many prior runs' Events already exist, so asserting against the grid's default
-    /// first page - as opposed to a Director's grid, which only ever shows what that one test itself
-    /// assigned - is not reliable. This pages forward through the grid's own pagination controls looking
-    /// for the target text, rather than assuming page 1. The final wait below, on whatever page the loop
-    /// stopped on, covers both "the grid's LoadData for this page hasn't settled yet" and "it's genuinely
-    /// missing."
-    /// </remarks>
-    private async Task AssertEventVisibleInGridAsync(string name)
-    {
-        const int maxPages = 50;
-
-        for (int page = 1; page <= maxPages; page++)
-        {
-            if (await Page.GetByText(name).CountAsync() > 0)
-            {
-                return;
-            }
-
-            ILocator nextPageButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Go to next page." });
-            if (!await nextPageButton.IsEnabledAsync())
-            {
-                break;
-            }
-
-            await nextPageButton.ClickAsync();
-        }
-
-        await Expect(Page.GetByText(name)).ToBeVisibleAsync(
-            new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
-    }
 
     /// <remarks>
     /// Scoped to the field's own container, not a bare page-wide <c>GetByText</c> - a collision on
@@ -192,44 +154,10 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
 
     private async Task<IdentityUserDto> CreateAndSignInDirectorAsync(Guid eventId)
     {
-        string email = $"e2e-director-{Guid.NewGuid():n}@example.test";
-        IdentityUserDto director =
-            await Fixture.IdentityApi.CreateUserAsync(email, TestCredentials.KnownPassword, CancellationToken.None);
+        IdentityUserDto director = await CreateTrackedUserAsync("e2e-director", CancellationToken.None);
         await Fixture.IdentityApi.GrantDirectorAsync(director.Id, eventId, CancellationToken.None);
 
-        await new LoginPage(Page).SignInAsync(Fixture.WebBaseUrl, email, TestCredentials.KnownPassword);
+        await new LoginPage(Page).SignInAsync(Fixture.WebBaseUrl, director.Email!, TestCredentials.KnownPassword);
         return director;
     }
-
-    /// <remarks>
-    /// The only sign-out affordance is the header's real <c>POST Account/Logout</c> form
-    /// (<c>SignOutForm.razor</c>) - clicking it, rather than clearing cookies directly, exercises the same
-    /// path a real session change goes through and keeps this test from assuming cookie storage details.
-    /// </remarks>
-    private async Task SignOutAsync()
-    {
-        await Page.GotoAsync(Fixture.WebBaseUrl.ToString());
-        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Sign out" }).ClickAsync();
-    }
-
-    /// <summary>Creates an Event via the real UI and returns its id, parsed off the resulting edit URL.</summary>
-    /// <remarks>
-    /// The URL-change assertion below carries a longer-than-default timeout - <c>/dashboard/events/new</c>
-    /// is an <c>InteractiveServer</c> page (ADR-0034), so a click has to survive a real SignalR round trip,
-    /// not just a DOM update; the first such round trip in a fresh browser context (cold circuit connect)
-    /// can comfortably exceed Playwright's 5s assertion default on a loaded machine.
-    /// </remarks>
-    private async Task<Guid> CreateEventAsync(string name)
-    {
-        await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard/events/new").ToString());
-        await Page.Locator("#Name").FillAsync(name);
-        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create event" }).ClickAsync();
-        await Expect(Page).ToHaveURLAsync(
-            new Regex(@"dashboard/events/[0-9a-f-]{36}$"), new PageAssertionsToHaveURLOptions { Timeout = 20_000 });
-
-        string path = new Uri(Page.Url).AbsolutePath;
-        return Guid.Parse(path[(path.LastIndexOf('/') + 1)..]);
-    }
-
-    private string EventEditorUrl(Guid eventId) => new Uri(Fixture.WebBaseUrl, $"dashboard/events/{eventId}").ToString();
 }
