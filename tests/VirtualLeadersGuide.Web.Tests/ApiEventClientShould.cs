@@ -1,11 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using Microsoft.Extensions.Configuration;
-using VirtualLeadersGuide.Identity.Contracts;
-using VirtualLeadersGuide.Web.Authorization;
 using VirtualLeadersGuide.Web.Events;
-using VirtualLeadersGuide.Web.Identity;
 
 namespace VirtualLeadersGuide.Web.Tests;
 
@@ -18,7 +14,6 @@ namespace VirtualLeadersGuide.Web.Tests;
 public class ApiEventClientShould
 {
     private const string JsonApiMediaType = "application/vnd.api+json";
-    private const string SigningKey = "test-internal-jwt-signing-key-at-least-32-bytes-long";
 
     [Fact]
     public async Task SendJsonApiAcceptHeaderAndTheBearerToken_WhenSendingARequest_ForGetEventAsync()
@@ -275,14 +270,8 @@ public class ApiEventClientShould
             () => client.GetEventsAsync(1, 10, null, CancellationToken.None));
     }
 
-    private static ApiEventClient CreateClient(HttpMessageHandler apiHandler)
-    {
-        var grantsClient = new ApiRoleGrantClient(new StubHttpClientFactory(
-            StubHttpMessageHandler.RespondingWith(HttpStatusCode.NotFound)));
-        var jwtProvider = new InternalJwtProvider(new FixedAuthenticationStateProvider("user-1"), grantsClient, Configuration());
-        var apiClient = new InternalApiClient(new StubHttpClientFactory(apiHandler), jwtProvider);
-        return new ApiEventClient(apiClient);
-    }
+    private static ApiEventClient CreateClient(HttpMessageHandler apiHandler) =>
+        ApiClientTestFactory.CreateEventClient(apiHandler);
 
     private static object EventResource(Guid? id = null, string name = "Fall Camporee", string slug = "fall-camporee") =>
         new
@@ -298,11 +287,4 @@ public class ApiEventClientShould
         response.Content.Headers.ContentType = new MediaTypeHeaderValue(JsonApiMediaType);
         return response;
     }
-
-    private static IConfiguration Configuration() => new ConfigurationBuilder()
-        .AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            [InternalJwtDefaults.SigningKeyConfigurationKey] = SigningKey
-        })
-        .Build();
 }
