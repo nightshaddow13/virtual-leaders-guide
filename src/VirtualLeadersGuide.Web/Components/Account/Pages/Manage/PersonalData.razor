@@ -1,11 +1,5 @@
 @page "/Account/Manage/PersonalData"
 
-@using Microsoft.AspNetCore.Identity
-@using VirtualLeadersGuide.Web.Identity
-
-@inject UserManager<ApplicationUser> UserManager
-@inject IdentityRedirectManager RedirectManager
-
 <PageTitle>Personal Data</PageTitle>
 
 <StatusMessage />
@@ -26,17 +20,3 @@
         </p>
     </RadzenColumn>
 </RadzenRow>
-
-@code {
-    [CascadingParameter]
-    private HttpContext HttpContext { get; set; } = default!;
-
-    protected override async Task OnInitializedAsync()
-    {
-        var user  = await UserManager.GetUserAsync(HttpContext.User);
-        if (user is null)
-        {
-            RedirectManager.RedirectToInvalidUser(UserManager, HttpContext);
-        }
-    }
-}

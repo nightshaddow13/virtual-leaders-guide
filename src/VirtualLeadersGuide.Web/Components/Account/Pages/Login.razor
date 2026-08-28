@@ -6,15 +6,6 @@
    (unreachable - ApiUserStore doesn't implement IUserTwoFactorStore, see ADR-0022 and issue #54). See
    IdentityRedirectManager.cs's header comment. *@
 
-@using System.ComponentModel.DataAnnotations
-@using Microsoft.AspNetCore.Authentication
-@using Microsoft.AspNetCore.Identity
-@using VirtualLeadersGuide.Web.Identity
-
-@inject SignInManager<ApplicationUser> SignInManager
-@inject ILogger<Login> Logger
-@inject IdentityRedirectManager RedirectManager
-
 <PageTitle>Log in</PageTitle>
 
 <h1>Log in</h1>
@@ -56,64 +47,3 @@
         </section>
     </RadzenColumn>
 </RadzenRow>
-
-@code {
-    private string? errorMessage;
-
-    [CascadingParameter]
-    private HttpContext HttpContext { get; set; } = default!;
-
-    [SupplyParameterFromForm]
-    private InputModel Input { get; set; } = default!;
-
-    [SupplyParameterFromQuery]
-    private string? ReturnUrl { get; set; }
-
-    /// <remarks>Clears the existing external cookie to ensure a clean login process.</remarks>
-    protected override async Task OnInitializedAsync()
-    {
-        Input ??= new();
-
-        if (HttpMethods.IsGet(HttpContext.Request.Method))
-        {
-            await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
-        }
-    }
-
-    /// <remarks>
-    /// <c>lockoutOnFailure: false</c> - this doesn't count login failures towards account lockout. Set to
-    /// <see langword="true"/> to enable password failures to trigger account lockout.
-    /// </remarks>
-    public async Task LoginUser()
-    {
-        var result = await SignInManager.PasswordSignInAsync(Input.Email, Input.Password, Input.RememberMe, lockoutOnFailure: false);
-        if (result.Succeeded)
-        {
-            Logger.LogInformation("User logged in.");
-            RedirectManager.RedirectTo(ReturnUrl);
-        }
-        else if (result.IsLockedOut)
-        {
-            Logger.LogWarning("User account locked out.");
-            RedirectManager.RedirectTo("Account/Lockout");
-        }
-        else
-        {
-            errorMessage = "Error: Invalid login attempt.";
-        }
-    }
-
-    private sealed class InputModel
-    {
-        [Required]
-        [EmailAddress]
-        public string Email { get; set; } = "";
-
-        [Required]
-        [DataType(DataType.Password)]
-        public string Password { get; set; } = "";
-
-        [Display(Name = "Remember me?")]
-        public bool RememberMe { get; set; }
-    }
-}

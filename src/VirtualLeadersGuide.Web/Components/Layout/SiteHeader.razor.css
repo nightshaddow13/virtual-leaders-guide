@@ -69,9 +69,47 @@
         height: 1.125rem;
     }
 
-/* .vlg-icon-sun/.vlg-icon-moon visibility (which one shows per theme state) lives in app.css, not here -
-   it keys off :root/[data-theme], a `:root`-level concern that belongs alongside the --vlg-* token cascade
-   it mirrors, not split across a Blazor-scoped file too. */
+/* ===========================================================================
+   Theme toggle icon state (ADR-0040). The icon shown reflects the theme currently ACTIVE (click it to
+   switch away from that theme) - mirrors the exact same 4-state cascade as app.css's --vlg-* tokens:
+   default light, system-dark-with-no-override, explicit dark, explicit light. Keyed off :root/[data-theme]
+   on <html> (see wwwroot/js/theme-toggle.js) - Blazor's CSS isolation only scopes the rightmost compound
+   selector in each rule, so the [data-theme="..."] ancestor clause below still matches regardless of scope.
+   =========================================================================== */
+
+.vlg-icon-moon {
+    display: block;
+}
+
+.vlg-icon-sun {
+    display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]):not([data-theme="dark"]) .vlg-icon-moon {
+        display: none;
+    }
+
+    :root:not([data-theme="light"]):not([data-theme="dark"]) .vlg-icon-sun {
+        display: block;
+    }
+}
+
+[data-theme="dark"] .vlg-icon-moon {
+    display: none;
+}
+
+[data-theme="dark"] .vlg-icon-sun {
+    display: block;
+}
+
+[data-theme="light"] .vlg-icon-moon {
+    display: block;
+}
+
+[data-theme="light"] .vlg-icon-sun {
+    display: none;
+}
 
 @media (max-width: 40rem) {
     .vlg-brand-row {

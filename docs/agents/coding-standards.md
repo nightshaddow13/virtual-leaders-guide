@@ -70,3 +70,40 @@ Off for now. Roslyn surfaces `///` docs from source for in-solution project refe
 without it. Turning it on would fire `CS1591` ("missing XML comment for publicly visible member") across every
 undocumented public member that predates this convention — tracked as a follow-up to enable once the codebase
 has caught up (also unblocks XML-doc-driven Swagger descriptions for P1-12, #38).
+
+## Blazor components
+
+A component's C# lives in a `{Component}.razor.cs` partial class, not an `@code` block, once the `.razor`
+file — markup and `@code` combined — passes 40 raw physical lines. A file at 40 lines or under may keep its
+`@code` inline regardless of shape; there is no additional exemption for e.g. a component with only one
+`[Parameter]`, and no requirement to split out a component that sits at or under the line. The threshold is
+a plain count of the file exactly as an editor's line-number gutter or `git diff` shows it — no adjustment
+for blank lines, comments, or directives. See ADR-0040 for why this is a pure line count rather than a
+threshold plus a list of shape-based exceptions.
+
+Dependencies move with the code: a component with a code-behind declares them as `private [Inject]`
+properties in the `.cs` file, not `@inject` directives in the markup. A component under the 40-line
+threshold keeps `@inject`, matching how it already worked. `_Imports.razor`'s global `@using` list applies
+only to `.razor` files — a `.razor.cs` file needs its own `using` directives for everything it references,
+`Microsoft.AspNetCore.Components` (for `[Inject]`/`[Parameter]`/`[CascadingParameter]` themselves) included.
+
+A private model class or enum used only by one component — an `InputModel`, a `PageState` enum — stays
+nested inside that component's code-behind partial class rather than moving to its own file. It's an
+implementation detail of one component, referenced nowhere else by name.
+
+Custom CSS that only one component consumes goes in `{Component}.razor.css`, never in the global
+`wwwroot/app.css`. `app.css` is reserved for the `--vlg-*` design-token cascade (ADR-0034), rules genuinely
+shared across multiple components, and document-shell chrome with no component of its own to attach to
+(`#blazor-error-ui`, whose markup lives in `App.razor`). This extends ADR-0038 rather than replacing it —
+Radzen-component-first is still the first question for a layout/typography/status need; this rule only
+governs where the CSS goes once ADR-0038 has already concluded custom CSS is warranted. See ADR-0040 for the
+full rule, including the `SiteHeader.razor.css` reversal it documents.
+
+Component logic that needs test coverage is tested with bUnit (ADR-0041), not by rendering the component
+through a real HTTP request. `RadzenTestServices`/`ApiClientTestFactory`/`DirectorInviteServiceTestFactory`/
+`FakeUserManagerFactory`/`IdentityTestServices` (all in `tests/VirtualLeadersGuide.Web.Tests/`) are this
+repo's shared component-test fixtures — reach for one of these before writing a new fake from scratch. A
+`private` `[SupplyParameterFromQuery]`/`[SupplyParameterFromForm]` property can't be set from a component
+test at all, bUnit or otherwise, since setting it means naming it; only the branches reachable without
+supplying one have coverage, and that's a known, accepted gap rather than something to work around by
+loosening the property's visibility for testability alone.

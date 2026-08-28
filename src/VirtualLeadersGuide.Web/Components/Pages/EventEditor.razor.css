@@ -1,0 +1,29 @@
+/* ===========================================================================
+   Slug field "/e/" prefix affix (P2-9, #18; ADR-0038; moved here from app.css by ADR-0040).
+   EventEditor.razor is this rule's only consumer - RadzenFormField's Start/End slots are the
+   component-shaped answer, but every input in this app's EditForms is a plain InputText/ValidationMessage
+   pair, not a RadzenTextBox (see ADR-0038's "What's exempt" section for the full rationale).
+   =========================================================================== */
+
+.vlg-slug-field {
+    display: flex;
+    align-items: stretch;
+}
+
+    .vlg-slug-field .vlg-slug-prefix {
+        display: flex;
+        align-items: center;
+        padding-inline: 0.5rem;
+        border: 1px solid var(--vlg-line);
+        border-inline-end: none;
+        border-start-start-radius: var(--vlg-radius);
+        border-end-start-radius: var(--vlg-radius);
+        background: var(--vlg-canvas-sunk);
+        color: var(--vlg-ink-faint);
+        font-size: 0.75rem;
+    }
+
+    .vlg-slug-field input {
+        border-start-start-radius: 0;
+        border-end-start-radius: 0;
+    }

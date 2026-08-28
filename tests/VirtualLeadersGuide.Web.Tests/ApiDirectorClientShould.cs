@@ -1,11 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using Microsoft.Extensions.Configuration;
 using VirtualLeadersGuide.Identity.Contracts;
-using VirtualLeadersGuide.Web.Authorization;
 using VirtualLeadersGuide.Web.Directors;
-using VirtualLeadersGuide.Web.Identity;
 
 namespace VirtualLeadersGuide.Web.Tests;
 
@@ -18,8 +15,6 @@ namespace VirtualLeadersGuide.Web.Tests;
 /// </remarks>
 public class ApiDirectorClientShould
 {
-    private const string SigningKey = "test-internal-jwt-signing-key-at-least-32-bytes-long";
-
     [Fact]
     public async Task ReturnUsersJoinedWithTheirGrants_WhenApiRespondsWithOk_ForGetUsersAsync()
     {
@@ -259,14 +254,8 @@ public class ApiDirectorClientShould
             () => client.GetUsersAsync(1, 10, null, null, CancellationToken.None));
     }
 
-    private static ApiDirectorClient CreateClient(HttpMessageHandler apiHandler)
-    {
-        var grantsClient = new ApiRoleGrantClient(new StubHttpClientFactory(
-            StubHttpMessageHandler.RespondingWith(HttpStatusCode.NotFound)));
-        var jwtProvider = new InternalJwtProvider(new FixedAuthenticationStateProvider("user-1"), grantsClient, Configuration());
-        var apiClient = new InternalApiClient(new StubHttpClientFactory(apiHandler), jwtProvider);
-        return new ApiDirectorClient(apiClient);
-    }
+    private static ApiDirectorClient CreateClient(HttpMessageHandler apiHandler) =>
+        ApiClientTestFactory.CreateDirectorClient(apiHandler);
 
     private static object UserResource(string id, string email, string? displayName, bool hasCredential) => new
     {
@@ -288,11 +277,4 @@ public class ApiDirectorClientShould
         response.Content.Headers.ContentType = new MediaTypeHeaderValue("application/vnd.api+json");
         return response;
     }
-
-    private static IConfiguration Configuration() => new ConfigurationBuilder()
-        .AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            [InternalJwtDefaults.SigningKeyConfigurationKey] = SigningKey
-        })
-        .Build();
 }
