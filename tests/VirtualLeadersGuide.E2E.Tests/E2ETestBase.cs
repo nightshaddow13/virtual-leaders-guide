@@ -187,9 +187,17 @@ public abstract class E2ETestBase(AspireE2EFixture fixture) : PageTest
     /// context closes, so "only record on failure" isn't an option. <see cref="DisposeAsync"/> deletes the
     /// file instead when the test passed (AC #2).
     /// </remarks>
+    /// <remarks>
+    /// <c>TimezoneId = "UTC"</c> pins the browser's <c>Intl.DateTimeFormat().resolvedOptions().timeZone</c>
+    /// (P2-15, #102) - without it Playwright defaults to the host machine's own zone, and a rendered Event
+    /// date range (<c>EventDateRange</c> converts to each viewer's browser timezone, ADR-0043) would vary
+    /// with whatever CI agent or developer machine ran the suite. <c>RecordVideoDir</c> is unrelated - see
+    /// this method's other remarks.
+    /// </remarks>
     public override BrowserNewContextOptions ContextOptions() => new()
     {
         RecordVideoDir = Path.GetTempPath(),
+        TimezoneId = "UTC"
     };
 
     /// <summary>
