@@ -17,6 +17,13 @@ the conventions the first of the three (deleting an Event) establishes for the o
   `Draft` Event and deleting a `Live` one with real Directors - no extra floor (typing the Event's Name, etc.)
   for the riskier case. The consequence copy inside the dialog (Directors affected, Slug freed up) carries the
   "make them read it" job instead.
+- **The consequence list is caller-supplied and conditional, not a fixed shape.** Each bullet is populated by
+  the caller and omitted entirely when it doesn't apply - deleting an Event with zero Directors assigned shows
+  no "Directors lose access" line at all, rather than one reading "0 directors." A caller whose consequence
+  data itself comes from a fallible fetch (P2-17: an Event's Director count, from `/api/roleGrants`) degrades
+  that one bullet to explanatory text ("Directors with access couldn't be loaded") instead of blocking the
+  dialog from opening at all - an Admin's ability to delete a broken record shouldn't depend on a transient
+  failure in data that's only advisory to begin with.
 - **Delete a User refuses two specific targets**, both guard rules rather than UI-only checks: a User holding
   the Admin Role (ADR-0008 re-syncs Admin status from the config allowlist on every sign-in, so deleting an
   Admin's row doesn't actually revoke anything if their email is still listed - the allowlist, not the
@@ -42,3 +49,6 @@ Deleting an Event's own cascade behavior (Grants go with it) is ADR-0044's decis
   a hand-rolled confirm here is a deviation from this ADR, not a new default.
 - `UserDetail.razor`'s "Delete user" control needs the caller's own id (from `AuthenticationState`) to
   implement the self-delete guard, not just the target User's id.
+- A caller assembling `ConfirmDialog`'s consequence list follows the convention above - conditional bullets,
+  degrade-not-block on a fetch failure - rather than inventing its own each time. #113/#114/#115 read this ADR
+  for that contract, not just the dialog's parameter shape.
