@@ -128,6 +128,20 @@ public class DirectorInviteServiceShould
     }
 
     [Fact]
+    public async Task ReturnSendFailed_WithoutThrowing_WhenSendingTheEmailFails_ForResendAsync()
+    {
+        using Fixture fixture = Fixture.Create();
+        IdentityUserDto user = SeedUser("dana@troop7.org", hasPassword: false);
+        fixture.Identity.Seed(user);
+        fixture.EmailSender.ThrowOnSend = new InvalidOperationException("Email:ConnectionString is not configured.");
+
+        ResendOutcome outcome = await fixture.Service.ResendAsync(user.Id, CancellationToken.None);
+
+        Assert.Equal(ResendOutcome.SendFailed, outcome);
+        Assert.Empty(fixture.EmailSender.Sent);
+    }
+
+    [Fact]
     public async Task ReturnAlreadyActive_WhenTheUserAlreadyHasAPassword_ForResendAsync()
     {
         using Fixture fixture = Fixture.Create();
@@ -291,8 +305,16 @@ public class DirectorInviteServiceShould
     {
         public List<(string Email, string SetupLink)> Sent { get; } = [];
 
+        /// <summary>When set, <see cref="SendDirectorInviteAsync"/> throws this instead of recording a send.</summary>
+        public Exception? ThrowOnSend { get; set; }
+
         public Task SendDirectorInviteAsync(ApplicationUser user, string email, string setupLink)
         {
+            if (ThrowOnSend is not null)
+            {
+                throw ThrowOnSend;
+            }
+
             Sent.Add((email, setupLink));
             return Task.CompletedTask;
         }
