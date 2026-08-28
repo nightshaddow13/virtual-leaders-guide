@@ -260,9 +260,8 @@ public partial class EventEditor
             return;
         }
 
-        if (outcome is EventWriteOutcome.Conflict or EventWriteOutcome.Invalid)
+        if (TryApplyFieldErrors(outcome, pointers))
         {
-            ApplyFieldErrors(pointers);
             return;
         }
 
@@ -306,9 +305,8 @@ public partial class EventEditor
             return;
         }
 
-        if (outcome is EventWriteOutcome.Conflict or EventWriteOutcome.Invalid)
+        if (TryApplyFieldErrors(outcome, pointers))
         {
-            ApplyFieldErrors(pointers);
             return;
         }
 
@@ -387,6 +385,23 @@ public partial class EventEditor
         }
 
         isAddingDirector = false;
+    }
+
+    /// <remarks>
+    /// Shared by <see cref="CreateAsync"/>/<see cref="UpdateAsync"/> - both route
+    /// <see cref="EventWriteOutcome.Conflict"/>/<see cref="EventWriteOutcome.Invalid"/> onto
+    /// <see cref="ApplyFieldErrors"/> identically, then stop; only their <see cref="EventWriteOutcome.Forbidden"/>
+    /// handling differs, so that stays in each caller.
+    /// </remarks>
+    private bool TryApplyFieldErrors(EventWriteOutcome outcome, IReadOnlyList<string> pointers)
+    {
+        if (outcome is not (EventWriteOutcome.Conflict or EventWriteOutcome.Invalid))
+        {
+            return false;
+        }
+
+        ApplyFieldErrors(pointers);
+        return true;
     }
 
     private void ApplyFieldErrors(IReadOnlyList<string> pointers)

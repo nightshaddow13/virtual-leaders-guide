@@ -99,15 +99,16 @@ public class EventDateRangeShould
 
     /// <remarks>
     /// Pins the whole reason <see cref="EventDateRange.Format"/> takes a <see cref="TimeZoneInfo"/> at all
-    /// (grilling decisions 5-7): the same UTC instant, rendered for two viewers in different zones, can
-    /// legitimately land on different calendar days.
+    /// (grilling decisions 5-7): the same UTC instant - 2am UTC, chosen so it falls on a different local
+    /// calendar day in each zone - rendered for a US Eastern viewer (<c>minus5</c>, UTC-4/-5) and a Tokyo
+    /// viewer (<c>plus9</c>, UTC+9) legitimately lands on different calendar days for each.
     /// </remarks>
     [Fact]
     public void RenderDifferentCalendarDays_WhenTheSameInstantIsFormattedForTwoDifferentZones_ForFormat()
     {
-        var startsAt = new DateTimeOffset(2026, 6, 13, 2, 0, 0, TimeSpan.Zero); // 2am UTC
-        TimeZoneInfo minus5 = TimeZoneInfo.FindSystemTimeZoneById("America/New_York"); // UTC-4/-5
-        TimeZoneInfo plus9 = TimeZoneInfo.FindSystemTimeZoneById("Asia/Tokyo"); // UTC+9
+        var startsAt = new DateTimeOffset(2026, 6, 13, 2, 0, 0, TimeSpan.Zero);
+        TimeZoneInfo minus5 = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
+        TimeZoneInfo plus9 = TimeZoneInfo.FindSystemTimeZoneById("Asia/Tokyo");
 
         string easternResult = EventDateRange.Format(startsAt, null, minus5, Now2026);
         string tokyoResult = EventDateRange.Format(startsAt, null, plus9, Now2026);
