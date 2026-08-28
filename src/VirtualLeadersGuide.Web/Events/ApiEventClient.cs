@@ -79,21 +79,29 @@ public sealed class ApiEventClient(InternalApiClient apiClient)
         return (EventReadOutcome.Success, ToDto(document.Data));
     }
 
-    /// <summary>Creates a new Event with only a Name - Api derives the Slug and generates the Passcode.</summary>
+    /// <summary>Creates a new Event with a Name and optional Start/End - Api derives the Slug and generates the Passcode.</summary>
     /// <param name="name">The new Event's display name.</param>
+    /// <param name="startsAt">The new Event's start, or <see langword="null"/> to leave it unset.</param>
+    /// <param name="endsAt">The new Event's end, or <see langword="null"/> to leave it unset.</param>
     /// <param name="cancellationToken">Propagated to the underlying HTTP call.</param>
     /// <returns>
     /// <see cref="EventWriteOutcome.Success"/> with the created Event (its server-derived Slug and
     /// generated Passcode included); <see cref="EventWriteOutcome.Forbidden"/> if the caller isn't an Admin
-    /// (ADR-0031); or <see cref="EventWriteOutcome.Conflict"/> with the colliding attribute pointers if
-    /// <paramref name="name"/> or its derived Slug is already in use.
+    /// (ADR-0031); <see cref="EventWriteOutcome.Conflict"/> with the colliding attribute pointers if
+    /// <paramref name="name"/> or its derived Slug is already in use; or <see cref="EventWriteOutcome.Invalid"/>
+    /// with the offending pointer if <paramref name="endsAt"/> isn't a valid end for <paramref name="startsAt"/>
+    /// (ADR-0042).
     /// </returns>
     public async Task<(EventWriteOutcome Outcome, EventDto? Event, IReadOnlyList<string> ConflictPointers)> CreateAsync(
-        string name, CancellationToken cancellationToken)
+        string name, DateTimeOffset? startsAt, DateTimeOffset? endsAt, CancellationToken cancellationToken)
     {
         var body = new EventDocument
         {
-            Data = new EventResourceObject { Type = ResourceType, Attributes = new EventAttributesDto { Name = name } }
+            Data = new EventResourceObject
+            {
+                Type = ResourceType,
+                Attributes = new EventAttributesDto { Name = name, StartsAt = startsAt, EndsAt = endsAt }
+            }
         };
         using var request = NewRequest(HttpMethod.Post, EventsPath, body);
         using HttpResponseMessage response = await SendAsync(request, cancellationToken);
@@ -105,7 +113,12 @@ public sealed class ApiEventClient(InternalApiClient apiClient)
 
         if (response.StatusCode == HttpStatusCode.Conflict)
         {
-            return (EventWriteOutcome.Conflict, null, await ReadConflictPointersAsync(response, cancellationToken));
+            return (EventWriteOutcome.Conflict, null, await ReadErrorPointersAsync(response, cancellationToken));
+        }
+
+        if (response.StatusCode == HttpStatusCode.UnprocessableEntity)
+        {
+            return (EventWriteOutcome.Invalid, null, await ReadErrorPointersAsync(response, cancellationToken));
         }
 
         EnsureExpectedStatus(response, HttpStatusCode.Created);
@@ -118,14 +131,23 @@ public sealed class ApiEventClient(InternalApiClient apiClient)
     /// <param name="name">The new Name, or <see langword="null"/> to leave it unchanged.</param>
     /// <param name="slug">The new Slug, or <see langword="null"/> to leave it unchanged.</param>
     /// <param name="passcode">The new Passcode, or <see langword="null"/> to leave it unchanged.</param>
+    /// <param name="startsAt">
+    /// The Event's start to persist, or <see langword="null"/> to clear it - unlike <paramref name="name"/>/
+    /// <paramref name="slug"/>/<paramref name="passcode"/>, there's no "leave unchanged" value: <c>startsAt</c>/
+    /// <c>endsAt</c> always serialize on the wire (<see cref="EventAttributesDto.StartsAt"/>'s remarks), so a
+    /// caller not changing this Event's start passes its current value back.
+    /// </param>
+    /// <param name="endsAt">The Event's end to persist, or <see langword="null"/> to clear it - see <paramref name="startsAt"/>.</param>
     /// <param name="cancellationToken">Propagated to the underlying HTTP call.</param>
     /// <returns>
     /// <see cref="EventWriteOutcome.Success"/> (Api returns 204, no body to read back);
-    /// <see cref="EventWriteOutcome.Forbidden"/> if the caller isn't an Admin; or
-    /// <see cref="EventWriteOutcome.Conflict"/> with the colliding attribute pointers.
+    /// <see cref="EventWriteOutcome.Forbidden"/> if the caller isn't an Admin;
+    /// <see cref="EventWriteOutcome.Conflict"/> with the colliding attribute pointers; or
+    /// <see cref="EventWriteOutcome.Invalid"/> with the offending pointer (ADR-0042).
     /// </returns>
     public async Task<(EventWriteOutcome Outcome, IReadOnlyList<string> ConflictPointers)> UpdateAsync(
-        Guid id, string? name, string? slug, string? passcode, CancellationToken cancellationToken)
+        Guid id, string? name, string? slug, string? passcode,
+        DateTimeOffset? startsAt, DateTimeOffset? endsAt, CancellationToken cancellationToken)
     {
         var body = new EventDocument
         {
@@ -133,7 +155,14 @@ public sealed class ApiEventClient(InternalApiClient apiClient)
             {
                 Type = ResourceType,
                 Id = id.ToString(),
-                Attributes = new EventAttributesDto { Name = name, Slug = slug, Passcode = passcode }
+                Attributes = new EventAttributesDto
+                {
+                    Name = name,
+                    Slug = slug,
+                    Passcode = passcode,
+                    StartsAt = startsAt,
+                    EndsAt = endsAt
+                }
             }
         };
         using var request = NewRequest(HttpMethod.Patch, $"{EventsPath}/{id}", body);
@@ -146,7 +175,12 @@ public sealed class ApiEventClient(InternalApiClient apiClient)
 
         if (response.StatusCode == HttpStatusCode.Conflict)
         {
-            return (EventWriteOutcome.Conflict, await ReadConflictPointersAsync(response, cancellationToken));
+            return (EventWriteOutcome.Conflict, await ReadErrorPointersAsync(response, cancellationToken));
+        }
+
+        if (response.StatusCode == HttpStatusCode.UnprocessableEntity)
+        {
+            return (EventWriteOutcome.Invalid, await ReadErrorPointersAsync(response, cancellationToken));
         }
 
         EnsureExpectedStatus(response, HttpStatusCode.NoContent);
@@ -199,7 +233,7 @@ public sealed class ApiEventClient(InternalApiClient apiClient)
     private static async Task<T> ReadAsync<T>(HttpResponseMessage response, CancellationToken cancellationToken) =>
         (await response.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken))!;
 
-    private static async Task<IReadOnlyList<string>> ReadConflictPointersAsync(
+    private static async Task<IReadOnlyList<string>> ReadErrorPointersAsync(
         HttpResponseMessage response, CancellationToken cancellationToken)
     {
         ErrorDocument document = await ReadAsync<ErrorDocument>(response, cancellationToken);
@@ -211,7 +245,9 @@ public sealed class ApiEventClient(InternalApiClient apiClient)
         Id = Guid.Parse(resource.Id!),
         Name = resource.Attributes!.Name!,
         Slug = resource.Attributes.Slug!,
-        Passcode = resource.Attributes.Passcode!
+        Passcode = resource.Attributes.Passcode!,
+        StartsAt = resource.Attributes.StartsAt,
+        EndsAt = resource.Attributes.EndsAt
     };
 
     private static string BuildCollectionUri(int pageNumber, int pageSize, string? sort)

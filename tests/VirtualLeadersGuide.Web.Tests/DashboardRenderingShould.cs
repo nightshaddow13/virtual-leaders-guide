@@ -1,9 +1,11 @@
 using System.Net;
+using AngleSharp.Dom;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using VirtualLeadersGuide.Web.Components.Pages;
 using VirtualLeadersGuide.Web.Events;
+using VirtualLeadersGuide.Web.Time;
 
 namespace VirtualLeadersGuide.Web.Tests;
 
@@ -22,7 +24,11 @@ public class DashboardRenderingShould : BunitContext
     /// default for any unconfigured call instead of throwing, rather than hand-configuring every Radzen JS
     /// interop call this test doesn't actually exercise.
     /// </remarks>
-    public DashboardRenderingShould() => JSInterop.Mode = JSRuntimeMode.Loose;
+    public DashboardRenderingShould()
+    {
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        Services.AddSingleton<BrowserTimeZoneAccessor>();
+    }
 
     [Fact]
     public void RedirectToNoAccess_WhenTheSignedInUserHoldsNoRoleClaim_ForOnInitializedAsync()
@@ -79,4 +85,72 @@ public class DashboardRenderingShould : BunitContext
 
         Assert.Contains("Something went wrong loading Events", cut.Markup, StringComparison.Ordinal);
     }
+
+    /// <remarks>
+    /// Under <see cref="JSRuntimeMode.Loose"/> the timezone call resolves to <see cref="TimeZoneInfo.Utc"/>
+    /// (<c>BrowserTimeZoneAccessor</c>'s own remarks) - real per-viewer conversion is
+    /// <see cref="EventDateRangeShould"/>'s job. This only pins that the DATES column actually renders
+    /// <see cref="EventDto.StartsAt"/>/<see cref="EventDto.EndsAt"/> through <c>FormatDates</c>, not a blank
+    /// cell or the raw property.
+    /// </remarks>
+    [Fact]
+    public void ShowTheFormattedDateRange_WhenAnEventHasBothDatesSet_ForLoadDataAsync()
+    {
+        Services.AddSingleton(ApiClientTestFactory.CreateEventClient(StubHttpMessageHandler.RespondingWithJson(
+            HttpStatusCode.OK, new { data = new[] { EventResource("Fall Camporee", "fall-camporee") } })));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("admin-1");
+        auth.SetRoles("Admin");
+
+        IRenderedComponent<Dashboard> cut = Render<Dashboard>();
+
+        Assert.Contains("JUN 12", cut.Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShowABlankDatesCell_WhenAnEventHasNoDatesSet_ForLoadDataAsync()
+    {
+        Services.AddSingleton(ApiClientTestFactory.CreateEventClient(StubHttpMessageHandler.RespondingWithJson(
+            HttpStatusCode.OK, new
+            {
+                data = new[]
+                {
+                    new
+                    {
+                        type = "events",
+                        id = Guid.NewGuid().ToString(),
+                        attributes = new
+                        {
+                            name = "Undated Event",
+                            slug = "undated-event",
+                            passcode = "TigerLantern",
+                            startsAt = (DateTimeOffset?)null,
+                            endsAt = (DateTimeOffset?)null
+                        }
+                    }
+                }
+            })));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("admin-1");
+        auth.SetRoles("Admin");
+
+        IRenderedComponent<Dashboard> cut = Render<Dashboard>();
+
+        IElement datesCell = cut.FindAll("tbody tr").First().QuerySelectorAll("td")[2];
+        Assert.Equal(string.Empty, datesCell.TextContent.Trim());
+    }
+
+    private static object EventResource(string name, string slug) => new
+    {
+        type = "events",
+        id = Guid.NewGuid().ToString(),
+        attributes = new
+        {
+            name,
+            slug,
+            passcode = "TigerLantern",
+            startsAt = new DateTimeOffset(2026, 6, 12, 9, 0, 0, TimeSpan.Zero),
+            endsAt = new DateTimeOffset(2026, 6, 14, 17, 0, 0, TimeSpan.Zero)
+        }
+    };
 }

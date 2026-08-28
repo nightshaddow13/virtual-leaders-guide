@@ -7,6 +7,7 @@ using Radzen;
 using VirtualLeadersGuide.Web.Authorization;
 using VirtualLeadersGuide.Web.Directors;
 using VirtualLeadersGuide.Web.Events;
+using VirtualLeadersGuide.Web.Time;
 
 namespace VirtualLeadersGuide.Web.Components.Pages;
 
@@ -23,6 +24,9 @@ public partial class EventEditor
 
     [Inject]
     private NotificationService NotificationService { get; set; } = default!;
+
+    [Inject]
+    private BrowserTimeZoneAccessor TimeZoneAccessor { get; set; } = default!;
 
     /// <remarks>
     /// <see langword="null"/> on <c>/dashboard/events/new</c>; set on <c>/dashboard/events/{Id:guid}</c>.
@@ -52,6 +56,19 @@ public partial class EventEditor
     private string? selectedDirectorUserId;
     private bool isAddingDirector;
     private string? directorErrorMessage;
+
+    /// <remarks>
+    /// Retained past <see cref="OnParametersSetAsync"/> for two reasons: the Director read-only view
+    /// (<see cref="PageState.Director"/>) reads its <see cref="EventDto.StartsAt"/>/<see cref="EventDto.EndsAt"/>
+    /// directly through <see cref="EventDateRange.FormatWithTime"/> on every render, so it updates for free
+    /// once <see cref="viewerZone"/> resolves; and <see cref="OnAfterRenderAsync"/> re-derives
+    /// <see cref="EventFormModel.StartsAtLocal"/>/<see cref="EventFormModel.EndsAtLocal"/> from it once the
+    /// real zone is known, since they were first populated against the UTC fallback.
+    /// </remarks>
+    private EventDto? loadedDto;
+
+    /// <remarks>See <c>Dashboard.razor.cs</c>'s identically-named field - same UTC-fallback-until-resolved shape.</remarks>
+    private TimeZoneInfo viewerZone = TimeZoneInfo.Utc;
 
     /// <remarks>
     /// Three decisions worth naming here: (1) <c>Id is null</c> is a load-time gate, not a save-time
@@ -111,7 +128,15 @@ public partial class EventEditor
             return;
         }
 
-        model = new EventFormModel { Name = dto.Name, Slug = dto.Slug, Passcode = dto.Passcode };
+        loadedDto = dto;
+        model = new EventFormModel
+        {
+            Name = dto.Name,
+            Slug = dto.Slug,
+            Passcode = dto.Passcode,
+            StartsAtLocal = ToLocalWallClock(dto.StartsAt),
+            EndsAtLocal = ToLocalWallClock(dto.EndsAt)
+        };
 
         if (accessView.CanEditEventDetails)
         {
@@ -129,6 +154,52 @@ public partial class EventEditor
     {
         editContext = new EditContext(model!);
         messageStore = new ValidationMessageStore(editContext);
+    }
+
+    /// <remarks>
+    /// Interop is only legal once the circuit has connected - <paramref name="firstRender"/> is the earliest
+    /// safe point (matches <c>Dashboard.razor.cs</c>). <see cref="OnParametersSetAsync"/> already ran by
+    /// then and populated <see cref="EventFormModel.StartsAtLocal"/>/<see cref="EventFormModel.EndsAtLocal"/>
+    /// against the UTC fallback, so they're re-derived here from <see cref="loadedDto"/> once the real zone
+    /// is known, then re-rendered - a signed-in Admin from a non-UTC zone would otherwise see a Start/End
+    /// that's shifted from what's actually stored for the brief window before the circuit connects.
+    /// </remarks>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        viewerZone = await TimeZoneAccessor.GetTimeZoneAsync();
+
+        if (model is not null && loadedDto is not null)
+        {
+            model.StartsAtLocal = ToLocalWallClock(loadedDto.StartsAt);
+            model.EndsAtLocal = ToLocalWallClock(loadedDto.EndsAt);
+        }
+
+        StateHasChanged();
+    }
+
+    private DateTime? ToLocalWallClock(DateTimeOffset? utc) =>
+        utc is null ? null : TimeZoneInfo.ConvertTime(utc.Value, viewerZone).DateTime;
+
+    /// <remarks>
+    /// The inverse of <see cref="ToLocalWallClock"/> - <paramref name="localWallClock"/> is what
+    /// <c>InputDate</c> bound with <c>Type="InputDateType.DateTimeLocal"</c> hands back: a naive
+    /// (<see cref="DateTimeKind.Unspecified"/>) clock reading with no timezone of its own, understood to be
+    /// in <see cref="viewerZone"/> (the entering Admin's browser - CONTEXT.md's Starts at / Ends at entry).
+    /// </remarks>
+    private DateTimeOffset? ToUtc(DateTime? localWallClock)
+    {
+        if (localWallClock is not { } value)
+        {
+            return null;
+        }
+
+        var unspecified = DateTime.SpecifyKind(value, DateTimeKind.Unspecified);
+        return new DateTimeOffset(unspecified, viewerZone.GetUtcOffset(unspecified)).ToUniversalTime();
     }
 
     /// <remarks>
@@ -165,17 +236,23 @@ public partial class EventEditor
     }
 
     /// <remarks>
-    /// If a custom <see cref="EventFormModel.Slug"/>/<see cref="EventFormModel.Passcode"/> is supplied,
-    /// the Event already exists by the time the follow-up <see cref="ApiEventClient.UpdateAsync"/> runs -
-    /// this method navigates to it regardless of how that PATCH goes, rather than reporting a failure
-    /// that already half-happened. A conflict or transient failure there (e.g. a chosen slug collides, or
-    /// the store hiccups) is left for the Admin to notice and fix from the edit page itself, since
-    /// there's no field left to attach the error to once we've navigated away from this form.
+    /// If a custom <see cref="EventFormModel.Slug"/>/<see cref="EventFormModel.Passcode"/> is supplied, or
+    /// either date was typed, the Event already exists by the time the follow-up
+    /// <see cref="ApiEventClient.UpdateAsync"/> runs - this method navigates to it regardless of how that
+    /// PATCH goes, rather than reporting a failure that already half-happened. A conflict, invalid range, or
+    /// transient failure there is left for the Admin to notice and fix from the edit page itself, since
+    /// there's no field left to attach the error to once we've navigated away from this form. The follow-up
+    /// PATCH must pass both dates even when neither was typed - <see cref="EventAttributesDto.StartsAt"/>/
+    /// <see cref="EventAttributesDto.EndsAt"/> always serialize (ADR-0042), so omitting them here would send
+    /// an explicit <c>null</c> and clear what the initial POST just set.
     /// </remarks>
     private async Task CreateAsync()
     {
+        DateTimeOffset? startsAt = ToUtc(model!.StartsAtLocal);
+        DateTimeOffset? endsAt = ToUtc(model.EndsAtLocal);
+
         (EventWriteOutcome outcome, EventDto? created, IReadOnlyList<string> pointers) =
-            await EventClient.CreateAsync(model!.Name ?? string.Empty, CancellationToken.None);
+            await EventClient.CreateAsync(model.Name ?? string.Empty, startsAt, endsAt, CancellationToken.None);
 
         if (outcome == EventWriteOutcome.Forbidden)
         {
@@ -183,7 +260,7 @@ public partial class EventEditor
             return;
         }
 
-        if (outcome == EventWriteOutcome.Conflict)
+        if (outcome is EventWriteOutcome.Conflict or EventWriteOutcome.Invalid)
         {
             ApplyFieldErrors(pointers);
             return;
@@ -196,7 +273,8 @@ public partial class EventEditor
         {
             try
             {
-                await EventClient.UpdateAsync(created!.Id, null, slugOverride, passcodeOverride, CancellationToken.None);
+                await EventClient.UpdateAsync(
+                    created!.Id, null, slugOverride, passcodeOverride, startsAt, endsAt, CancellationToken.None);
             }
             catch (EventDataUnavailableException)
             {
@@ -219,7 +297,8 @@ public partial class EventEditor
     private async Task UpdateAsync(Guid id)
     {
         (EventWriteOutcome outcome, IReadOnlyList<string> pointers) = await EventClient.UpdateAsync(
-            id, model!.Name, NullIfBlank(model.Slug), NullIfBlank(model.Passcode), CancellationToken.None);
+            id, model!.Name, NullIfBlank(model.Slug), NullIfBlank(model.Passcode),
+            ToUtc(model.StartsAtLocal), ToUtc(model.EndsAtLocal), CancellationToken.None);
 
         if (outcome == EventWriteOutcome.Forbidden)
         {
@@ -227,7 +306,7 @@ public partial class EventEditor
             return;
         }
 
-        if (outcome == EventWriteOutcome.Conflict)
+        if (outcome is EventWriteOutcome.Conflict or EventWriteOutcome.Invalid)
         {
             ApplyFieldErrors(pointers);
             return;
@@ -331,6 +410,18 @@ public partial class EventEditor
                     new FieldIdentifier(model!, nameof(EventFormModel.Slug)),
                     "This address is already in use by another Event.");
             }
+            else if (pointer.EndsWith("/startsAt", StringComparison.Ordinal))
+            {
+                messageStore.Add(
+                    new FieldIdentifier(model!, nameof(EventFormModel.StartsAtLocal)),
+                    "Set a start before setting an end.");
+            }
+            else if (pointer.EndsWith("/endsAt", StringComparison.Ordinal))
+            {
+                messageStore.Add(
+                    new FieldIdentifier(model!, nameof(EventFormModel.EndsAtLocal)),
+                    "End must be after the start.");
+            }
         }
 
         editContext.NotifyValidationStateChanged();
@@ -341,7 +432,11 @@ public partial class EventEditor
     /// <remarks>
     /// <see cref="Slug"/>/<see cref="Passcode"/> stay unvalidated beyond presence - format is enforced by
     /// Api's own CHECK constraint and uniqueness by its 409 (<see cref="ApplyFieldErrors"/>); duplicating
-    /// that here isn't this story's job.
+    /// that here isn't this story's job. <see cref="StartsAtLocal"/>/<see cref="EndsAtLocal"/> carry no
+    /// DataAnnotations for the same reason, plus a second one: the page header's Save button calls
+    /// <see cref="SaveAsync"/> directly rather than through <c>EditForm</c>'s <c>OnValidSubmit</c>, so a
+    /// client-side validator wouldn't gate it anyway - Api's 422 (ADR-0042), surfaced through
+    /// <see cref="ApplyFieldErrors"/>, is the only enforcement that actually runs.
     /// </remarks>
     private sealed class EventFormModel
     {
@@ -352,5 +447,15 @@ public partial class EventEditor
         public string? Slug { get; set; }
 
         public string? Passcode { get; set; }
+
+        /// <remarks>
+        /// A naive wall-clock reading (<see cref="DateTimeKind.Unspecified"/>), in <c>viewerZone</c> - not a
+        /// <see cref="DateTimeOffset"/> - because that's what <c>InputDate</c> bound with
+        /// <c>Type="InputDateType.DateTimeLocal"</c> produces and consumes. Converted to/from UTC at the
+        /// Api boundary by <see cref="ToUtc"/>/<see cref="ToLocalWallClock"/>.
+        /// </remarks>
+        public DateTime? StartsAtLocal { get; set; }
+
+        public DateTime? EndsAtLocal { get; set; }
     }
 }

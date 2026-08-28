@@ -16,5 +16,12 @@ public enum EventWriteOutcome
     /// Api's <c>EventResourceDefinition</c> rejected a Name/Slug collision with 409 - see the pointers a
     /// caller reads off the write method's return value to route the error to the offending field.
     /// </remarks>
-    Conflict
+    Conflict,
+
+    /// <remarks>
+    /// Api's <c>EventResourceDefinition</c> rejected the write with 422 - a well-formed request that broke a
+    /// business rule rather than colliding with another Event (ADR-0042), namely <c>Event.StartsAt</c>/
+    /// <c>Event.EndsAt</c>'s ordering rules. Same pointer-reading contract as <see cref="Conflict"/>.
+    /// </remarks>
+    Invalid
 }

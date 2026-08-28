@@ -5,6 +5,7 @@ using Radzen;
 using Radzen.Blazor;
 using VirtualLeadersGuide.Web.Authorization;
 using VirtualLeadersGuide.Web.Events;
+using VirtualLeadersGuide.Web.Time;
 
 namespace VirtualLeadersGuide.Web.Components.Pages;
 
@@ -15,6 +16,9 @@ public partial class Dashboard
 
     [Inject]
     private ApiEventClient EventClient { get; set; } = default!;
+
+    [Inject]
+    private BrowserTimeZoneAccessor TimeZoneAccessor { get; set; } = default!;
 
     /// <remarks>
     /// <see cref="ClaimTypes.Role"/> claims come from <c>ApplicationUserClaimsPrincipalFactory</c> (P2-5,
@@ -51,6 +55,14 @@ public partial class Dashboard
     private bool isLoading;
     private string? loadErrorMessage;
 
+    /// <remarks>
+    /// Starts UTC and is replaced once <see cref="OnAfterRenderAsync"/> resolves the real one - grid rows
+    /// only ever exist after <see cref="LoadDataAsync"/>, itself a circuit round trip that can't complete
+    /// before first render, so there's no frame where a DATES cell renders in the wrong zone (see
+    /// <see cref="BrowserTimeZoneAccessor"/>'s remarks and ADR-0043).
+    /// </remarks>
+    private TimeZoneInfo viewerZone = TimeZoneInfo.Utc;
+
     protected override async Task OnInitializedAsync()
     {
         if (AuthenticationStateTask is null)
@@ -69,6 +81,25 @@ public partial class Dashboard
 
         accessView = new EventAccessView(state.User);
     }
+
+    /// <remarks>
+    /// Interop is only legal once the circuit has connected - <paramref name="firstRender"/> is the earliest
+    /// safe point. Re-renders the grid afterward so any already-loaded rows pick up the resolved zone
+    /// instead of staying on the UTC fallback for the rest of the page's life.
+    /// </remarks>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        viewerZone = await TimeZoneAccessor.GetTimeZoneAsync();
+        StateHasChanged();
+    }
+
+    private string FormatDates(EventDto item) =>
+        EventDateRange.Format(item.StartsAt, item.EndsAt, viewerZone, DateTimeOffset.UtcNow);
 
     /// <remarks>
     /// Wrapped in try/catch deliberately: an uncaught exception out of a <c>RadzenDataGrid</c> event
@@ -103,16 +134,22 @@ public partial class Dashboard
         isLoading = false;
     }
 
-    /// <remarks>Maps Radzen's <see cref="SortDescriptor"/> onto JSON:API's <c>sort=</c>/<c>sort=-</c> syntax.</remarks>
+    /// <remarks>
+    /// Maps Radzen's <see cref="SortDescriptor"/> onto JSON:API's <c>sort=</c>/<c>sort=-</c> syntax.
+    /// Lowercases only the first character, not the whole property name - JsonApiDotNetCore's default
+    /// naming exposes an attribute in camelCase (<c>startsAt</c>, not <c>startsat</c>); lowering the whole
+    /// string was harmless while every sortable column's name was one word (<c>name</c>, <c>slug</c>) but
+    /// would 400 a sort on <see cref="EventDto.StartsAt"/>.
+    /// </remarks>
     private static string? ToJsonApiSort(IEnumerable<SortDescriptor>? sorts)
     {
         SortDescriptor? first = sorts?.FirstOrDefault();
-        if (first?.Property is not { } property)
+        if (first?.Property is not { Length: > 0 } property)
         {
             return null;
         }
 
-        property = property.ToLowerInvariant();
+        property = char.ToLowerInvariant(property[0]) + property[1..];
         return first.SortOrder == SortOrder.Descending ? $"-{property}" : property;
     }
 }
