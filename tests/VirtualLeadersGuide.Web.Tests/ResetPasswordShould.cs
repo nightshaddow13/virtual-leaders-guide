@@ -13,6 +13,10 @@ namespace VirtualLeadersGuide.Web.Tests;
 /// <c>Code</c> is a <see langword="private"/> <c>[SupplyParameterFromQuery]</c> property - bUnit's
 /// parameter builder can only set a public one, so the "valid code, successful reset" branch isn't
 /// reachable from a component test at all; only the no-code branch, which needs no parameter set, is.
+/// The child <c>&lt;StatusMessage&gt;</c> component also unconditionally reads a cascading
+/// <see cref="HttpContext"/> in its own <c>OnInitialized</c>, regardless of whether the host page declares
+/// one itself - supplied below even though <c>ResetPassword</c> has no <see cref="HttpContext"/> dependency
+/// of its own. <see cref="SetupAccountShould"/> supplies one for the same reason.
 /// </remarks>
 public class ResetPasswordShould : BunitContext
 {
@@ -22,8 +26,6 @@ public class ResetPasswordShould : BunitContext
         Services.AddSingleton(FakeUserManagerFactory.CreateUserManager());
         IdentityTestServices.RegisterIdentityRedirectManager(Services);
 
-        // The child <StatusMessage> component unconditionally reads a cascading HttpContext in its own
-        // OnInitialized, regardless of whether this page declares one itself.
         Render<ResetPassword>(parameters => parameters.AddCascadingValue(new DefaultHttpContext()));
 
         var navigation = (BunitNavigationManager)Services.GetRequiredService<NavigationManager>();

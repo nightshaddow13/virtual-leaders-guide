@@ -13,7 +13,8 @@ namespace VirtualLeadersGuide.Web.Tests;
 /// <c>UserId</c>/<c>Code</c> are <see langword="private"/> <c>[SupplyParameterFromQuery]</c> properties -
 /// bUnit's parameter builder can only set a public one, so only the missing-parameters branch (which needs
 /// neither set) is reachable from a component test; the valid-invite and expired/tampered-token branches
-/// are not.
+/// are not. See <see cref="ResetPasswordShould"/> for why a cascading <see cref="HttpContext"/> is supplied
+/// below even though this page injects none of its own.
 /// </remarks>
 public class SetupAccountShould : BunitContext
 {
@@ -23,7 +24,6 @@ public class SetupAccountShould : BunitContext
         Services.AddSingleton(FakeUserManagerFactory.CreateUserManager());
         IdentityTestServices.RegisterIdentityRedirectManager(Services);
 
-        // The child <StatusMessage> component unconditionally reads a cascading HttpContext.
         Render<SetupAccount>(parameters => parameters.AddCascadingValue(new DefaultHttpContext()));
 
         var navigation = (BunitNavigationManager)Services.GetRequiredService<NavigationManager>();

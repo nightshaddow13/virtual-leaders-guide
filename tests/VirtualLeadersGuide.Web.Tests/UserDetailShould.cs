@@ -9,7 +9,11 @@ using VirtualLeadersGuide.Web.Identity;
 
 namespace VirtualLeadersGuide.Web.Tests;
 
-/// <remarks>No HTTP-level test exists for this page - it's new with P2-12 (#43).</remarks>
+/// <remarks>
+/// No HTTP-level test exists for this page - it's new with P2-12 (#43). <c>DirectorInviteService</c> is
+/// only reachable from <c>ResendAsync</c>/<c>RevokeAsync</c>, neither of which any test below clicks
+/// through - <see cref="RegisterServices"/> registers a working instance purely to satisfy <c>[Inject]</c>.
+/// </remarks>
 public class UserDetailShould : BunitContext
 {
     private const string UserId = "user-1";
@@ -61,9 +65,6 @@ public class UserDetailShould : BunitContext
     {
         RadzenTestServices.RegisterRadzenComponentsHost(Services);
         Services.AddSingleton(ApiClientTestFactory.CreateDirectorClient(directorHandler));
-
-        // DirectorInviteService is only reachable from ResendAsync/RevokeAsync, neither of which any of
-        // these tests click through - a working instance is registered purely to satisfy [Inject].
         Services.AddSingleton(DirectorInviteServiceTestFactory.Create(
             FakeUserManagerFactory.CreateUserManager(),
             StubHttpMessageHandler.RespondingWith(HttpStatusCode.NotFound)));
