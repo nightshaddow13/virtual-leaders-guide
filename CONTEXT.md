@@ -47,9 +47,26 @@ When an Event runs — each a specific date *and* time, not a bare calendar day.
 requires Starts at; "ends June 14, start unknown" isn't a real state. Ends at is always strictly after Starts
 at, so a single-day Event is one whose two instants fall on the same day, not one where they're equal.
 Recorded from the clock of whoever entered them and shown to each person in their own local time — there's
-no venue timezone to anchor them to yet (see ADR-0043). An Event whose Ends at has passed is what P2-16
-calls "past".
+no venue timezone to anchor them to yet (see ADR-0043).
 _Avoid_: Start date / End date (they carry a time too), Schedule, Duration, Dates (as one field — they're two)
+
+**Status**:
+An Event's position in its lifecycle: `Draft` (the default for a new or duplicated Event — not yet shown to
+Directors), `Live` (published; an Admin sets this manually, independent of Starts at/Ends at), `Past`
+(automatic once a `Live` Event's Ends at elapses — never applies to an Event still in `Draft`, since nothing
+was ever public to conclude), or `Cancelled` (manual, only reachable from `Live`, and terminal — the record
+that a gathering stopped happening, not a way to hide a `Draft` that never had an audience). `Past` and
+`Cancelled` are both one-way; the only path back is duplicating the Event into a fresh `Draft` (see
+Duplicate). Deleting an Event is a separate, independent action available from any Status.
+_Avoid_: Archived, Active/Inactive — "archived" is not a stored value here; it's informal shorthand for
+"Status is `Past` or `Cancelled`," used only to describe hiding an Event from the default dashboard list.
+
+**Duplicate**:
+An Admin action that creates a new Event by copying another's fields (Name, Starts at/Ends at, and any future
+content) as a starting point, rather than typing one in from scratch. The new Event gets its own Slug and
+Passcode — never the source's — and always starts in `Draft` Status, regardless of the source's. Directors
+are never copied - a Grant is a decision about one specific Event.
+_Avoid_: Template, Clone, Copy (as the verb - this app says Duplicate)
 
 **User**:
 A person with a row in ASP.NET Core Identity's own table (`ApplicationUser`/`AspNetUsers`), keyed by email.
@@ -76,7 +93,9 @@ future Event-scoped roles) — never Admin, whose Role already covers every Even
 Director may hold any number of Grants, including zero. Made by an Admin, from the Event being granted —
 never the reverse — and only to a User who already holds the Director Role (see Invite for how that's
 established). Stored as a `UserRole` row with a non-null `EventId`, exposed to Admins at `/api/roleGrants`.
-_Avoid_: Assignment, Permission.
+Taking one away is **Removed**, from the Event, leaving the Role itself untouched.
+_Avoid_: Assignment, Permission. Revoke (as the verb for this - reserved for undoing an un-activated Invite,
+a full teardown of the User itself, see Invite - a larger and different act than removing one Grant).
 
 **Admin**:
 A platform-wide Role: holding it already is full access — can create, edit, and delete any Event's content,
