@@ -85,6 +85,33 @@ public class Event : Identifiable<Guid>
     [Attr(Capabilities = AttrCapabilities.AllowView | AttrCapabilities.AllowChange)]
     public required string? Passcode { get; set; }
 
+    /// <summary>When this Event starts — a specific date and time, not a bare calendar day (CONTEXT.md's Starts at / Ends at entry).</summary>
+    /// <remarks>
+    /// Nullable and independent of <see cref="Name"/>/<see cref="Slug"/>/<see cref="Passcode"/> - an Event
+    /// with no known start yet is a real, valid state, not an error and never defaulted (mirrors CONTEXT.md's
+    /// framing that "no dates yet" is a normal Event, not an incomplete one). The setter normalizes to UTC on
+    /// assignment, the same shape <see cref="Name"/>'s trim and <see cref="Slug"/>'s lowercasing already use -
+    /// so the in-memory value never disagrees with what's persisted, and the app's per-viewer local-time
+    /// rendering (Web's <c>EventDateRange</c>) always converts from one known frame of reference. Full default
+    /// <see cref="AttrCapabilities"/> (unlike <see cref="Slug"/>/<see cref="Passcode"/>): nothing about this
+    /// value is server-generated, and <c>AllowSort</c> backs the dashboard grid's DATES column sort.
+    /// Ordering against <see cref="EndsAt"/> - <see cref="EndsAt"/> may only be set once this is, and must be
+    /// strictly after it - is enforced both by <c>CK_Events_Dates_Ordered</c>
+    /// (<see cref="VirtualLeadersGuideDbContext"/>) and, for the partial-PATCH case the CHECK constraint alone
+    /// can't validate at the JSON:API layer, by <see cref="EventResourceDefinition"/>.
+    /// </remarks>
+    [Attr]
+    public DateTimeOffset? StartsAt { get; set => field = value?.ToUniversalTime(); }
+
+    /// <summary>When this Event ends - see <see cref="StartsAt"/>'s remarks for the shared rules governing both.</summary>
+    /// <remarks>
+    /// May only be set once <see cref="StartsAt"/> already is ("ends June 14, start unknown" isn't a valid
+    /// state), and must be strictly after it - a zero-length Event isn't real, so an ordinary same-day Event
+    /// is just one whose two instants land on the same local calendar day, not one where they're equal.
+    /// </remarks>
+    [Attr]
+    public DateTimeOffset? EndsAt { get; set => field = value?.ToUniversalTime(); }
+
     /// <summary>The Director (and future Event-scoped role) grants scoped to this Event.</summary>
     public ICollection<UserRole> RoleGrants { get; set; } = new List<UserRole>();
 

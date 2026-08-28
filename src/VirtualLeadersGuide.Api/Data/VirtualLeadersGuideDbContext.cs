@@ -126,6 +126,7 @@ public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDb
     {
         table.HasCheckConstraint("CK_Events_Name_NotEmpty", BuildNameNotEmptyCheckSql());
         table.HasCheckConstraint("CK_Events_Slug_Format", BuildSlugFormatCheckSql());
+        table.HasCheckConstraint("CK_Events_Dates_Ordered", BuildDatesOrderedCheckSql());
     }
 
     /// <remarks>
@@ -155,6 +156,19 @@ public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDb
         return "Slug <> '' AND Slug NOT LIKE '-%' AND Slug NOT LIKE '%-' AND Slug NOT LIKE '%--%' " +
             $"AND {stripped} = ''";
     }
+
+    /// <remarks>
+    /// Encodes both <see cref="Event.StartsAt"/>/<see cref="Event.EndsAt"/> rules at once: <c>EndsAt</c> may
+    /// only be set once <c>StartsAt</c> already is, and must be strictly after it. Bare unquoted column names
+    /// and plain comparison operators only, so it parses identically on SQL Server and SQLite (ADR-0014) -
+    /// matching <see cref="BuildNameNotEmptyCheckSql"/>/<see cref="BuildSlugFormatCheckSql"/>'s portability
+    /// bar. Correct on SQLite only because both columns are always stored as UTC (see
+    /// <see cref="Event.StartsAt"/>'s normalizing setter) - EF's SQLite provider stores
+    /// <see cref="DateTimeOffset"/> as TEXT, so comparing two values with different offsets would compare
+    /// lexicographically and could give the wrong answer; an all-UTC column never has that problem.
+    /// </remarks>
+    private static string BuildDatesOrderedCheckSql() =>
+        "EndsAt IS NULL OR (StartsAt IS NOT NULL AND EndsAt > StartsAt)";
 
     /// <remarks>
     /// <see cref="Event.Passcode"/>'s <see cref="IDataProtector"/> can't be constructor-injected:

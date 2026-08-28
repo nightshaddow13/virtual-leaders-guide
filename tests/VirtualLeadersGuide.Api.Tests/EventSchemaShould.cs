@@ -95,6 +95,62 @@ public class EventSchemaShould : IAsyncLifetime
     }
 
     [Fact]
+    public async Task SaveSuccessfully_WhenEndIsAfterStart_ForSaveChanges()
+    {
+        using IServiceScope scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        var @event = Event.Create("Fall Retreat", "fall-retreat");
+        @event.StartsAt = DateTimeOffset.UtcNow;
+        @event.EndsAt = @event.StartsAt.Value.AddDays(1);
+
+        db.Events.Add(@event);
+        await db.SaveChangesAsync();
+
+        Assert.Equal(1, await db.Events.CountAsync());
+    }
+
+    [Fact]
+    public async Task ThrowDbUpdateException_WhenEndPrecedesStart_ForSaveChanges()
+    {
+        using IServiceScope scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        var @event = Event.Create("Fall Retreat", "fall-retreat");
+        @event.StartsAt = DateTimeOffset.UtcNow;
+        @event.EndsAt = @event.StartsAt.Value.AddDays(-1);
+
+        db.Events.Add(@event);
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+    }
+
+    [Fact]
+    public async Task ThrowDbUpdateException_WhenEndEqualsStart_ForSaveChanges()
+    {
+        using IServiceScope scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        var @event = Event.Create("Fall Retreat", "fall-retreat");
+        @event.StartsAt = DateTimeOffset.UtcNow;
+        @event.EndsAt = @event.StartsAt;
+
+        db.Events.Add(@event);
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+    }
+
+    [Fact]
+    public async Task ThrowDbUpdateException_WhenEndIsSetWithNoStart_ForSaveChanges()
+    {
+        using IServiceScope scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        var @event = Event.Create("Fall Retreat", "fall-retreat");
+        @event.EndsAt = DateTimeOffset.UtcNow;
+
+        db.Events.Add(@event);
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+    }
+
+    [Fact]
     public async Task CascadeDeleteEventScopedGrants_WhenTheEventIsDeleted_ForSaveChanges()
     {
         using IServiceScope scope = _factory.Services.CreateScope();

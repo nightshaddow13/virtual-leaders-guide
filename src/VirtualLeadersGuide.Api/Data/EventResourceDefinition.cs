@@ -94,7 +94,9 @@ public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, G
     /// <see cref="FillServerGeneratedDefaults"/> for why this is unconditional rather than "if blank". Finally
     /// pre-checks the <see cref="Event.Name"/>/<see cref="Event.Slug"/> unique indexes and throws a 409 naming
     /// whichever collided - see <see cref="CheckForConflictsAsync"/> for why this is a pre-check rather than
-    /// catching the eventual <see cref="Microsoft.EntityFrameworkCore.DbUpdateException"/>.
+    /// catching the eventual <see cref="Microsoft.EntityFrameworkCore.DbUpdateException"/>. Also validates
+    /// <see cref="Event.StartsAt"/>/<see cref="Event.EndsAt"/>'s ordering rules, throwing a 422 naming
+    /// whichever attribute is wrong - see <see cref="ValidateDateRange"/>.
     /// </remarks>
     public override async Task OnWritingAsync(
         Event resource, WriteOperationKind writeOperation, CancellationToken cancellationToken)
@@ -121,6 +123,7 @@ public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, G
         if (writeOperation is WriteOperationKind.CreateResource or WriteOperationKind.UpdateResource)
         {
             await CheckForConflictsAsync(resource, cancellationToken);
+            ValidateDateRange(resource);
         }
 
         await base.OnWritingAsync(resource, writeOperation, cancellationToken);
@@ -200,6 +203,45 @@ public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, G
         Detail = $"{displayName} '{value}' is already in use by another Event.",
         Source = new ErrorSource { Pointer = $"/data/attributes/{attributeName}" }
     };
+
+    /// <remarks>
+    /// Enforces the same two rules as <c>CK_Events_Dates_Ordered</c> (<see cref="VirtualLeadersGuideDbContext"/>),
+    /// but the CHECK constraint alone can't produce a JSON:API error naming which attribute is wrong, and
+    /// can't see a partial PATCH's merged state the way <paramref name="resource"/> here already does -
+    /// JsonApiDotNetCore's <c>EntityFrameworkCoreRepository.UpdateAsync</c> copies targeted attributes onto
+    /// the database-loaded entity before calling <see cref="OnWritingAsync"/>, so a PATCH setting only
+    /// <see cref="Event.EndsAt"/> still sees the persisted <see cref="Event.StartsAt"/> here, and a PATCH
+    /// clearing <see cref="Event.StartsAt"/> while <see cref="Event.EndsAt"/> remains set is still caught.
+    /// The 422 status (this repo's first) rather than the 409 <see cref="CheckForConflictsAsync"/> uses is
+    /// deliberate - see ADR-0042: an invalid range isn't a collision with another Event.
+    /// </remarks>
+    private static void ValidateDateRange(Event resource)
+    {
+        if (resource.EndsAt is null)
+        {
+            return;
+        }
+
+        if (resource.StartsAt is null)
+        {
+            throw new JsonApiException(new ErrorObject(HttpStatusCode.UnprocessableEntity)
+            {
+                Title = "Invalid date range.",
+                Detail = "Set a start before setting an end.",
+                Source = new ErrorSource { Pointer = "/data/attributes/startsAt" }
+            });
+        }
+
+        if (resource.EndsAt <= resource.StartsAt)
+        {
+            throw new JsonApiException(new ErrorObject(HttpStatusCode.UnprocessableEntity)
+            {
+                Title = "Invalid date range.",
+                Detail = "End must be after the start.",
+                Source = new ErrorSource { Pointer = "/data/attributes/endsAt" }
+            });
+        }
+    }
 
     private FilterExpression BuildAssignedEventsFilter(EventAccessPolicy policy)
     {

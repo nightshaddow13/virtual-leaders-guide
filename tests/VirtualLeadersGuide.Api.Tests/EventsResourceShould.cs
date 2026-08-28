@@ -230,7 +230,7 @@ public class EventsResourceShould : IAsyncLifetime
         HttpResponseMessage response = await SendAsync(client, HttpMethod.Post, "/api/events", body);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        await AssertConflictPointersAsync(response, "/data/attributes/name", "/data/attributes/slug");
+        await AssertErrorPointersAsync(response, "/data/attributes/name", "/data/attributes/slug");
     }
 
     [Fact]
@@ -251,7 +251,7 @@ public class EventsResourceShould : IAsyncLifetime
         HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/events/{other.Id}", body);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        await AssertConflictPointersAsync(response, "/data/attributes/name");
+        await AssertErrorPointersAsync(response, "/data/attributes/name");
     }
 
     [Fact]
@@ -272,7 +272,7 @@ public class EventsResourceShould : IAsyncLifetime
         HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/events/{other.Id}", body);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        await AssertConflictPointersAsync(response, "/data/attributes/slug");
+        await AssertErrorPointersAsync(response, "/data/attributes/slug");
     }
 
     [Fact]
@@ -293,7 +293,194 @@ public class EventsResourceShould : IAsyncLifetime
         HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/events/{other.Id}", body);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        await AssertConflictPointersAsync(response, "/data/attributes/name", "/data/attributes/slug");
+        await AssertErrorPointersAsync(response, "/data/attributes/name", "/data/attributes/slug");
+    }
+
+    [Fact]
+    public async Task SucceedWithCreated_WhenAdminCreatesAnEventWithBothDates_ForPost()
+    {
+        using HttpClient client = AdminClient();
+        var startsAt = new DateTimeOffset(2026, 6, 12, 9, 0, 0, TimeSpan.FromHours(-5));
+        var endsAt = new DateTimeOffset(2026, 6, 14, 17, 0, 0, TimeSpan.FromHours(-5));
+        var body = new
+        {
+            data = new
+            {
+                type = "events",
+                attributes = new { name = $"Fall Camporee {Guid.NewGuid()}", startsAt, endsAt }
+            }
+        };
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Post, "/api/events", body);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        JsonElement attributes = await AttributesOfAsync(response);
+        Assert.Equal(startsAt.ToUniversalTime(), attributes.GetProperty("startsAt").GetDateTimeOffset());
+        Assert.Equal(endsAt.ToUniversalTime(), attributes.GetProperty("endsAt").GetDateTimeOffset());
+    }
+
+    [Fact]
+    public async Task SucceedWithNoContent_WhenAdminSetsAnEndOnAnEventThatAlreadyHasAStart_ForPatch()
+    {
+        Event @event = await _factory.CreateEventAsync(startsAt: DateTimeOffset.UtcNow);
+        using HttpClient client = AdminClient();
+        var body = new
+        {
+            data = new
+            {
+                type = "events", id = @event.Id.ToString(),
+                attributes = new { endsAt = DateTimeOffset.UtcNow.AddDays(1) }
+            }
+        };
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/events/{@event.Id}", body);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RejectWithUnprocessableEntity_WhenEndEqualsStart_ForPatch()
+    {
+        var startsAt = DateTimeOffset.UtcNow;
+        Event @event = await _factory.CreateEventAsync(startsAt: startsAt);
+        using HttpClient client = AdminClient();
+        var body = new
+        {
+            data = new
+            {
+                type = "events", id = @event.Id.ToString(),
+                attributes = new { endsAt = startsAt }
+            }
+        };
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/events/{@event.Id}", body);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        await AssertErrorPointersAsync(response, "/data/attributes/endsAt");
+    }
+
+    [Fact]
+    public async Task RejectWithUnprocessableEntity_WhenEndPrecedesStart_ForPatch()
+    {
+        var startsAt = DateTimeOffset.UtcNow;
+        Event @event = await _factory.CreateEventAsync(startsAt: startsAt);
+        using HttpClient client = AdminClient();
+        var body = new
+        {
+            data = new
+            {
+                type = "events", id = @event.Id.ToString(),
+                attributes = new { endsAt = startsAt.AddDays(-1) }
+            }
+        };
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/events/{@event.Id}", body);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        await AssertErrorPointersAsync(response, "/data/attributes/endsAt");
+    }
+
+    [Fact]
+    public async Task RejectWithUnprocessableEntity_WhenAnEndIsSetOnAnEventWithNoStart_ForPatch()
+    {
+        Event @event = await _factory.CreateEventAsync();
+        using HttpClient client = AdminClient();
+        var body = new
+        {
+            data = new
+            {
+                type = "events", id = @event.Id.ToString(),
+                attributes = new { endsAt = DateTimeOffset.UtcNow }
+            }
+        };
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/events/{@event.Id}", body);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        await AssertErrorPointersAsync(response, "/data/attributes/startsAt");
+    }
+
+    [Fact]
+    public async Task RejectWithUnprocessableEntity_WhenClearingStartWhileEndRemainsSet_ForPatch()
+    {
+        var startsAt = DateTimeOffset.UtcNow;
+        Event @event = await _factory.CreateEventAsync(startsAt: startsAt);
+        using HttpClient adminClient = AdminClient();
+        await SendAsync(adminClient, HttpMethod.Patch, $"/api/events/{@event.Id}",
+            new { data = new { type = "events", id = @event.Id.ToString(), attributes = new { endsAt = startsAt.AddDays(1) } } });
+
+        var body = new
+        {
+            data = new
+            {
+                type = "events", id = @event.Id.ToString(),
+                attributes = new { startsAt = (DateTimeOffset?)null }
+            }
+        };
+        HttpResponseMessage response = await SendAsync(adminClient, HttpMethod.Patch, $"/api/events/{@event.Id}", body);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        await AssertErrorPointersAsync(response, "/data/attributes/startsAt");
+    }
+
+    [Fact]
+    public async Task SucceedWithNoContent_WhenClearingBothDates_ForPatch()
+    {
+        Event @event = await _factory.CreateEventAsync(startsAt: DateTimeOffset.UtcNow);
+        using HttpClient client = AdminClient();
+        var body = new
+        {
+            data = new
+            {
+                type = "events", id = @event.Id.ToString(),
+                attributes = new { startsAt = (DateTimeOffset?)null, endsAt = (DateTimeOffset?)null }
+            }
+        };
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/events/{@event.Id}", body);
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        HttpResponseMessage getResponse = await SendAsync(client, HttpMethod.Get, $"/api/events/{@event.Id}");
+        JsonElement attributes = await AttributesOfAsync(getResponse);
+        Assert.Equal(JsonValueKind.Null, attributes.GetProperty("startsAt").ValueKind);
+        Assert.Equal(JsonValueKind.Null, attributes.GetProperty("endsAt").ValueKind);
+    }
+
+    [Fact]
+    public async Task PersistAsUtc_WhenCreatingAnEventWithANonUtcOffset_ForPost()
+    {
+        using HttpClient client = AdminClient();
+        var startsAt = new DateTimeOffset(2026, 6, 12, 9, 0, 0, TimeSpan.FromHours(9));
+        var body = new
+        {
+            data = new { type = "events", attributes = new { name = $"Fall Camporee {Guid.NewGuid()}", startsAt } }
+        };
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Post, "/api/events", body);
+
+        JsonElement attributes = await AttributesOfAsync(response);
+        DateTimeOffset returned = attributes.GetProperty("startsAt").GetDateTimeOffset();
+        Assert.Equal(TimeSpan.Zero, returned.Offset);
+        Assert.Equal(startsAt.ToUniversalTime(), returned);
+    }
+
+    [Fact]
+    public async Task RejectWithForbidden_WhenAnAssignedDirectorSetsDates_ForPatch()
+    {
+        Event @event = await _factory.CreateEventAsync();
+        using HttpClient client = DirectorClient(@event.Id);
+        var body = new
+        {
+            data = new
+            {
+                type = "events", id = @event.Id.ToString(),
+                attributes = new { startsAt = DateTimeOffset.UtcNow }
+            }
+        };
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/events/{@event.Id}", body);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     private HttpClient AdminClient() =>
@@ -302,7 +489,7 @@ public class EventsResourceShould : IAsyncLifetime
     private HttpClient DirectorClient(Guid eventId) =>
         _factory.CreateUserClient(roleClaims: [ApiWebApplicationFactory.DirectorRoleClaim(eventId)]);
 
-    private static async Task AssertConflictPointersAsync(HttpResponseMessage response, params string[] expectedPointers)
+    private static async Task AssertErrorPointersAsync(HttpResponseMessage response, params string[] expectedPointers)
     {
         using JsonDocument document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         string[] actualPointers = document.RootElement.GetProperty("errors").EnumerateArray()
