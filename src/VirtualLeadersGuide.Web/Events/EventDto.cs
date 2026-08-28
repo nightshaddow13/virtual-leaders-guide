@@ -10,4 +10,16 @@ public sealed class EventDto
     public required string Slug { get; init; }
 
     public required string Passcode { get; init; }
+
+    /// <summary>When this Event starts, in UTC as Api stores it (CONTEXT.md's Starts at / Ends at entry).</summary>
+    /// <remarks>
+    /// <see langword="null"/> when unset - a real, valid state, not an incomplete one. Rendered to a viewer
+    /// via <see cref="EventDateRange"/>, which converts from UTC into that viewer's own browser timezone
+    /// (<see cref="VirtualLeadersGuide.Web.Time.BrowserTimeZoneAccessor"/>) - never displayed as the raw UTC
+    /// instant.
+    /// </remarks>
+    public DateTimeOffset? StartsAt { get; init; }
+
+    /// <summary>When this Event ends - see <see cref="StartsAt"/>'s remarks for the shared rules governing both.</summary>
+    public DateTimeOffset? EndsAt { get; init; }
 }

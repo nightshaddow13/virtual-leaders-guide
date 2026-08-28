@@ -42,6 +42,15 @@ words, e.g. `TigerLantern`) the moment an Event is created, so every Event has a
 never blank, unlike waiting on an Admin to set one.
 _Avoid_: AccessCode, SiteCode
 
+**Starts at / Ends at**:
+When an Event runs — each a specific date *and* time, not a bare calendar day. Both optional, but Ends at
+requires Starts at; "ends June 14, start unknown" isn't a real state. Ends at is always strictly after Starts
+at, so a single-day Event is one whose two instants fall on the same day, not one where they're equal.
+Recorded from the clock of whoever entered them and shown to each person in their own local time — there's
+no venue timezone to anchor them to yet (see ADR-0043). An Event whose Ends at has passed is what P2-16
+calls "past".
+_Avoid_: Start date / End date (they carry a time too), Schedule, Duration, Dates (as one field — they're two)
+
 **User**:
 A person with a row in ASP.NET Core Identity's own table (`ApplicationUser`/`AspNetUsers`), keyed by email.
 Created either on their first sign-in, or earlier by an Admin's Invite — a User can exist, and hold Roles,
@@ -86,7 +95,7 @@ A Role a User holds independent of any Event (see Role). Holding it alone grants
 no Grants at all is **unscoped**, a normal and permanent state, not a waiting room (e.g. someone invited but
 never assigned to an Event). Read access to a specific Event comes only from a Grant for that Event; what a
 Director may *write* is decided per resource, not inherited from the Role itself — Event details (Name,
-Slug, Passcode) are Admin-only to edit (ADR-0031). An Event can have multiple Directors, and one Director
+Slug, Passcode, Starts at, Ends at) are Admin-only to edit (ADR-0031). An Event can have multiple Directors, and one Director
 can hold Grants for multiple Events. The Role itself is established exactly one way, by Invite; Grants are
 added afterwards, from the Event, never the reverse (ADR-0035).
 _Avoid_: Organizer, Admin (these are for the platform-level or generic role — Director is specifically

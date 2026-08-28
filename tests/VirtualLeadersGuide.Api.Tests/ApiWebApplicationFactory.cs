@@ -120,12 +120,17 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
     /// The Event's Name. Omit to get a fresh Guid-suffixed default (and the Slug <see cref="Event.Create"/>
     /// derives from it), so repeated calls within one test don't collide on the Name/Slug unique indexes.
     /// </param>
+    /// <param name="startsAt">
+    /// An optional <see cref="Event.StartsAt"/> to persist alongside the Event - for tests that need an
+    /// already-set start to PATCH an end against, without a separate round trip through the Api itself.
+    /// </param>
     /// <returns>The newly persisted <see cref="Event"/>.</returns>
-    public async Task<Event> CreateEventAsync(string? name = null)
+    public async Task<Event> CreateEventAsync(string? name = null, DateTimeOffset? startsAt = null)
     {
         using IServiceScope scope = Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
         Event @event = Event.Create(name ?? $"Event {Guid.NewGuid()}");
+        @event.StartsAt = startsAt;
 
         dbContext.Events.Add(@event);
         await dbContext.SaveChangesAsync();

@@ -64,6 +64,44 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
             await Expect(Page.Locator("#Passcode")).ToHaveValueAsync(newPasscode);
         });
 
+    [Fact(DisplayName = "Given an existing Event, when an Admin sets its start and end, then the dashboard grid shows the formatted range")]
+    public async Task GivenAnExistingEvent_WhenAnAdminSetsItsStartAndEnd_ThenTheDashboardGridShowsTheFormattedRange() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, string name) = await CreateEventAsync("Summer Camporee");
+
+            await Page.GotoAsync(EventEditorUrl(eventId));
+            await Page.Locator("#StartsAt").FillAsync("2026-06-12T09:00");
+            await Page.Locator("#EndsAt").FillAsync("2026-06-14T17:00");
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" }).ClickAsync();
+
+            await Expect(Page).ToHaveURLAsync(
+                new Uri(Fixture.WebBaseUrl, "dashboard").ToString(),
+                new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+
+            ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = name });
+            await Expect(row.GetByText("JUN 12")).ToBeVisibleAsync(
+                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+        });
+
+    [Fact(DisplayName = "Given an existing Event, when an Admin sets an end before the start, then the error lands on the end field")]
+    public async Task GivenAnExistingEvent_WhenAnAdminSetsAnEndBeforeTheStart_ThenTheErrorLandsOnTheEndField() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, _) = await CreateEventAsync("Winter Klondike");
+
+            await Page.GotoAsync(EventEditorUrl(eventId));
+            await Page.Locator("#StartsAt").FillAsync("2026-06-14T09:00");
+            await Page.Locator("#EndsAt").FillAsync("2026-06-12T09:00");
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" }).ClickAsync();
+
+            await Expect(Page).ToHaveURLAsync(EventEditorUrl(eventId));
+            await Expect(FieldErrorLocator("EndsAt").GetByText("End must be after the start.")).ToBeVisibleAsync(
+                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+        });
+
     [Fact(DisplayName = "Given an existing Event, when an Admin creates another with the same name, then the error lands on the name field")]
     public async Task GivenAnExistingEvent_WhenAnAdminCreatesAnotherWithTheSameName_ThenTheErrorLandsOnTheNameField() =>
         await RunAsync(async () =>

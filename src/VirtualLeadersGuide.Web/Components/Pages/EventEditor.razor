@@ -4,6 +4,7 @@
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 
 @using VirtualLeadersGuide.Web.Directors
+@using VirtualLeadersGuide.Web.Events
 
 <PageTitle>@(Id is null ? "New event" : "Event")</PageTitle>
 
@@ -39,6 +40,10 @@
         <div class="vlg-readonly-field">
             <RadzenText TextStyle="TextStyle.Overline">Public address</RadzenText>
             <span>/e/@model.Slug</span>
+        </div>
+        <div class="vlg-readonly-field">
+            <RadzenText TextStyle="TextStyle.Overline">Dates</RadzenText>
+            <span>@EventDateRange.FormatWithTime(loadedDto?.StartsAt, loadedDto?.EndsAt, viewerZone)</span>
         </div>
         <div class="vlg-readonly-field">
             <RadzenText TextStyle="TextStyle.Overline">Passcode</RadzenText>
@@ -97,6 +102,18 @@
                         <RadzenText TextStyle="TextStyle.Caption" TagName="TagName.Div" Style="margin-block-start: 0.25rem;">Changing this breaks links already printed in leader packets.</RadzenText>
                     }
                     <ValidationMessage For="() => model!.Slug" class="rz-messages-error" />
+                </div>
+                <div class="vlg-field">
+                    <label for="StartsAt">Starts at</label>
+                    <InputDate id="StartsAt" Type="InputDateType.DateTimeLocal" @bind-Value="model!.StartsAtLocal"
+                               class="rz-textbox rz-input-md" />
+                    <ValidationMessage For="() => model!.StartsAtLocal" class="rz-messages-error" />
+                </div>
+                <div class="vlg-field">
+                    <label for="EndsAt">Ends at</label>
+                    <InputDate id="EndsAt" Type="InputDateType.DateTimeLocal" @bind-Value="model!.EndsAtLocal"
+                               class="rz-textbox rz-input-md" />
+                    <ValidationMessage For="() => model!.EndsAtLocal" class="rz-messages-error" />
                 </div>
                 <div class="vlg-field">
                     <label for="Passcode">Passcode</label>

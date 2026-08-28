@@ -30,7 +30,8 @@ Two further choices fell out of building it:
 The two produce genuinely different information-leak postures for the same underlying "you can't see this"
 fact, and that asymmetry is deliberate, not an inconsistency to fix later.
 
-Event details (Name, Slug, Passcode) are Admin-only to write. A Director's grant scopes them to an Event
+Event details (Name, Slug, Passcode, Starts at, Ends at - the last two added by P2-15, #102) are Admin-only
+to write. A Director's grant scopes them to an Event
 for reading, not editing - `EventAccessPolicy.CanUpdate` returns `IsAdmin` regardless of the Event id, so
 `OnWritingAsync` rejects every Director `PATCH` the same way it already rejected `POST`/`DELETE`. This
 reflects CONTEXT.md's Director entry: the Role scopes a User to an Event, but what they may write on any

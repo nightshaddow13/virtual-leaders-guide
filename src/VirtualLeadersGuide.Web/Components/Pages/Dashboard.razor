@@ -28,6 +28,9 @@
             <RadzenDataGridColumn TItem="EventDto" Property="@nameof(EventDto.Slug)" Title="Event address">
                 <Template Context="item">/e/@item.Slug</Template>
             </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="EventDto" Property="@nameof(EventDto.StartsAt)" Title="Dates">
+                <Template Context="item">@FormatDates(item)</Template>
+            </RadzenDataGridColumn>
             <RadzenDataGridColumn TItem="EventDto" Sortable="false" Filterable="false" Width="@ActionColumnWidth" TextAlign="TextAlign.Center">
                 <Template Context="item">
                     <RadzenButton Icon="@(accessView.IsAdmin ? "edit" : "visibility")" ButtonStyle="ButtonStyle.Light"

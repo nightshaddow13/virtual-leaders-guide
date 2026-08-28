@@ -103,6 +103,37 @@ public class ApiEventClientShould
     }
 
     [Fact]
+    public async Task ReturnTheMappedDates_WhenApiRespondsWithOk_ForGetEventAsync()
+    {
+        var eventId = Guid.NewGuid();
+        var startsAt = new DateTimeOffset(2026, 6, 12, 14, 0, 0, TimeSpan.Zero);
+        var endsAt = new DateTimeOffset(2026, 6, 14, 22, 0, 0, TimeSpan.Zero);
+        var handler = new StubHttpMessageHandler(
+            _ => JsonApiResponse(HttpStatusCode.OK, new { data = EventResource(eventId, startsAt: startsAt, endsAt: endsAt) }));
+        ApiEventClient client = CreateClient(handler);
+
+        (EventReadOutcome outcome, EventDto? @event) = await client.GetEventAsync(eventId, CancellationToken.None);
+
+        Assert.Equal(EventReadOutcome.Success, outcome);
+        Assert.Equal(startsAt, @event?.StartsAt);
+        Assert.Equal(endsAt, @event?.EndsAt);
+    }
+
+    [Fact]
+    public async Task ReturnNullDates_WhenApiRespondsWithNoDatesSet_ForGetEventAsync()
+    {
+        var eventId = Guid.NewGuid();
+        var handler = new StubHttpMessageHandler(
+            _ => JsonApiResponse(HttpStatusCode.OK, new { data = EventResource(eventId) }));
+        ApiEventClient client = CreateClient(handler);
+
+        (_, EventDto? @event) = await client.GetEventAsync(eventId, CancellationToken.None);
+
+        Assert.Null(@event?.StartsAt);
+        Assert.Null(@event?.EndsAt);
+    }
+
+    [Fact]
     public async Task ReturnForbidden_WhenApiRespondsWithForbidden_ForGetEventAsync()
     {
         var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.Forbidden));
@@ -115,7 +146,7 @@ public class ApiEventClientShould
     }
 
     [Fact]
-    public async Task SendOnlyTheNameAttribute_WhenCreatingAnEvent_ForCreateAsync()
+    public async Task SendOnlyTheNameAttribute_WhenCreatingAnEventWithNoDates_ForCreateAsync()
     {
         string? capturedBody = null;
         string? capturedContentType = null;
@@ -127,13 +158,58 @@ public class ApiEventClientShould
         });
         ApiEventClient client = CreateClient(handler);
 
-        await client.CreateAsync("Fall Camporee", CancellationToken.None);
+        await client.CreateAsync("Fall Camporee", null, null, CancellationToken.None);
 
         Assert.Equal(JsonApiMediaType, capturedContentType);
         Assert.NotNull(capturedBody);
         Assert.Contains("\"name\":\"Fall Camporee\"", capturedBody, StringComparison.Ordinal);
         Assert.DoesNotContain("slug", capturedBody, StringComparison.Ordinal);
         Assert.DoesNotContain("passcode", capturedBody, StringComparison.Ordinal);
+    }
+
+    /// <remarks>
+    /// Pins ADR-0042's clearing mechanism: unlike every other attribute here, an unset
+    /// <see cref="EventAttributesDto.StartsAt"/>/<see cref="EventAttributesDto.EndsAt"/> still serializes as
+    /// an explicit JSON <c>null</c> rather than being omitted - see <see cref="EventAttributesDto"/>'s
+    /// remarks. This is the first thing to break if that attribute's <c>JsonIgnoreCondition.Never</c> is
+    /// ever "tidied" back to the type default.
+    /// </remarks>
+    [Fact]
+    public async Task SendExplicitNullDates_WhenCreatingAnEventWithNoDates_ForCreateAsync()
+    {
+        string? capturedBody = null;
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            capturedBody = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            return JsonApiResponse(HttpStatusCode.Created, new { data = EventResource() });
+        });
+        ApiEventClient client = CreateClient(handler);
+
+        await client.CreateAsync("Fall Camporee", null, null, CancellationToken.None);
+
+        Assert.NotNull(capturedBody);
+        Assert.Contains("\"startsAt\":null", capturedBody, StringComparison.Ordinal);
+        Assert.Contains("\"endsAt\":null", capturedBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task SendBothDatesAsUtcIso8601_WhenCreatingAnEventWithDates_ForCreateAsync()
+    {
+        string? capturedBody = null;
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            capturedBody = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            return JsonApiResponse(HttpStatusCode.Created, new { data = EventResource() });
+        });
+        ApiEventClient client = CreateClient(handler);
+        var startsAt = new DateTimeOffset(2026, 6, 12, 14, 0, 0, TimeSpan.Zero);
+        var endsAt = new DateTimeOffset(2026, 6, 14, 22, 0, 0, TimeSpan.Zero);
+
+        await client.CreateAsync("Fall Camporee", startsAt, endsAt, CancellationToken.None);
+
+        Assert.NotNull(capturedBody);
+        Assert.Contains("\"startsAt\":\"2026-06-12T14:00:00", capturedBody, StringComparison.Ordinal);
+        Assert.Contains("\"endsAt\":\"2026-06-14T22:00:00", capturedBody, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -145,7 +221,7 @@ public class ApiEventClientShould
         ApiEventClient client = CreateClient(handler);
 
         (EventWriteOutcome outcome, EventDto? @event, IReadOnlyList<string> pointers) =
-            await client.CreateAsync("Fall Camporee", CancellationToken.None);
+            await client.CreateAsync("Fall Camporee", null, null, CancellationToken.None);
 
         Assert.Equal(EventWriteOutcome.Success, outcome);
         Assert.Equal(eventId, @event?.Id);
@@ -159,7 +235,7 @@ public class ApiEventClientShould
         ApiEventClient client = CreateClient(handler);
 
         (EventWriteOutcome outcome, EventDto? @event, IReadOnlyList<string> pointers) =
-            await client.CreateAsync("Fall Camporee", CancellationToken.None);
+            await client.CreateAsync("Fall Camporee", null, null, CancellationToken.None);
 
         Assert.Equal(EventWriteOutcome.Forbidden, outcome);
         Assert.Null(@event);
@@ -180,13 +256,33 @@ public class ApiEventClientShould
         ApiEventClient client = CreateClient(handler);
 
         (EventWriteOutcome outcome, EventDto? @event, IReadOnlyList<string> pointers) =
-            await client.CreateAsync("Fall Camporee", CancellationToken.None);
+            await client.CreateAsync("Fall Camporee", null, null, CancellationToken.None);
 
         Assert.Equal(EventWriteOutcome.Conflict, outcome);
         Assert.Null(@event);
         Assert.Equal(
             new[] { "/data/attributes/name", "/data/attributes/slug" }.Order(),
             pointers.Order());
+    }
+
+    [Fact]
+    public async Task ReturnInvalidWithThePointer_WhenApiRespondsWithUnprocessableEntity_ForCreateAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => JsonApiResponse(HttpStatusCode.UnprocessableEntity, new
+        {
+            errors = new[]
+            {
+                new { title = "Invalid date range.", source = new { pointer = "/data/attributes/endsAt" } }
+            }
+        }));
+        ApiEventClient client = CreateClient(handler);
+
+        (EventWriteOutcome outcome, EventDto? @event, IReadOnlyList<string> pointers) = await client.CreateAsync(
+            "Fall Camporee", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(-1), CancellationToken.None);
+
+        Assert.Equal(EventWriteOutcome.Invalid, outcome);
+        Assert.Null(@event);
+        Assert.Equal(["/data/attributes/endsAt"], pointers);
     }
 
     [Fact]
@@ -200,12 +296,35 @@ public class ApiEventClientShould
         });
         ApiEventClient client = CreateClient(handler);
 
-        await client.UpdateAsync(Guid.NewGuid(), name: null, slug: "fall-camporee", passcode: null, CancellationToken.None);
+        await client.UpdateAsync(
+            Guid.NewGuid(), name: null, slug: "fall-camporee", passcode: null,
+            startsAt: null, endsAt: null, CancellationToken.None);
 
         Assert.NotNull(capturedBody);
         Assert.Contains("\"slug\":\"fall-camporee\"", capturedBody, StringComparison.Ordinal);
         Assert.DoesNotContain("name", capturedBody, StringComparison.Ordinal);
         Assert.DoesNotContain("passcode", capturedBody, StringComparison.Ordinal);
+    }
+
+    /// <remarks>See <see cref="SendExplicitNullDates_WhenCreatingAnEventWithNoDates_ForCreateAsync"/> - the same clearing mechanism, exercised on PATCH.</remarks>
+    [Fact]
+    public async Task SendExplicitNullDates_WhenClearingBothDates_ForUpdateAsync()
+    {
+        string? capturedBody = null;
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            capturedBody = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
+        });
+        ApiEventClient client = CreateClient(handler);
+
+        await client.UpdateAsync(
+            Guid.NewGuid(), name: null, slug: null, passcode: null,
+            startsAt: null, endsAt: null, CancellationToken.None);
+
+        Assert.NotNull(capturedBody);
+        Assert.Contains("\"startsAt\":null", capturedBody, StringComparison.Ordinal);
+        Assert.Contains("\"endsAt\":null", capturedBody, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -215,7 +334,7 @@ public class ApiEventClientShould
         ApiEventClient client = CreateClient(handler);
 
         (EventWriteOutcome outcome, IReadOnlyList<string> pointers) = await client.UpdateAsync(
-            Guid.NewGuid(), "Renamed", null, null, CancellationToken.None);
+            Guid.NewGuid(), "Renamed", null, null, null, null, CancellationToken.None);
 
         Assert.Equal(EventWriteOutcome.Success, outcome);
         Assert.Empty(pointers);
@@ -228,7 +347,7 @@ public class ApiEventClientShould
         ApiEventClient client = CreateClient(handler);
 
         (EventWriteOutcome outcome, IReadOnlyList<string> pointers) = await client.UpdateAsync(
-            Guid.NewGuid(), "Renamed", null, null, CancellationToken.None);
+            Guid.NewGuid(), "Renamed", null, null, null, null, CancellationToken.None);
 
         Assert.Equal(EventWriteOutcome.Forbidden, outcome);
         Assert.Empty(pointers);
@@ -244,10 +363,29 @@ public class ApiEventClientShould
         ApiEventClient client = CreateClient(handler);
 
         (EventWriteOutcome outcome, IReadOnlyList<string> pointers) = await client.UpdateAsync(
-            Guid.NewGuid(), null, "taken-slug", null, CancellationToken.None);
+            Guid.NewGuid(), null, "taken-slug", null, null, null, CancellationToken.None);
 
         Assert.Equal(EventWriteOutcome.Conflict, outcome);
         Assert.Equal(["/data/attributes/slug"], pointers);
+    }
+
+    [Fact]
+    public async Task ReturnInvalidWithThePointer_WhenApiRespondsWithUnprocessableEntity_ForUpdateAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => JsonApiResponse(HttpStatusCode.UnprocessableEntity, new
+        {
+            errors = new[]
+            {
+                new { title = "Invalid date range.", source = new { pointer = "/data/attributes/startsAt" } }
+            }
+        }));
+        ApiEventClient client = CreateClient(handler);
+
+        (EventWriteOutcome outcome, IReadOnlyList<string> pointers) = await client.UpdateAsync(
+            Guid.NewGuid(), null, null, null, null, DateTimeOffset.UtcNow, CancellationToken.None);
+
+        Assert.Equal(EventWriteOutcome.Invalid, outcome);
+        Assert.Equal(["/data/attributes/startsAt"], pointers);
     }
 
     [Fact]
@@ -273,12 +411,14 @@ public class ApiEventClientShould
     private static ApiEventClient CreateClient(HttpMessageHandler apiHandler) =>
         ApiClientTestFactory.CreateEventClient(apiHandler);
 
-    private static object EventResource(Guid? id = null, string name = "Fall Camporee", string slug = "fall-camporee") =>
+    private static object EventResource(
+        Guid? id = null, string name = "Fall Camporee", string slug = "fall-camporee",
+        DateTimeOffset? startsAt = null, DateTimeOffset? endsAt = null) =>
         new
         {
             type = "events",
             id = (id ?? Guid.NewGuid()).ToString(),
-            attributes = new { name, slug, passcode = "TigerLantern" }
+            attributes = new { name, slug, passcode = "TigerLantern", startsAt, endsAt }
         };
 
     private static HttpResponseMessage JsonApiResponse<T>(HttpStatusCode statusCode, T body)

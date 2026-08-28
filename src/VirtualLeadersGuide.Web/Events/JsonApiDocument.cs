@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace VirtualLeadersGuide.Web.Events;
 
 /// <summary>
@@ -14,13 +16,14 @@ internal sealed class EventResourceObject
     public EventAttributesDto? Attributes { get; init; }
 }
 
-/// <summary>An Event's <c>name</c>/<c>slug</c>/<c>passcode</c> attributes, as sent or received in a request/response.</summary>
+/// <summary>An Event's <c>name</c>/<c>slug</c>/<c>passcode</c>/<c>startsAt</c>/<c>endsAt</c> attributes, as sent or received in a request/response.</summary>
 /// <remarks>
 /// Every property is nullable so a request can omit an attribute rather than send it as JSON <c>null</c> -
 /// a PATCH that included <c>"slug": null</c> would try to null out a <c>NOT NULL</c> column (see
 /// <c>Event.Slug</c>'s remarks in Api). <see cref="ApiEventClient"/> serializes with
 /// <c>DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull</c> so an omitted value here is omitted
-/// from the wire, not nulled.
+/// from the wire, not nulled - except <see cref="StartsAt"/>/<see cref="EndsAt"/>, which opt back into
+/// sending an explicit <c>null</c>; see their own remarks for why.
 /// </remarks>
 internal sealed class EventAttributesDto
 {
@@ -29,6 +32,20 @@ internal sealed class EventAttributesDto
     public string? Slug { get; init; }
 
     public string? Passcode { get; init; }
+
+    /// <remarks>
+    /// Deliberately opts out of the omit-on-null rule above (<see cref="JsonIgnoreCondition.Never"/>, not
+    /// the type default) - unlike <see cref="Name"/>/<see cref="Slug"/>/<see cref="Passcode"/>, this column
+    /// is genuinely nullable, so a client clearing this field needs a way to say so. Sending an explicit
+    /// JSON <c>null</c> is that way; omitting the attribute (as every other property here does) would mean
+    /// "leave unchanged" instead, making clearing inexpressible (ADR-0042).
+    /// </remarks>
+    [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
+    public DateTimeOffset? StartsAt { get; init; }
+
+    /// <remarks>See <see cref="StartsAt"/>'s remarks - the same exception applies here.</remarks>
+    [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
+    public DateTimeOffset? EndsAt { get; init; }
 }
 
 /// <summary>A single-resource JSON:API document - the request body for POST/PATCH and the response body for GET-single/POST.</summary>
