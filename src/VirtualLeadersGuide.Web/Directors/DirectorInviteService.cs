@@ -122,7 +122,17 @@ public sealed class DirectorInviteService(
         }
 
         await userManager.UpdateSecurityStampAsync(user);
-        await SendInviteEmailAsync(user);
+
+        try
+        {
+            await SendInviteEmailAsync(user);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Resend for User {UserId} rotated the security stamp but sending the email failed.", userId);
+            return ResendOutcome.SendFailed;
+        }
+
         return ResendOutcome.Sent;
     }
 
