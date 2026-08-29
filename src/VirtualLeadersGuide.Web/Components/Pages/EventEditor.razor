@@ -171,6 +171,12 @@
                     </RadzenText>
                 }
             </RadzenStack>
+
+            <RadzenStack Orientation="Orientation.Vertical" Gap="0.5rem" Style="margin-block-start: 2rem;">
+                <h2>Danger zone</h2>
+                <RadzenButton Text="Delete event" ButtonStyle="ButtonStyle.Danger" Disabled="@isDeleting"
+                              Click="DeleteAsync" Style="align-self: flex-start;" />
+            </RadzenStack>
         }
         break;
 }

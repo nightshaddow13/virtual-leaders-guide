@@ -6,6 +6,8 @@
 
 <PageTitle>Dashboard</PageTitle>
 
+<RadzenComponents @rendermode="InteractiveServer" />
+
 @if (accessView is not null)
 {
     <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween"
@@ -33,9 +35,16 @@
             </RadzenDataGridColumn>
             <RadzenDataGridColumn TItem="EventDto" Sortable="false" Filterable="false" Width="@ActionColumnWidth" TextAlign="TextAlign.Center">
                 <Template Context="item">
-                    <RadzenButton Icon="@(accessView.IsAdmin ? "edit" : "visibility")" ButtonStyle="ButtonStyle.Light"
-                                  aria-label="@(accessView.IsAdmin ? "Edit" : "View")"
-                                  Click="@(() => NavigationManager.NavigateTo($"dashboard/events/{item.Id}"))" />
+                    <RadzenStack Orientation="Orientation.Horizontal" Gap="0.25rem" JustifyContent="JustifyContent.Center">
+                        <RadzenButton Icon="@(accessView.IsAdmin ? "edit" : "visibility")" ButtonStyle="ButtonStyle.Light"
+                                      aria-label="@(accessView.IsAdmin ? "Edit" : "View")"
+                                      Click="@(() => NavigationManager.NavigateTo($"dashboard/events/{item.Id}"))" />
+                        @if (accessView.IsAdmin)
+                        {
+                            <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" aria-label="Delete"
+                                          Click="@(() => DeleteAsync(item))" />
+                        }
+                    </RadzenStack>
                 </Template>
             </RadzenDataGridColumn>
         </Columns>
@@ -53,5 +62,10 @@
     @if (loadErrorMessage is not null)
     {
         <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" AllowClose="false" Text="@loadErrorMessage" />
+    }
+
+    @if (deleteErrorMessage is not null)
+    {
+        <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" AllowClose="false" Text="@deleteErrorMessage" />
     }
 }
