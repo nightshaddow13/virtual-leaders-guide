@@ -1,0 +1,16 @@
+<p>@Message</p>
+
+@if (Consequences is { Count: > 0 })
+{
+    <ul class="vlg-consequence-list">
+        @foreach (string consequence in Consequences)
+        {
+            <li>@consequence</li>
+        }
+    </ul>
+}
+
+<RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.End" Gap="0.5rem" Style="margin-block-start: 1rem;">
+    <RadzenButton Text="Cancel" ButtonStyle="ButtonStyle.Light" Click="@(() => DialogService.Close(false))" />
+    <RadzenButton Text="@ConfirmText" ButtonStyle="@ConfirmButtonStyle" Click="@(() => DialogService.Close(true))" />
+</RadzenStack>

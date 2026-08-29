@@ -317,6 +317,19 @@ h1:focus {
     border-block-end: 1px dashed var(--vlg-line);
 }
 
+/* ===========================================================================
+   ConfirmDialog (P2-17, #112; ADR-0045) - the consequence bullet list shared
+   by every destructive-action confirmation in the app, not just this one.
+   =========================================================================== */
+
+.vlg-consequence-list {
+    margin: 0.75rem 0;
+    padding-inline-start: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
 #blazor-error-ui {
     color-scheme: light only;
     background: lightyellow;

@@ -187,6 +187,32 @@ public sealed class ApiEventClient(InternalApiClient apiClient)
         return (EventWriteOutcome.Success, []);
     }
 
+    /// <summary>Deletes an Event permanently - hard delete, no recovery path (ADR-0045). Admin-only (ADR-0031).</summary>
+    /// <param name="id">The Event to delete.</param>
+    /// <param name="cancellationToken">Propagated to the underlying HTTP call.</param>
+    /// <returns>
+    /// <see cref="EventWriteOutcome.Success"/> (Api returns 204); <see cref="EventWriteOutcome.Forbidden"/> if
+    /// the caller isn't an Admin; or <see cref="EventWriteOutcome.NotFound"/> if the Event was already gone.
+    /// </returns>
+    public async Task<EventWriteOutcome> DeleteAsync(Guid id, CancellationToken cancellationToken)
+    {
+        using var request = NewRequest(HttpMethod.Delete, $"{EventsPath}/{id}");
+        using HttpResponseMessage response = await SendAsync(request, cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            return EventWriteOutcome.Forbidden;
+        }
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return EventWriteOutcome.NotFound;
+        }
+
+        EnsureExpectedStatus(response, HttpStatusCode.NoContent);
+        return EventWriteOutcome.Success;
+    }
+
     private static HttpRequestMessage NewRequest(HttpMethod method, string uri, EventDocument? body = null)
     {
         var request = new HttpRequestMessage(method, uri);
