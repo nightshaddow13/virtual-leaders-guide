@@ -123,6 +123,57 @@ public class EventEditorShould : BunitContext
         Assert.Contains("End must be after the start.", cut.Markup, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ShowDangerZone_WhenEditingAnExistingEventAsAnAdmin_ForOnParametersSetAsync()
+    {
+        Guid eventId = Guid.NewGuid();
+        RegisterClients(
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = EventResource(eventId) }),
+            StubHttpMessageHandler.RespondingWith(HttpStatusCode.NotFound));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("admin-1");
+        auth.SetRoles("Admin");
+
+        IRenderedComponent<EventEditor> cut = Render<EventEditor>(parameters => parameters
+            .Add(component => component.Id, eventId));
+
+        Assert.Contains("Danger zone", cut.Markup, StringComparison.Ordinal);
+        Assert.Contains(cut.FindAll("button"), button => button.TextContent.Contains("Delete event", StringComparison.Ordinal));
+    }
+
+    /// <remarks>A not-yet-created Event has nothing to delete - see the Danger zone's own placement remarks.</remarks>
+    [Fact]
+    public void HideDangerZone_WhenCreatingANewEventAsAnAdmin_ForOnParametersSetAsync()
+    {
+        RegisterClients(
+            StubHttpMessageHandler.RespondingWith(HttpStatusCode.NotFound),
+            StubHttpMessageHandler.RespondingWith(HttpStatusCode.NotFound));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("admin-1");
+        auth.SetRoles("Admin");
+
+        IRenderedComponent<EventEditor> cut = Render<EventEditor>();
+
+        Assert.DoesNotContain("Danger zone", cut.Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void HideDangerZone_WhenViewingAsAnAssignedDirector_ForOnParametersSetAsync()
+    {
+        Guid eventId = Guid.NewGuid();
+        RegisterClients(
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = EventResource(eventId) }),
+            StubHttpMessageHandler.RespondingWith(HttpStatusCode.NotFound));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("director-1");
+        auth.SetRoles("Director");
+
+        IRenderedComponent<EventEditor> cut = Render<EventEditor>(parameters => parameters
+            .Add(component => component.Id, eventId));
+
+        Assert.DoesNotContain("Danger zone", cut.Markup, StringComparison.Ordinal);
+    }
+
     private static object EventResource(Guid id) => new
     {
         type = "events",
