@@ -119,6 +119,45 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
                 new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
         });
 
+    [Fact(DisplayName = "Given an existing Event, when an Admin deletes it and confirms, then it is removed from the Events list")]
+    public async Task GivenAnExistingEvent_WhenAnAdminDeletesItAndConfirms_ThenItIsRemovedFromTheEventsList() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (_, string name) = await CreateEventAsync("To Delete");
+
+            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
+            ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = name });
+            await row.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Delete" }).ClickAsync();
+
+            ILocator dialog = Page.Locator(".rz-dialog-content");
+            await Expect(dialog).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await dialog.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Delete", Exact = true }).ClickAsync();
+
+            await Expect(Page.GetByText(name)).Not.ToBeVisibleAsync(
+                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+        });
+
+    [Fact(DisplayName = "Given the delete dialog is open, when an Admin cancels instead, then the Event remains listed")]
+    public async Task GivenTheDeleteDialogIsOpen_WhenAnAdminCancelsInstead_ThenTheEventRemainsListed() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (_, string name) = await CreateEventAsync("Not Deleted");
+
+            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
+            ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = name });
+            await row.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Delete" }).ClickAsync();
+
+            ILocator dialog = Page.Locator(".rz-dialog-content");
+            await Expect(dialog).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await dialog.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Cancel" }).ClickAsync();
+
+            await Expect(dialog).Not.ToBeVisibleAsync();
+            await Expect(Page.GetByText(name)).ToBeVisibleAsync(
+                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+        });
+
     [Fact(DisplayName = "Given a Director assigned to one Event, when viewing the dashboard, then only that Event is listed read-only with no create button")]
     public async Task GivenADirectorAssignedToOneEvent_WhenViewingTheDashboard_ThenOnlyThatEventIsListedReadOnlyWithNoCreateButton() =>
         await RunAsync(async () =>
@@ -144,6 +183,27 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
                 new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
             await Expect(Page.Locator("#Name")).Not.ToBeVisibleAsync();
             await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" })).Not.ToBeVisibleAsync();
+        });
+
+    [Fact(DisplayName = "Given a Director assigned to an Event, when viewing the dashboard or that Event, then no delete action is available")]
+    public async Task GivenADirectorAssignedToAnEvent_WhenViewingTheDashboardOrThatEvent_ThenNoDeleteActionIsAvailable() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid assignedEventId, string assignedName) = await CreateEventAsync("Director Viewable");
+            await SignOutAsync();
+
+            await CreateAndSignInDirectorAsync(assignedEventId);
+
+            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
+            ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = assignedName });
+            await Expect(row).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(row.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Delete" })).Not.ToBeVisibleAsync();
+
+            await Page.GotoAsync(EventEditorUrl(assignedEventId));
+            await Expect(Page.GetByText("VIEW ONLY")).ToBeVisibleAsync(
+                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(Page.GetByText("Danger zone")).Not.ToBeVisibleAsync();
         });
 
     [Fact(DisplayName = "Given a Director, when navigating directly to an Event they aren't assigned to, then they are denied")]
