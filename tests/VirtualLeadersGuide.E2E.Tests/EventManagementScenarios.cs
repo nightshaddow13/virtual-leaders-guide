@@ -134,7 +134,7 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
             await Expect(dialog).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
             await dialog.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Delete", Exact = true }).ClickAsync();
 
-            await Expect(Page.GetByText(name)).Not.ToBeVisibleAsync(
+            await Expect(row).Not.ToBeVisibleAsync(
                 new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
         });
 
