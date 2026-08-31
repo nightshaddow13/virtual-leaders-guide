@@ -333,20 +333,7 @@ public partial class EventEditor
         saveErrorMessage = null;
 
         int directorCount = directorsForEvent?.Count ?? 0;
-        List<string> consequences = [];
-        if (directorCount > 0)
-        {
-            consequences.Add($"{directorCount} director{(directorCount == 1 ? "" : "s")} lose access to this event");
-        }
-
-        consequences.Add($"The address /e/{model!.Slug} frees up for reuse");
-        consequences.Add("This can't be undone");
-
-        var parameters = new Dictionary<string, object?>
-        {
-            [nameof(ConfirmDialog.Message)] = $"Delete {model.Name}?",
-            [nameof(ConfirmDialog.Consequences)] = (IReadOnlyList<string>)consequences
-        };
+        var parameters = EventDeleteConfirmation.BuildDialogParameters(model!.Name!, model.Slug!, directorCount);
 
         bool? confirmed = await DialogService.OpenAsync<ConfirmDialog>("Delete event?", parameters);
         if (confirmed is not true)
