@@ -55,8 +55,8 @@ public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDb
     }
 
     /// <remarks>
-    /// The grant→Event foreign key cascades — deleting an Event takes its Director grants with it —
-    /// provisionally, since no ticket builds Event deletion yet; see <see cref="UserRole.EventId"/>. The
+    /// The grant→Event foreign key cascades — deleting an Event takes its Director grants with it — a
+    /// considered decision (ADR-0044), not an inherited default; see <see cref="UserRole.EventId"/>. The
     /// platform-wide and Event-scoped grants need two filtered unique indexes rather than one plain index on
     /// (UserId, RoleId, EventId); see ADR-0017 for why a plain index can't do this.
     /// </remarks>

@@ -1,0 +1,7 @@
+.vlg-consequence-list {
+    margin: 0.75rem 0;
+    padding-inline-start: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}

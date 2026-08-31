@@ -389,6 +389,68 @@ public class ApiEventClientShould
     }
 
     [Fact]
+    public async Task SendADeleteRequestToTheEventsIdUri_WhenDeleting_ForDeleteAsync()
+    {
+        HttpRequestMessage? capturedRequest = null;
+        Guid id = Guid.NewGuid();
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            capturedRequest = request;
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
+        });
+        ApiEventClient client = CreateClient(handler);
+
+        await client.DeleteAsync(id, CancellationToken.None);
+
+        Assert.NotNull(capturedRequest);
+        Assert.Equal(HttpMethod.Delete, capturedRequest.Method);
+        Assert.EndsWith($"/api/events/{id}", capturedRequest.RequestUri!.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ReturnSuccess_WhenApiRespondsWithNoContent_ForDeleteAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.NoContent));
+        ApiEventClient client = CreateClient(handler);
+
+        EventWriteOutcome outcome = await client.DeleteAsync(Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal(EventWriteOutcome.Success, outcome);
+    }
+
+    [Fact]
+    public async Task ReturnForbidden_WhenApiRespondsWithForbidden_ForDeleteAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.Forbidden));
+        ApiEventClient client = CreateClient(handler);
+
+        EventWriteOutcome outcome = await client.DeleteAsync(Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal(EventWriteOutcome.Forbidden, outcome);
+    }
+
+    [Fact]
+    public async Task ReturnNotFound_WhenApiRespondsWithNotFound_ForDeleteAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
+        ApiEventClient client = CreateClient(handler);
+
+        EventWriteOutcome outcome = await client.DeleteAsync(Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal(EventWriteOutcome.NotFound, outcome);
+    }
+
+    [Fact]
+    public async Task ThrowEventDataUnavailableException_WhenTheHttpCallFails_ForDeleteAsync()
+    {
+        var handler = StubHttpMessageHandler.ThrowingOn(() => new HttpRequestException("simulated Api outage"));
+        ApiEventClient client = CreateClient(handler);
+
+        await Assert.ThrowsAsync<EventDataUnavailableException>(
+            () => client.DeleteAsync(Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Fact]
     public async Task ThrowEventDataUnavailableException_WhenTheHttpCallFails_ForGetEventsAsync()
     {
         var handler = StubHttpMessageHandler.ThrowingOn(() => new HttpRequestException("simulated Api outage"));

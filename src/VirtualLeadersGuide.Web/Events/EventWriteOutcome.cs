@@ -1,6 +1,9 @@
 namespace VirtualLeadersGuide.Web.Events;
 
-/// <summary>Outcomes <see cref="ApiEventClient.CreateAsync"/> and <see cref="ApiEventClient.UpdateAsync"/> distinguish.</summary>
+/// <summary>
+/// Outcomes <see cref="ApiEventClient.CreateAsync"/>, <see cref="ApiEventClient.UpdateAsync"/>, and
+/// <see cref="ApiEventClient.DeleteAsync"/> distinguish.
+/// </summary>
 public enum EventWriteOutcome
 {
     Success,
@@ -23,5 +26,12 @@ public enum EventWriteOutcome
     /// business rule rather than colliding with another Event (ADR-0042), namely <c>Event.StartsAt</c>/
     /// <c>Event.EndsAt</c>'s ordering rules. Same pointer-reading contract as <see cref="Conflict"/>.
     /// </remarks>
-    Invalid
+    Invalid,
+
+    /// <remarks>
+    /// <see cref="ApiEventClient.DeleteAsync"/> only - the Event was already gone (a stale grid, or a
+    /// concurrent delete winning the race). A caller treats this as silent success, not a failure: the
+    /// Admin's intent ("this Event shouldn't exist") is already satisfied, so there is nothing to surface.
+    /// </remarks>
+    NotFound
 }
