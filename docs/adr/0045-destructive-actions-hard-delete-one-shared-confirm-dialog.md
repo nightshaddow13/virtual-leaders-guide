@@ -42,3 +42,13 @@ Deleting an Event's own cascade behavior (Grants go with it) is ADR-0044's decis
   a hand-rolled confirm here is a deviation from this ADR, not a new default.
 - `UserDetail.razor`'s "Delete user" control needs the caller's own id (from `AuthenticationState`) to
   implement the self-delete guard, not just the target User's id.
+
+## Exception: removing a Placement (Phase 5)
+
+Removing a row from an Activity's or InfoPage's Placement table (P5-12/#97, P5-20/#92) is the one destructive
+action that does **not** always go through `ConfirmDialog`. It's a plain remove with undo offered in a toast
+when the Tier the row referenced survives the removal — `ConfirmDialog` fires only when removing the row
+would reap a Tier (a Tab/Sub Tab/Section/Sub Section with nothing left referencing it), since that's the one
+outcome of a Placement removal that isn't trivially reversible from the same screen. This is deliberate, not
+an oversight: unlike deleting an Event/User/Grant, most Placement removals are a one-click mistake to undo,
+and gating all of them behind a dialog would make the common case worse for no protective benefit.

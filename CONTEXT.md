@@ -18,8 +18,10 @@ editable, and unique across all Events — unlike Name, which is just a display 
 _Avoid_: Route, Path, Key
 
 **Activity**:
-A single scheduled thing happening at an Event (e.g. "Opening Ceremony, 9:00am–9:30am"). Belongs to exactly one
-Event.
+A single thing happening at an Event (e.g. "Opening Ceremony", "Aquatics Rotation"). Has a Name and a
+Description (rich text — see InfoPage's markdown mechanism, which Description shares) and belongs to exactly
+one Event. A scheduled time and a Location are additions a later phase makes to this same concept — an
+Activity is real and listable before it has either.
 _Avoid_: ScheduleItem (describes storage shape, not the domain concept), Session (reads as a conference term)
 
 **Page**:
@@ -29,10 +31,57 @@ _Avoid_: ContentPage (redundant — a page's job is content)
 
 **InfoPage**:
 A Page subtype holding free-form markdown content (About, Packing List, FAQ, etc.), authored and stored as data
-through the dashboard — not checked-in `.md` files, so updates don't require a redeploy. The only Page subtype
-that exists today — the Page/InfoPage split exists specifically to leave room for future subtypes (e.g. a map
-page, a schedule page) without renaming the base concept later.
+through the dashboard — not checked-in `.md` files, so updates don't require a redeploy — via the same
+markdown mechanism Activity's Description shares. The only Page subtype that exists today — the Page/InfoPage
+split exists specifically to leave room for future subtypes (e.g. a map page, a schedule page) without
+renaming the base concept later. Placed via a Placement under a Tab (optionally a Sub Tab) — never a Section
+or Sub Section, since an InfoPage is a whole page, not a heading-level item within one; see Placement.
 _Avoid_: ContentPage
+
+**Tier**:
+The general term for a Tab, Sub Tab, Section, or Sub Section — the four grouping levels a Placement can set.
+Not separately authored; all four share one lifecycle: created inline the moment a name is typed while
+placing an Activity or InfoPage, deleted the moment nothing places anything under them anymore, and never
+renamable (typing a different name creates a different Tier, it doesn't rename the existing one).
+_Avoid_: Grouping, Category (both were informal working terms before this glossary entry existed)
+
+**Tab**:
+A required, top-level grouping an Activity or InfoPage is placed under — the navigation unit a visitor picks
+between (e.g. "Morning", "Afternoon"). Scoped to one Event. Not separately authored: created inline the
+moment someone types a new name while placing something, and deleted the moment nothing places anything
+under it — directly, or indirectly via a Sub Tab/Section/Sub Section that only exists under it — anymore.
+_Avoid_: Category (an earlier three-tier draft of this model used Category for what is now Sub Tab)
+
+**Sub Tab**:
+An optional second-level navigation grouping, scoped to one Tab (e.g. "Round Robin" under "Morning"). Same
+lazy-create, auto-delete lifecycle as Tab. Independent of Section — a Placement may set a Sub Tab with no
+Section, or a Section with no Sub Tab; neither blocks the other.
+_Avoid_: Category (an earlier three-tier draft of this model used Category for this tier)
+
+**Section**:
+An optional page-structure grouping for an Activity Placement — a heading wherever it's placed, not a
+navigation unit. Scoped to whichever immediate parent the Placement gives it: the bare Tab, when that
+Placement has no Sub Tab, or that specific Sub Tab, when it does — so the same name typed under two different
+Sub Tabs (or under a Tab both with and without a Sub Tab) creates two distinct Sections, not one shared
+across them. Same lazy-create, auto-delete lifecycle as Tab. **Never set on an InfoPage's Placement** — an
+InfoPage is a whole page, not a heading-level item sitting within one.
+_Avoid_: Sub Category (an earlier three-tier draft of this model used Sub Category for this tier)
+
+**Sub Section**:
+An optional sub-heading nested one level under a Section — the deepest tier; nothing nests under it. Scoped
+to its Section, so it inherits Section's InfoPage restriction: **never set on an InfoPage's Placement**.
+_Avoid_: Sub Category (an earlier three-tier draft of this model had no fourth level)
+
+**Placement**:
+An Activity's or InfoPage's appearance under a specific Tab and, optionally, a Sub Tab. An Activity's
+Placement may go two levels deeper still — a Section and, under that, a Sub Section — but an InfoPage's
+Placement never does, since an InfoPage is a whole page, not a heading-level item sitting within one (see
+InfoPage). A Tab/Sub Tab renders as one of two exclusive screens: either its Activities (organized by their
+Sections/Sub Sections) or exactly one InfoPage — never both, and never more than one InfoPage. Each Placement
+carries its own SortOrder, independent of any other Placement of the same Activity/InfoPage — the same
+Activity may be placed under more than one Tab (e.g. offered morning and afternoon), each ordered on its own.
+The same exact path can never be set twice for the same Activity or InfoPage.
+_Avoid_: Assignment, Slot (Slot reads time-based)
 
 **Passcode**:
 A single shared secret for an Event (one value at a time, editable by an Admin — no rotation history), visible
