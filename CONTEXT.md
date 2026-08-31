@@ -34,6 +34,32 @@ that exists today — the Page/InfoPage split exists specifically to leave room 
 page, a schedule page) without renaming the base concept later.
 _Avoid_: ContentPage
 
+**Tab**:
+A required, top-level grouping an Activity or InfoPage is placed under — the navigation unit a visitor picks
+between (e.g. "Morning", "Afternoon"). Scoped to one Event. Not separately authored: created inline the
+moment someone types a new name while placing something, and deleted the moment nothing places anything
+under it — directly, or indirectly via a Sub Tab/Section/Sub Section that only exists under it — anymore.
+_Avoid_: Category (an earlier three-tier draft of this model used Category for what is now Sub Tab)
+
+**Sub Tab**:
+An optional second-level navigation grouping, scoped to one Tab (e.g. "Round Robin" under "Morning"). Same
+lazy-create, auto-delete lifecycle as Tab. Independent of Section — a Placement may set a Sub Tab with no
+Section, or a Section with no Sub Tab; neither blocks the other.
+_Avoid_: Category (an earlier three-tier draft of this model used Category for this tier)
+
+**Section**:
+An optional page-structure grouping — a heading wherever it's placed, not a navigation unit. Scoped to
+whichever immediate parent a Placement gives it: the bare Tab, when that Placement has no Sub Tab, or that
+specific Sub Tab, when it does — so the same name typed under two different Sub Tabs (or under a Tab both
+with and without a Sub Tab) creates two distinct Sections, not one shared across them. Same lazy-create,
+auto-delete lifecycle as Tab.
+_Avoid_: Sub Category (an earlier three-tier draft of this model used Sub Category for this tier)
+
+**Sub Section**:
+An optional sub-heading nested one level under a Section — the deepest tier; nothing nests under it. Scoped
+to its Section. Same lazy-create, auto-delete lifecycle as Tab.
+_Avoid_: Sub Category (an earlier three-tier draft of this model had no fourth level)
+
 **Passcode**:
 A single shared secret for an Event (one value at a time, editable by an Admin — no rotation history), visible
 in full to an assigned Director, entered by a visitor to unlock read access to that event's Leaders Guide. Not
