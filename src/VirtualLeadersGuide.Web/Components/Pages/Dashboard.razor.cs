@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Radzen;
 using Radzen.Blazor;
 using VirtualLeadersGuide.Web.Authorization;
+using VirtualLeadersGuide.Web.Components.Shared;
+using VirtualLeadersGuide.Web.Directors;
 using VirtualLeadersGuide.Web.Events;
 using VirtualLeadersGuide.Web.Time;
 
@@ -16,6 +18,12 @@ public partial class Dashboard
 
     [Inject]
     private ApiEventClient EventClient { get; set; } = default!;
+
+    [Inject]
+    private ApiDirectorClient DirectorClient { get; set; } = default!;
+
+    [Inject]
+    private DialogService DialogService { get; set; } = default!;
 
     [Inject]
     private BrowserTimeZoneAccessor TimeZoneAccessor { get; set; } = default!;
@@ -31,13 +39,14 @@ public partial class Dashboard
     private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
 
     /// <remarks>
-    /// Not the icon button's own ~44px: the grid renders with a fixed table layout
+    /// Not the icon buttons' own ~44px each: the grid renders with a fixed table layout
     /// (<c>rz-grid-table-fixed</c>), so a column can never grow to fit its content - one narrower than the
-    /// button clips it against the cell's padding box instead of just looking cramped. 76px leaves the
-    /// centered button real breathing room on both sides. The button itself is icon-only, not text - see
-    /// ADR-0037 for the row-action convention this establishes.
+    /// buttons clips them against the cell's padding box instead of just looking cramped. Two buttons (Edit/
+    /// View plus, for an Admin, Delete - P2-17, #112) at ~44px each, a 4px gap between them, and the same
+    /// breathing room on both sides that 76px reserved for one button, comes to 128px. The buttons themselves
+    /// are icon-only, not text - see ADR-0037 for the row-action convention this establishes.
     /// </remarks>
-    private const string ActionColumnWidth = "76px";
+    private const string ActionColumnWidth = "128px";
 
     private RadzenDataGrid<EventDto>? grid;
     private EventAccessView? accessView;
@@ -54,6 +63,7 @@ public partial class Dashboard
     private int totalCount;
     private bool isLoading;
     private string? loadErrorMessage;
+    private string? deleteErrorMessage;
 
     /// <remarks>
     /// Starts UTC and is replaced once <see cref="OnAfterRenderAsync"/> resolves the real one - grid rows
@@ -132,6 +142,56 @@ public partial class Dashboard
         }
 
         isLoading = false;
+    }
+
+    /// <remarks>
+    /// Wrapped in try/catch for the same reason <see cref="LoadDataAsync"/> is - an uncaught exception out of
+    /// a Radzen callback crashes the whole circuit. The Director count feeding the confirm dialog's
+    /// consequence list is its own fetch (<see cref="ApiDirectorClient.GetDirectorCountForEventAsync"/>) that
+    /// can fail independently of the delete itself; per ADR-0045, a failure there degrades that one bullet
+    /// rather than blocking the dialog from opening at all - an Admin's ability to delete a broken Event
+    /// shouldn't depend on a transient failure in data that's only advisory to begin with. A 404 from the
+    /// delete call itself is treated as silent success (grid reloads, no message) since the Admin's intent -
+    /// "this Event shouldn't exist" - is already satisfied by the row already being gone.
+    /// </remarks>
+    private async Task DeleteAsync(EventDto item)
+    {
+        deleteErrorMessage = null;
+
+        try
+        {
+            int? directorCount;
+            try
+            {
+                directorCount = await DirectorClient.GetDirectorCountForEventAsync(item.Id, CancellationToken.None);
+            }
+            catch (DirectorDataUnavailableException)
+            {
+                directorCount = null;
+            }
+
+            var parameters = EventDeleteConfirmation.BuildDialogParameters(item.Name, item.Slug, directorCount);
+
+            bool? confirmed = await DialogService.OpenAsync<ConfirmDialog>("Delete event?", parameters);
+            if (confirmed is not true)
+            {
+                return;
+            }
+
+            EventWriteOutcome outcome = await EventClient.DeleteAsync(item.Id, CancellationToken.None);
+            if (outcome is EventWriteOutcome.Success or EventWriteOutcome.NotFound)
+            {
+                await grid!.Reload();
+            }
+            else if (outcome == EventWriteOutcome.Forbidden)
+            {
+                deleteErrorMessage = "You don't have permission to delete this Event.";
+            }
+        }
+        catch (EventDataUnavailableException)
+        {
+            deleteErrorMessage = "Something went wrong deleting this Event. Try again.";
+        }
     }
 
     /// <remarks>

@@ -104,12 +104,7 @@ public sealed class ApiDirectorClient(InternalApiClient apiClient)
     /// <summary>Lists the Directors currently granted access to <paramref name="eventId"/> (EventEditor's Directors section).</summary>
     public async Task<IReadOnlyList<UserRowDto>> GetDirectorsForEventAsync(Guid eventId, CancellationToken cancellationToken)
     {
-        string filter = $"and(equals(eventId,'{eventId}'),equals(roleId,'{RoleIds.Director}'))";
-        RoleGrantCollectionDocument grantsDocument = await FetchAsync<RoleGrantCollectionDocument>(
-            $"{RoleGrantsPath}?filter={Uri.EscapeDataString(filter)}&page[size]={MaxFetch}", cancellationToken);
-        List<string> userIds = [.. grantsDocument.Data
-            .Select(resource => resource.Attributes!.UserId).OfType<string>().Distinct()];
-
+        List<string> userIds = await GetDirectorUserIdsForEventAsync(eventId, cancellationToken);
         if (userIds.Count == 0)
         {
             return [];
@@ -117,6 +112,26 @@ public sealed class ApiDirectorClient(InternalApiClient apiClient)
 
         IReadOnlyList<UserRowDto> users = await GetUsersByIdAsync(userIds, cancellationToken);
         return users;
+    }
+
+    /// <summary>
+    /// Counts the Directors currently granted access to <paramref name="eventId"/> - the Dashboard's
+    /// delete-confirmation dialog (P2-17, #112). One round trip, unlike <see cref="GetDirectorsForEventAsync"/>'s
+    /// two - a count doesn't need the second fetch that resolves ids into Users.
+    /// </summary>
+    public async Task<int> GetDirectorCountForEventAsync(Guid eventId, CancellationToken cancellationToken)
+    {
+        List<string> userIds = await GetDirectorUserIdsForEventAsync(eventId, cancellationToken);
+        return userIds.Count;
+    }
+
+    private async Task<List<string>> GetDirectorUserIdsForEventAsync(Guid eventId, CancellationToken cancellationToken)
+    {
+        string filter = $"and(equals(eventId,'{eventId}'),equals(roleId,'{RoleIds.Director}'))";
+        RoleGrantCollectionDocument grantsDocument = await FetchAsync<RoleGrantCollectionDocument>(
+            $"{RoleGrantsPath}?filter={Uri.EscapeDataString(filter)}&page[size]={MaxFetch}", cancellationToken);
+        return [.. grantsDocument.Data
+            .Select(resource => resource.Attributes!.UserId).OfType<string>().Distinct()];
     }
 
     /// <summary>Grants a User the unscoped, platform-wide Director Role (ADR-0035) - the act an Invite performs.</summary>

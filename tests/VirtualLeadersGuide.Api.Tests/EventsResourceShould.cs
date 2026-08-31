@@ -1,7 +1,10 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using VirtualLeadersGuide.Api.Data;
+using VirtualLeadersGuide.Identity.Contracts;
 
 namespace VirtualLeadersGuide.Api.Tests;
 
@@ -178,6 +181,37 @@ public class EventsResourceShould : IAsyncLifetime
         HttpResponseMessage response = await SendAsync(client, HttpMethod.Delete, $"/api/events/{other.Id}");
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RejectWithNotFound_WhenAdminDeletesANonexistentEvent_ForDelete()
+    {
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Delete, $"/api/events/{Guid.NewGuid()}");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    /// <remarks>
+    /// HTTP-level counterpart to <c>EventSchemaShould.CascadeDeleteEventScopedGrants_WhenTheEventIsDeleted_ForSaveChanges</c>,
+    /// which only proves the cascade at the DbContext level - this proves it fires through the actual
+    /// JsonApiDotNetCore delete pipeline too (P2-17, #112; ADR-0044's Question 14).
+    /// </remarks>
+    [Fact]
+    public async Task CascadeDeleteTheDirectorsGrant_WhenAdminDeletesAnEventWithAnAssignedDirector_ForDelete()
+    {
+        Event @event = await _factory.CreateEventAsync();
+        ApplicationUser director = await _factory.CreateUserAsync();
+        UserRole grant = await _factory.CreateGrantAsync(director.Id, RoleIds.Director, @event.Id);
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Delete, $"/api/events/{@event.Id}");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        using IServiceScope scope = _factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        Assert.False(await dbContext.DomainUserRoles.AnyAsync(g => g.Id == grant.Id));
     }
 
     [Fact]

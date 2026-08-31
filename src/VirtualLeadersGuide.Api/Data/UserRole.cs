@@ -35,11 +35,12 @@ public class UserRole : Identifiable<Guid>
 
     public Role? Role { get; set; }
 
+    /// <summary>The <see cref="Event.Id"/> this grant is scoped to, or <see langword="null"/> for a platform-wide grant.</summary>
     /// <remarks>
     /// A real FK against <see cref="Event.Id"/> (P2-6, #15), with cascade delete
-    /// (<see cref="VirtualLeadersGuideDbContext"/>) — provisional, since no ticket builds Event deletion yet
-    /// (only archiving is planned near-term). Whoever eventually builds it should revisit this behavior
-    /// rather than assume it was a considered choice for that feature specifically.
+    /// (<see cref="VirtualLeadersGuideDbContext"/>) - a considered decision, not an inherited default: ADR-0044
+    /// weighed blocking Event deletion while Directors are still assigned against cascading, and chose
+    /// cascading because a Grant is meaningless once its Event is gone.
     /// </remarks>
     [Attr(Capabilities = AttrCapabilities.AllowView | AttrCapabilities.AllowCreate
         | AttrCapabilities.AllowFilter | AttrCapabilities.AllowSort)]

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Forms;
 using Radzen;
 using VirtualLeadersGuide.Web.Authorization;
+using VirtualLeadersGuide.Web.Components.Shared;
 using VirtualLeadersGuide.Web.Directors;
 using VirtualLeadersGuide.Web.Events;
 using VirtualLeadersGuide.Web.Time;
@@ -24,6 +25,9 @@ public partial class EventEditor
 
     [Inject]
     private NotificationService NotificationService { get; set; } = default!;
+
+    [Inject]
+    private DialogService DialogService { get; set; } = default!;
 
     [Inject]
     private BrowserTimeZoneAccessor TimeZoneAccessor { get; set; } = default!;
@@ -50,6 +54,7 @@ public partial class EventEditor
     private string? permissionLostMessage;
     private string? saveErrorMessage;
     private bool isSaving;
+    private bool isDeleting;
 
     private List<UserRowDto>? directorsForEvent;
     private List<UserRowDto>? candidateDirectors;
@@ -312,6 +317,56 @@ public partial class EventEditor
 
         NotificationService.Notify(NotificationSeverity.Success, "Changes saved");
         NavigateToDashboard();
+    }
+
+    /// <remarks>
+    /// Not gated by <see cref="isSaving"/> or any unsaved-edit check - delete removes the whole record, so
+    /// unsaved form edits become moot the moment it succeeds, same as clicking Cancel (grilled decision,
+    /// P2-17). Uses <see cref="directorsForEvent"/>'s count already loaded by <see cref="LoadDirectorsAsync"/>
+    /// for the confirm dialog's consequence list - no extra Api call needed here, unlike <c>Dashboard.razor.cs</c>'s
+    /// grid row action, which has no Director data in hand yet. <see cref="EventWriteOutcome.Forbidden"/> reuses
+    /// <see cref="permissionLostMessage"/>, matching <see cref="UpdateAsync"/>'s own claim-lag handling, rather
+    /// than a delete-specific message.
+    /// </remarks>
+    private async Task DeleteAsync()
+    {
+        saveErrorMessage = null;
+
+        int directorCount = directorsForEvent?.Count ?? 0;
+        var parameters = EventDeleteConfirmation.BuildDialogParameters(model!.Name!, model.Slug!, directorCount);
+
+        bool? confirmed = await DialogService.OpenAsync<ConfirmDialog>("Delete event?", parameters);
+        if (confirmed is not true)
+        {
+            return;
+        }
+
+        isDeleting = true;
+
+        try
+        {
+            EventWriteOutcome outcome = await EventClient.DeleteAsync(Id!.Value, CancellationToken.None);
+            if (outcome is EventWriteOutcome.Success or EventWriteOutcome.NotFound)
+            {
+                NavigateToDashboard();
+                return;
+            }
+
+            if (outcome == EventWriteOutcome.Forbidden)
+            {
+                permissionLostMessage = "You no longer have permission to delete this Event.";
+            }
+            else
+            {
+                saveErrorMessage = "Something went wrong deleting this Event. Try again.";
+            }
+        }
+        catch (EventDataUnavailableException)
+        {
+            saveErrorMessage = "Something went wrong deleting this Event. Try again.";
+        }
+
+        isDeleting = false;
     }
 
     /// <remarks>

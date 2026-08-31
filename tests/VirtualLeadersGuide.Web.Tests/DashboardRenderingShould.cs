@@ -22,12 +22,17 @@ public class DashboardRenderingShould : BunitContext
     /// Radzen components call into JS (e.g. <c>RadzenDataGrid</c>'s <c>Radzen.createDataGrid</c> on first
     /// render) for concerns this test has no stake in - sizing, virtualization. Loose mode returns a
     /// default for any unconfigured call instead of throwing, rather than hand-configuring every Radzen JS
-    /// interop call this test doesn't actually exercise.
+    /// interop call this test doesn't actually exercise. <c>ApiDirectorClient</c> is registered here (not just
+    /// where a test actually clicks Delete) because <c>Dashboard.razor.cs</c> injects it unconditionally now
+    /// (P2-17, #112) - every render needs it resolvable even when a test never exercises the delete path.
     /// </remarks>
     public DashboardRenderingShould()
     {
         JSInterop.Mode = JSRuntimeMode.Loose;
         Services.AddSingleton<BrowserTimeZoneAccessor>();
+        RadzenTestServices.RegisterRadzenComponentsHost(Services);
+        Services.AddSingleton(ApiClientTestFactory.CreateDirectorClient(
+            StubHttpMessageHandler.RespondingWith(HttpStatusCode.NotFound)));
     }
 
     [Fact]
@@ -70,6 +75,34 @@ public class DashboardRenderingShould : BunitContext
 
         Assert.DoesNotContain(cut.FindAll("button"), button => button.TextContent.Contains("+ New event", StringComparison.Ordinal));
         Assert.Contains("My events", cut.Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShowDeleteIcon_WhenTheSignedInUserIsAnAdmin_ForOnInitializedAsync()
+    {
+        Services.AddSingleton(ApiClientTestFactory.CreateEventClient(StubHttpMessageHandler.RespondingWithJson(
+            HttpStatusCode.OK, new { data = new[] { EventResource("Fall Camporee", "fall-camporee") } })));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("admin-1");
+        auth.SetRoles("Admin");
+
+        IRenderedComponent<Dashboard> cut = Render<Dashboard>();
+
+        Assert.Contains(cut.FindAll("button"), button => button.GetAttribute("aria-label") == "Delete");
+    }
+
+    [Fact]
+    public void HideDeleteIcon_WhenTheSignedInUserIsADirector_ForOnInitializedAsync()
+    {
+        Services.AddSingleton(ApiClientTestFactory.CreateEventClient(StubHttpMessageHandler.RespondingWithJson(
+            HttpStatusCode.OK, new { data = new[] { EventResource("Fall Camporee", "fall-camporee") } })));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("director-1");
+        auth.SetRoles("Director");
+
+        IRenderedComponent<Dashboard> cut = Render<Dashboard>();
+
+        Assert.DoesNotContain(cut.FindAll("button"), button => button.GetAttribute("aria-label") == "Delete");
     }
 
     [Fact]
