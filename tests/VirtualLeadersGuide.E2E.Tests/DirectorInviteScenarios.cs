@@ -6,7 +6,15 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// <remarks>
 /// Covers P2-12 (#43): inviting a Director by email from <c>/dashboard/users</c>, completing account setup
 /// at <c>/setup</c>, assigning the invited Director to an Event from the Event's own Directors section
-/// (ADR-0035 - never the reverse), and the resend/revoke actions on a pending invite.
+/// (ADR-0035 - never the reverse), and the resend/revoke actions on a pending invite. Also covers P2-18
+/// (#113): removing a Director's Event-scoped access from that same section - the two removal scenarios
+/// seed their throwaway Director's Grant directly via <c>Fixture.IdentityApi.GrantDirectorAsync</c> rather
+/// than through <see cref="AddDirectorToEventAsync"/>'s dropdown UI, since the subject under test is the
+/// Remove action, not how the Grant got there in the first place. Both removal scenarios scope their
+/// disappearance/still-visible assertion to <c>.vlg-directors-list</c> rather than a page-wide
+/// <c>GetByText(email)</c> - the removal confirm dialog's own message also names the Director's email, the
+/// same strict-mode collision commit <c>e666687</c> hit for P2-17's delete-Event dialog, so an unscoped
+/// locator can match both the dialog and the row at once while the dialog is still closing.
 /// <see cref="AspireE2EFixture.EmailSink"/> intercepts the invite email the same way
 /// <see cref="PasswordResetScenarios"/> intercepts a reset link. <c>IdentityApiClient.GrantDirectorAsync</c>
 /// (added for P2-9, #18) is deliberately unused here - the point of these scenarios is that the invite UI
@@ -161,6 +169,50 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
             await SignOutAsync();
             await Page.GotoAsync(inviteEmail.Payload);
             await Expect(Page.GetByText("Invalid invite")).ToBeVisibleAsync(
+                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+        });
+
+    [Fact(DisplayName = "Given an Admin viewing an Event's Directors list, when they remove a Director and confirm, then the Director disappears from that Event's list")]
+    public async Task GivenAnAdminViewingAnEventsDirectorsList_WhenTheyRemoveADirectorAndConfirm_ThenTheDirectorDisappearsFromThatEventsList() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, string _) = await CreateEventAsync("Remove Director");
+            IdentityUserDto director = await CreateTrackedUserAsync("e2e-remove-director", CancellationToken.None);
+            await Fixture.IdentityApi.GrantDirectorAsync(director.Id, eventId, CancellationToken.None);
+
+            await Page.GotoAsync(EventEditorUrl(eventId));
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = $"Remove {director.Email}", Exact = true })
+                .ClickAsync();
+
+            ILocator dialog = Page.Locator(".rz-dialog-content");
+            await Expect(dialog).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(dialog).ToContainTextAsync(director.Email!);
+            await dialog.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Remove", Exact = true }).ClickAsync();
+
+            await Expect(Page.Locator(".vlg-directors-list").GetByText(director.Email!)).Not.ToBeVisibleAsync(
+                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+        });
+
+    [Fact(DisplayName = "Given the remove-Director dialog is open, when an Admin cancels instead, then the Director stays assigned")]
+    public async Task GivenTheRemoveDirectorDialogIsOpen_WhenAnAdminCancelsInstead_ThenTheDirectorStaysAssigned() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, string _) = await CreateEventAsync("Cancel Remove Director");
+            IdentityUserDto director = await CreateTrackedUserAsync("e2e-cancel-remove-director", CancellationToken.None);
+            await Fixture.IdentityApi.GrantDirectorAsync(director.Id, eventId, CancellationToken.None);
+
+            await Page.GotoAsync(EventEditorUrl(eventId));
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = $"Remove {director.Email}", Exact = true })
+                .ClickAsync();
+
+            ILocator dialog = Page.Locator(".rz-dialog-content");
+            await Expect(dialog).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await dialog.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Cancel", Exact = true }).ClickAsync();
+
+            await Expect(dialog).Not.ToBeVisibleAsync();
+            await Expect(Page.Locator(".vlg-directors-list").GetByText(director.Email!)).ToBeVisibleAsync(
                 new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
         });
 

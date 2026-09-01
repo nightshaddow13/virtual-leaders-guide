@@ -2,6 +2,8 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using VirtualLeadersGuide.Api.Data;
 using VirtualLeadersGuide.Identity.Contracts;
 
@@ -18,6 +20,10 @@ namespace VirtualLeadersGuide.Api.Tests;
 /// <see cref="SucceedWithCreated_WhenAdminCreatesAPlatformWideDirectorGrant_ForPost"/> pins ADR-0035: a
 /// Director grant with no <c>EventId</c> is the unscoped Role row an Invite (P2-12, #43) establishes - a
 /// normal, permanent state, not a special case this resource needs to reject.
+/// <see cref="LeaveThePlatformWideDirectorGrantUntouched_WhenAdminDeletesAnEventScopedGrant_ForDelete"/> pins
+/// the other half of ADR-0035 (P2-18, #113): removing one Event-scoped Grant never touches the same User's
+/// unscoped Role row. The <c>*ForAUserHoldingAdmin*</c> tests pin ADR-0051: an Event-scoped Director Grant
+/// can be neither created nor deleted for a User who separately holds Admin, but an unscoped one still can.
 /// </remarks>
 public class RoleGrantsResourceShould : IAsyncLifetime
 {
@@ -114,6 +120,72 @@ public class RoleGrantsResourceShould : IAsyncLifetime
         HttpResponseMessage response = await SendAsync(client, HttpMethod.Delete, $"/api/roleGrants/{grant.Id}");
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task LeaveThePlatformWideDirectorGrantUntouched_WhenAdminDeletesAnEventScopedGrant_ForDelete()
+    {
+        ApplicationUser user = await _factory.CreateUserAsync();
+        Event @event = await _factory.CreateEventAsync();
+        UserRole unscopedGrant = await _factory.CreateGrantAsync(user.Id, RoleIds.Director);
+        UserRole scopedGrant = await _factory.CreateGrantAsync(user.Id, RoleIds.Director, @event.Id);
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Delete, $"/api/roleGrants/{scopedGrant.Id}");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        using IServiceScope scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        Assert.True(await db.DomainUserRoles.AsNoTracking().AnyAsync(g => g.Id == unscopedGrant.Id));
+        Assert.False(await db.DomainUserRoles.AsNoTracking().AnyAsync(g => g.Id == scopedGrant.Id));
+    }
+
+    [Fact]
+    public async Task SucceedWithNoContent_WhenAdminDeletesAnUnscopedDirectorGrantForAUserHoldingAdmin_ForDelete()
+    {
+        ApplicationUser user = await _factory.CreateUserAsync();
+        await _factory.CreateGrantAsync(user.Id, RoleIds.Admin);
+        UserRole grant = await _factory.CreateGrantAsync(user.Id, RoleIds.Director);
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Delete, $"/api/roleGrants/{grant.Id}");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RejectWithForbidden_WhenAdminCreatesAnEventScopedGrantForAUserHoldingAdmin_ForPost()
+    {
+        ApplicationUser user = await _factory.CreateUserAsync();
+        Event @event = await _factory.CreateEventAsync();
+        await _factory.CreateGrantAsync(user.Id, RoleIds.Admin);
+        using HttpClient client = AdminClient();
+        var body = new
+        {
+            data = new
+            {
+                type = "roleGrants",
+                attributes = new { userId = user.Id, roleId = RoleIds.Director, eventId = @event.Id }
+            }
+        };
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Post, "/api/roleGrants", body);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RejectWithForbidden_WhenAdminDeletesAnEventScopedGrantForAUserHoldingAdmin_ForDelete()
+    {
+        ApplicationUser user = await _factory.CreateUserAsync();
+        Event @event = await _factory.CreateEventAsync();
+        await _factory.CreateGrantAsync(user.Id, RoleIds.Admin);
+        UserRole grant = await _factory.CreateGrantAsync(user.Id, RoleIds.Director, @event.Id);
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Delete, $"/api/roleGrants/{grant.Id}");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Fact]

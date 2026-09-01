@@ -27,3 +27,12 @@
         border-start-start-radius: 0;
         border-end-start-radius: 0;
     }
+
+/* Directors list row layout (P2-18, #113) - see DirectorInviteScenarios' class remarks for why this
+   container exists as an E2E scoping target, not just row spacing. */
+
+.vlg-directors-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}

@@ -14,7 +14,8 @@ namespace VirtualLeadersGuide.Api.Data;
 /// <summary>
 /// Enforces Admin-only access on <c>/api/roleGrants</c> (P2-8, #17): only an Admin may read, create, or
 /// delete a <see cref="UserRole"/> grant, and even an Admin may not create or delete an Admin-role grant
-/// through this resource - see ADR-0033.
+/// through this resource - see ADR-0033. Also refuses an Event-scoped Director grant, create or delete,
+/// for a User who separately holds Admin - see ADR-0051.
 /// </summary>
 /// <remarks>
 /// Authorization lives here rather than a hand-written controller or ASP.NET Core middleware, the same
@@ -30,6 +31,9 @@ public sealed class UserRoleResourceDefinition : JsonApiResourceDefinition<UserR
     private const string AdminGrantTitle =
         "Admin role grants can't be created or removed through this resource - see ADR-0008's config allowlist.";
 
+    private const string AdminHoldsEventGrantTitle =
+        "An Admin already has access to every event and can't hold a separate Event grant - see ADR-0051.";
+
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly VirtualLeadersGuideDbContext _dbContext;
 
@@ -40,8 +44,8 @@ public sealed class UserRoleResourceDefinition : JsonApiResourceDefinition<UserR
     /// <see cref="CurrentPolicy"/>.
     /// </param>
     /// <param name="dbContext">
-    /// Backs <see cref="CheckForConflictsAsync"/>'s duplicate-grant pre-check and
-    /// <see cref="RoleIdForDeleteAsync"/>'s re-read.
+    /// Backs <see cref="CheckForConflictsAsync"/>'s duplicate-grant pre-check, <see cref="GrantForDeleteAsync"/>'s
+    /// re-read, and <see cref="HoldsAdminAsync"/>'s ADR-0051 check.
     /// </param>
     public UserRoleResourceDefinition(
         IResourceGraph resourceGraph, IHttpContextAccessor httpContextAccessor, VirtualLeadersGuideDbContext dbContext)
@@ -68,16 +72,18 @@ public sealed class UserRoleResourceDefinition : JsonApiResourceDefinition<UserR
 
     /// <inheritdoc/>
     /// <remarks>
-    /// Rejects any write from a non-Admin, then - separately - rejects any write touching an Admin-role grant
-    /// even from an Admin (ADR-0033). For <see cref="WriteOperationKind.DeleteResource"/>, JsonApiDotNetCore
-    /// hands this method a placeholder <paramref name="resource"/> with only <see cref="IIdentifiable.StringId"/>
-    /// set (its own documented behavior for delete/relationship operations), so
-    /// <see cref="RoleIdForDeleteAsync"/> re-reads the real <see cref="UserRole.RoleId"/> from the database
-    /// rather than trusting the placeholder's default value, which would otherwise let an Admin-grant delete
-    /// through unchecked. A delete for an id that no longer exists resolves that lookup to
-    /// <see langword="null"/> and falls through to
+    /// Rejects any write from a non-Admin, then applies two further, separate refusals (order doesn't matter
+    /// between them - each is a full rejection on its own): an Admin-role grant even from an Admin (ADR-0033),
+    /// and - ADR-0051 - an Event-scoped Director grant for a User who separately holds Admin, since Admin
+    /// already covers every Event with no Grant step (ADR-0035) and a Grant alongside it is invalid state, not
+    /// a second permission. For <see cref="WriteOperationKind.DeleteResource"/>, JsonApiDotNetCore hands this
+    /// method a placeholder <paramref name="resource"/> with only <see cref="IIdentifiable.StringId"/> set (its
+    /// own documented behavior for delete/relationship operations), so <see cref="GrantForDeleteAsync"/>
+    /// re-reads the real row from the database rather than trusting the placeholder's default values, which
+    /// would otherwise let both refusals through unchecked. A delete for an id that no longer exists resolves
+    /// that lookup to all-<see langword="null"/> and falls through to
     /// <see cref="JsonApiResourceDefinition{TResource,TId}.OnWritingAsync"/>'s own not-found handling, rather
-    /// than being misreported as a blocked Admin-grant delete.
+    /// than being misreported as a blocked delete.
     /// </remarks>
     public override async Task OnWritingAsync(
         UserRole resource, WriteOperationKind writeOperation, CancellationToken cancellationToken)
@@ -88,13 +94,18 @@ public sealed class UserRoleResourceDefinition : JsonApiResourceDefinition<UserR
             throw ForbiddenException(NotAdminTitle);
         }
 
-        int? roleId = writeOperation == WriteOperationKind.DeleteResource
-            ? await RoleIdForDeleteAsync(resource.Id, cancellationToken)
-            : resource.RoleId;
+        (int? roleId, string? userId, Guid? eventId) = writeOperation == WriteOperationKind.DeleteResource
+            ? await GrantForDeleteAsync(resource.Id, cancellationToken)
+            : (resource.RoleId, resource.UserId, resource.EventId);
 
         if (roleId == RoleIds.Admin)
         {
             throw ForbiddenException(AdminGrantTitle);
+        }
+
+        if (roleId == RoleIds.Director && eventId is not null && await HoldsAdminAsync(userId, cancellationToken))
+        {
+            throw ForbiddenException(AdminHoldsEventGrantTitle);
         }
 
         if (writeOperation == WriteOperationKind.CreateResource)
@@ -133,11 +144,26 @@ public sealed class UserRoleResourceDefinition : JsonApiResourceDefinition<UserR
         });
     }
 
-    private async Task<int?> RoleIdForDeleteAsync(Guid id, CancellationToken cancellationToken) =>
-        await _dbContext.DomainUserRoles.AsNoTracking()
-            .Where(grant => grant.Id == id)
-            .Select(grant => (int?)grant.RoleId)
+    /// <remarks>
+    /// Widened past a bare <c>RoleId</c> read (this type's earlier shape) to also carry <c>UserId</c>/
+    /// <c>EventId</c> - ADR-0051's guard needs both, and re-reading the row twice for two different guards
+    /// would cost a second round trip for no benefit.
+    /// </remarks>
+    private async Task<(int? RoleId, string? UserId, Guid? EventId)> GrantForDeleteAsync(
+        Guid id, CancellationToken cancellationToken)
+    {
+        var grant = await _dbContext.DomainUserRoles.AsNoTracking()
+            .Where(g => g.Id == id)
+            .Select(g => new { g.RoleId, g.UserId, g.EventId })
             .FirstOrDefaultAsync(cancellationToken);
+
+        return grant is null ? (null, null, null) : (grant.RoleId, grant.UserId, grant.EventId);
+    }
+
+    /// <summary>Whether <paramref name="userId"/> separately holds the platform-wide Admin Role - ADR-0051's guard.</summary>
+    private async Task<bool> HoldsAdminAsync(string? userId, CancellationToken cancellationToken) =>
+        userId is not null && await _dbContext.DomainUserRoles.AsNoTracking()
+            .AnyAsync(grant => grant.UserId == userId && grant.RoleId == RoleIds.Admin, cancellationToken);
 
     private RoleGrantAccessPolicy CurrentPolicy() =>
         new(_httpContextAccessor.HttpContext?.User ?? throw new InvalidOperationException(

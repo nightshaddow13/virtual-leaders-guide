@@ -30,6 +30,9 @@ public partial class EventEditor
     private DialogService DialogService { get; set; } = default!;
 
     [Inject]
+    private TooltipService TooltipService { get; set; } = default!;
+
+    [Inject]
     private BrowserTimeZoneAccessor TimeZoneAccessor { get; set; } = default!;
 
     /// <remarks>
@@ -56,11 +59,24 @@ public partial class EventEditor
     private bool isSaving;
     private bool isDeleting;
 
-    private List<UserRowDto>? directorsForEvent;
+    private List<EventDirectorDto>? directorsForEvent;
     private List<UserRowDto>? candidateDirectors;
     private string? selectedDirectorUserId;
     private bool isAddingDirector;
+    private bool isRemovingDirector;
     private string? directorErrorMessage;
+
+    /// <remarks>
+    /// Anchors the "why is this disabled" tooltip (ADR-0052) to the specific row hovered - a single shared
+    /// field would only ever hold the last row's <see cref="ElementReference"/> once <see cref="LoadDirectorsAsync"/>
+    /// finishes rendering every row in the loop, which is wrong for every row but the last. Keyed by
+    /// <see cref="EventDirectorDto.GrantId"/> rather than index, so a reload that reorders the list can't
+    /// point a tooltip at the wrong row.
+    /// </remarks>
+    private readonly Dictionary<Guid, ElementReference> adminGuardAnchors = [];
+
+    private const string AdminGuardTooltipText =
+        "Admins have access to every event. Remove them from the admin allowlist instead.";
 
     /// <remarks>
     /// Retained past <see cref="OnParametersSetAsync"/> for two reasons: the Director read-only view
@@ -382,14 +398,16 @@ public partial class EventEditor
     private void NavigateToDashboard() => NavigationManager.NavigateTo("dashboard", forceLoad: true);
 
     /// <remarks>
-    /// Directors are added from the Event, never the reverse (ADR-0035) - this is the only place in the app
-    /// that writes an Event-scoped Grant. <see cref="candidateDirectors"/> excludes anyone already in
-    /// <see cref="directorsForEvent"/>, so the dropdown only ever offers a Director who isn't already
-    /// assigned here.
+    /// Directors are added and removed from the Event, never the reverse (ADR-0035) - this is the only place
+    /// in the app that writes an Event-scoped Grant, in either direction. <see cref="candidateDirectors"/>
+    /// excludes anyone already in <see cref="directorsForEvent"/>, so the dropdown only ever offers a
+    /// Director who isn't already assigned here - and a removal (P2-18, #113) reloads this list, so the
+    /// removed person reappears in that dropdown immediately.
     /// </remarks>
     private async Task LoadDirectorsAsync()
     {
         directorErrorMessage = null;
+        adminGuardAnchors.Clear();
 
         try
         {
@@ -398,7 +416,7 @@ public partial class EventEditor
             (IReadOnlyList<UserRowDto> allUsers, _) =
                 await DirectorClient.GetUsersAsync(1, 1000, null, null, CancellationToken.None);
 
-            var assignedIds = directorsForEvent.Select(director => director.Id).ToHashSet();
+            var assignedIds = directorsForEvent.Select(director => director.UserId).ToHashSet();
             candidateDirectors = [.. allUsers.Where(u => u.IsDirector && !assignedIds.Contains(u.Id))];
         }
         catch (DirectorDataUnavailableException)
@@ -407,6 +425,52 @@ public partial class EventEditor
             candidateDirectors = [];
             directorErrorMessage = "Something went wrong loading Directors. Try refreshing the page.";
         }
+    }
+
+    /// <remarks>
+    /// Mirrors <see cref="DeleteAsync"/>'s dialog-then-write shape. <see cref="GrantWriteOutcome.Removed"/>
+    /// and <see cref="GrantWriteOutcome.NotFound"/> both reload the list - see <see cref="GrantWriteOutcome.NotFound"/>'s
+    /// remarks for why a stale target reads as success, not failure, matching <see cref="DeleteAsync"/>'s own
+    /// <c>EventWriteOutcome.NotFound</c> handling. <see cref="GrantWriteOutcome.Forbidden"/> covers both
+    /// claim-lag (a since-demoted Admin) and ADR-0051's target-holds-Admin guard - normally unreachable here
+    /// since that row's button is disabled, but a page can go stale between render and click; both causes
+    /// share the one message, since both resolve by refreshing. AC3's internal-JWT lag (a removed Director
+    /// may keep read access until their session refreshes) is deliberately not surfaced here - it's already
+    /// documented on <c>EventAccessPolicy</c>, and <see cref="DirectorRemovalConfirmation"/>'s remarks cover
+    /// why it stays out of the confirm dialog too.
+    /// </remarks>
+    private async Task RemoveDirectorAsync(EventDirectorDto director)
+    {
+        directorErrorMessage = null;
+
+        var parameters = DirectorRemovalConfirmation.BuildDialogParameters(director.DisplayLabel, model!.Name!);
+        bool? confirmed = await DialogService.OpenAsync<ConfirmDialog>("Remove director?", parameters);
+        if (confirmed is not true)
+        {
+            return;
+        }
+
+        isRemovingDirector = true;
+
+        try
+        {
+            GrantWriteOutcome outcome = await DirectorClient.RemoveEventAccessAsync(director.GrantId, CancellationToken.None);
+
+            if (outcome is GrantWriteOutcome.Removed or GrantWriteOutcome.NotFound)
+            {
+                await LoadDirectorsAsync();
+            }
+            else
+            {
+                directorErrorMessage = "Couldn't remove that Director - refresh and try again.";
+            }
+        }
+        catch (DirectorDataUnavailableException)
+        {
+            directorErrorMessage = "Couldn't remove that Director - refresh and try again.";
+        }
+
+        isRemovingDirector = false;
     }
 
     private async Task AddDirectorAsync()

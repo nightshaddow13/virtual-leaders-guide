@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using AngleSharp.Dom;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
+using VirtualLeadersGuide.Identity.Contracts;
 using VirtualLeadersGuide.Web.Components.Pages;
 using VirtualLeadersGuide.Web.Time;
 
@@ -11,6 +12,10 @@ namespace VirtualLeadersGuide.Web.Tests;
 /// <remarks>
 /// Covers the <c>PageState</c> transitions <c>OnParametersSetAsync</c>'s own <c>&lt;remarks&gt;</c>
 /// documents - no HTTP-level test exists for this page yet, unlike <c>Dashboard.razor</c>.
+/// <c>RenderADisabledRemoveButton_WhenADirectorAlsoHoldsAdmin_ForOnParametersSetAsync</c>'s handler
+/// dispatches on query string rather than reusing one fixed body for <c>/api/roleGrants</c> the way most
+/// tests in this class do - see <c>ApiDirectorClientShould</c>'s class remarks for why, at the client layer
+/// this page's rendering builds on.
 /// </remarks>
 public class EventEditorShould : BunitContext
 {
@@ -174,6 +179,97 @@ public class EventEditorShould : BunitContext
         Assert.DoesNotContain("Danger zone", cut.Markup, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void RenderAnEnabledRemoveButtonPerDirector_WhenEditingAnExistingEventAsAnAdmin_ForOnParametersSetAsync()
+    {
+        Guid eventId = Guid.NewGuid();
+        var directorHandler = new StubHttpMessageHandler(request => request.RequestUri!.AbsolutePath switch
+        {
+            "/api/roleGrants" => JsonResponse(new { data = new[] { GrantResource("director-1", RoleIds.Director, eventId) } }),
+            "/api/users" => JsonResponse(new { data = new[] { UserResource("director-1", "pat@troop12.org", "Pat Riley", hasCredential: true) } }),
+            _ => new HttpResponseMessage(HttpStatusCode.NotFound)
+        });
+        RegisterClients(
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = EventResource(eventId) }),
+            directorHandler);
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("admin-1");
+        auth.SetRoles("Admin");
+
+        IRenderedComponent<EventEditor> cut = Render<EventEditor>(parameters => parameters
+            .Add(component => component.Id, eventId));
+
+        IElement removeButton = cut.FindAll("button")
+            .Single(button => button.GetAttribute("aria-label") == "Remove Pat Riley");
+        Assert.False(removeButton.HasAttribute("disabled"));
+    }
+
+    [Fact]
+    public void RenderADisabledRemoveButton_WhenADirectorAlsoHoldsAdmin_ForOnParametersSetAsync()
+    {
+        Guid eventId = Guid.NewGuid();
+        var directorHandler = new StubHttpMessageHandler(request =>
+        {
+            string path = request.RequestUri!.AbsolutePath;
+            string query = request.RequestUri!.Query;
+
+            if (path == "/api/users")
+            {
+                return JsonResponse(new { data = new[] { UserResource("admin-director-1", "ash@council.org", "Ash Vance", hasCredential: true) } });
+            }
+
+            if (path == "/api/roleGrants" && query.Contains("eventId", StringComparison.Ordinal))
+            {
+                return JsonResponse(new { data = new[] { GrantResource("admin-director-1", RoleIds.Director, eventId) } });
+            }
+
+            if (path == "/api/roleGrants")
+            {
+                return JsonResponse(new
+                {
+                    data = new[]
+                    {
+                        GrantResource("admin-director-1", RoleIds.Director, eventId),
+                        GrantResource("admin-director-1", RoleIds.Admin, eventId: null)
+                    }
+                });
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+        RegisterClients(
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = EventResource(eventId) }),
+            directorHandler);
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("admin-1");
+        auth.SetRoles("Admin");
+
+        IRenderedComponent<EventEditor> cut = Render<EventEditor>(parameters => parameters
+            .Add(component => component.Id, eventId));
+
+        IElement removeButton = cut.FindAll("button")
+            .Single(button => button.GetAttribute("aria-label") == "Remove Ash Vance");
+        Assert.True(removeButton.HasAttribute("disabled"));
+    }
+
+    [Fact]
+    public void HideRemoveButtons_WhenViewingAsAnAssignedDirector_ForOnParametersSetAsync()
+    {
+        Guid eventId = Guid.NewGuid();
+        RegisterClients(
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = EventResource(eventId) }),
+            StubHttpMessageHandler.RespondingWith(HttpStatusCode.NotFound));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("director-1");
+        auth.SetRoles("Director");
+
+        IRenderedComponent<EventEditor> cut = Render<EventEditor>(parameters => parameters
+            .Add(component => component.Id, eventId));
+
+        Assert.DoesNotContain(cut.FindAll("button"),
+            button => button.GetAttribute("aria-label")?.StartsWith("Remove ", StringComparison.Ordinal) == true);
+    }
+
     private static object EventResource(Guid id) => new
     {
         type = "events",
@@ -195,4 +291,22 @@ public class EventEditorShould : BunitContext
         Services.AddSingleton<BrowserTimeZoneAccessor>();
         RadzenTestServices.RegisterRadzenComponentsHost(Services);
     }
+
+    /// <remarks>Mirrors <c>ApiDirectorClientShould</c>'s identically-named helper - kept local rather than shared, matching <see cref="EventResource"/>'s own precedent in this class.</remarks>
+    private static object UserResource(string id, string email, string? displayName, bool hasCredential) => new
+    {
+        type = "users",
+        id,
+        attributes = new { email, displayName, hasCredential }
+    };
+
+    private static object GrantResource(string userId, int roleId, Guid? eventId) => new
+    {
+        type = "roleGrants",
+        id = Guid.NewGuid().ToString(),
+        attributes = new { userId, roleId, eventId }
+    };
+
+    private static HttpResponseMessage JsonResponse<T>(T body) =>
+        new(HttpStatusCode.OK) { Content = JsonContent.Create(body) };
 }

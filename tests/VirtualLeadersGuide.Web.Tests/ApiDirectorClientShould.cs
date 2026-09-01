@@ -11,7 +11,12 @@ namespace VirtualLeadersGuide.Web.Tests;
 /// response bodies as anonymous objects with already-lowercase names. Unlike <c>ApiEventClient</c>,
 /// <see cref="ApiDirectorClient"/> joins two resources (<c>/api/users</c>, <c>/api/roleGrants</c>) per call,
 /// so most responders here dispatch on <see cref="HttpRequestMessage.RequestUri"/>'s path rather than
-/// returning one fixed body.
+/// returning one fixed body. <c>MarkADirectorWhoAlsoHoldsAdmin_ForGetDirectorsForEventAsync</c> goes further
+/// still, dispatching on query string too - <see cref="ApiDirectorClient.GetDirectorsForEventAsync"/> makes
+/// two distinct <c>/api/roleGrants</c> calls (event-scoped grants, then every grant for the resolved users),
+/// and a single fixed body can't represent "one Director grant for this event" and "this User also holds
+/// Admin" at once without producing a spurious second row (ADR-0051's <see cref="EventDirectorDto.IsAdmin"/>
+/// needs the User's <em>other</em> grants, which the event-scoped fetch alone never returns).
 /// </remarks>
 public class ApiDirectorClientShould
 {
@@ -160,27 +165,71 @@ public class ApiDirectorClientShould
         });
         ApiDirectorClient client = CreateClient(handler);
 
-        IReadOnlyList<UserRowDto> directors = await client.GetDirectorsForEventAsync(eventId, CancellationToken.None);
+        IReadOnlyList<EventDirectorDto> directors = await client.GetDirectorsForEventAsync(eventId, CancellationToken.None);
 
         Assert.Empty(directors);
         Assert.False(usersRequested);
     }
 
     [Fact]
-    public async Task ReturnTheAssignedDirectors_WhenGrantsMatchTheEvent_ForGetDirectorsForEventAsync()
+    public async Task ReturnTheAssignedDirectorsWithTheirGrantId_WhenGrantsMatchTheEvent_ForGetDirectorsForEventAsync()
     {
         var eventId = Guid.NewGuid();
+        var grantId = Guid.NewGuid();
         var handler = new StubHttpMessageHandler(request => request.RequestUri!.AbsolutePath switch
         {
-            "/api/roleGrants" => JsonApiResponse(HttpStatusCode.OK, new { data = new[] { GrantResource("u1", RoleIds.Director, eventId) } }),
+            "/api/roleGrants" => JsonApiResponse(HttpStatusCode.OK, new { data = new[] { GrantResource("u1", RoleIds.Director, eventId, grantId.ToString()) } }),
             "/api/users" => JsonApiResponse(HttpStatusCode.OK, new { data = new[] { UserResource("u1", "pat@troop12.org", "Pat Riley", hasCredential: true) } }),
             _ => new HttpResponseMessage(HttpStatusCode.NotFound)
         });
         ApiDirectorClient client = CreateClient(handler);
 
-        IReadOnlyList<UserRowDto> directors = await client.GetDirectorsForEventAsync(eventId, CancellationToken.None);
+        IReadOnlyList<EventDirectorDto> directors = await client.GetDirectorsForEventAsync(eventId, CancellationToken.None);
 
-        Assert.Equal("u1", Assert.Single(directors).Id);
+        EventDirectorDto director = Assert.Single(directors);
+        Assert.Equal("u1", director.UserId);
+        Assert.Equal(grantId, director.GrantId);
+        Assert.False(director.IsAdmin);
+    }
+
+    [Fact]
+    public async Task MarkADirectorWhoAlsoHoldsAdmin_ForGetDirectorsForEventAsync()
+    {
+        var eventId = Guid.NewGuid();
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            string path = request.RequestUri!.AbsolutePath;
+            string query = request.RequestUri!.Query;
+
+            if (path == "/api/users")
+            {
+                return JsonApiResponse(HttpStatusCode.OK, new { data = new[] { UserResource("u1", "ash@council.org", "Ash Vance", hasCredential: true) } });
+            }
+
+            if (path == "/api/roleGrants" && query.Contains("eventId", StringComparison.Ordinal))
+            {
+                return JsonApiResponse(HttpStatusCode.OK, new { data = new[] { GrantResource("u1", RoleIds.Director, eventId) } });
+            }
+
+            if (path == "/api/roleGrants")
+            {
+                return JsonApiResponse(HttpStatusCode.OK, new
+                {
+                    data = new[]
+                    {
+                        GrantResource("u1", RoleIds.Director, eventId),
+                        GrantResource("u1", RoleIds.Admin, eventId: null)
+                    }
+                });
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+        ApiDirectorClient client = CreateClient(handler);
+
+        IReadOnlyList<EventDirectorDto> directors = await client.GetDirectorsForEventAsync(eventId, CancellationToken.None);
+
+        Assert.True(Assert.Single(directors).IsAdmin);
     }
 
     [Fact]
@@ -235,6 +284,78 @@ public class ApiDirectorClientShould
     }
 
     [Fact]
+    public async Task ReturnRemoved_WhenApiRespondsWithNoContent_ForRemoveEventAccessAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.NoContent));
+        ApiDirectorClient client = CreateClient(handler);
+
+        GrantWriteOutcome outcome = await client.RemoveEventAccessAsync(Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal(GrantWriteOutcome.Removed, outcome);
+    }
+
+    [Fact]
+    public async Task ReturnNotFound_WhenApiRespondsWithNotFound_ForRemoveEventAccessAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
+        ApiDirectorClient client = CreateClient(handler);
+
+        GrantWriteOutcome outcome = await client.RemoveEventAccessAsync(Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal(GrantWriteOutcome.NotFound, outcome);
+    }
+
+    [Fact]
+    public async Task ReturnForbidden_WhenApiRespondsWithForbidden_ForRemoveEventAccessAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.Forbidden));
+        ApiDirectorClient client = CreateClient(handler);
+
+        GrantWriteOutcome outcome = await client.RemoveEventAccessAsync(Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal(GrantWriteOutcome.Forbidden, outcome);
+    }
+
+    [Fact]
+    public async Task SendADeleteToTheGrantsResource_ForRemoveEventAccessAsync()
+    {
+        var grantId = Guid.NewGuid();
+        HttpRequestMessage? capturedRequest = null;
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            capturedRequest = request;
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
+        });
+        ApiDirectorClient client = CreateClient(handler);
+
+        await client.RemoveEventAccessAsync(grantId, CancellationToken.None);
+
+        Assert.NotNull(capturedRequest);
+        Assert.Equal(HttpMethod.Delete, capturedRequest!.Method);
+        Assert.EndsWith($"/api/roleGrants/{grantId}", capturedRequest.RequestUri!.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ThrowDirectorDataUnavailableException_WhenTheHttpCallFails_ForRemoveEventAccessAsync()
+    {
+        var handler = StubHttpMessageHandler.ThrowingOn(() => new HttpRequestException("simulated Api outage"));
+        ApiDirectorClient client = CreateClient(handler);
+
+        await Assert.ThrowsAsync<DirectorDataUnavailableException>(
+            () => client.RemoveEventAccessAsync(Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ThrowDirectorDataUnavailableException_WhenApiRespondsWithAnUnexpectedStatus_ForRemoveEventAccessAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        ApiDirectorClient client = CreateClient(handler);
+
+        await Assert.ThrowsAsync<DirectorDataUnavailableException>(
+            () => client.RemoveEventAccessAsync(Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Fact]
     public async Task ThrowDirectorDataUnavailableException_WhenTheHttpCallFails_ForGetUsersAsync()
     {
         var handler = StubHttpMessageHandler.ThrowingOn(() => new HttpRequestException("simulated Api outage"));
@@ -264,10 +385,11 @@ public class ApiDirectorClientShould
         attributes = new { email, displayName, hasCredential }
     };
 
-    private static object GrantResource(string userId, int roleId, Guid? eventId) => new
+    /// <remarks><paramref name="id"/> defaults to a random one - callers that need to assert against a specific grant id (e.g. <see cref="ApiDirectorClient.RemoveEventAccessAsync"/>'s target) pass one explicitly.</remarks>
+    private static object GrantResource(string userId, int roleId, Guid? eventId, string? id = null) => new
     {
         type = "roleGrants",
-        id = Guid.NewGuid().ToString(),
+        id = id ?? Guid.NewGuid().ToString(),
         attributes = new { userId, roleId, eventId }
     };
 
