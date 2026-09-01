@@ -138,15 +138,35 @@
                 }
                 else if (directorsForEvent is not null)
                 {
-                    @foreach (UserRowDto director in directorsForEvent)
-                    {
-                        <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween"
-                                     AlignItems="AlignItems.Center" Gap="0.5rem">
-                            <span>@(director.DisplayName ?? director.Email)</span>
-                            <RadzenBadge Text="@(director.HasCredential ? "ACTIVE" : "INVITED")"
-                                         BadgeStyle="@(director.HasCredential ? BadgeStyle.Success : BadgeStyle.Warning)" Variant="Variant.Outlined" />
-                        </RadzenStack>
-                    }
+                    <div class="vlg-directors-list">
+                        @foreach (EventDirectorDto director in directorsForEvent)
+                        {
+                            <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween"
+                                         AlignItems="AlignItems.Center" Gap="0.5rem">
+                                <span>@director.DisplayLabel</span>
+                                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+                                    <RadzenBadge Text="@(director.HasCredential ? "ACTIVE" : "INVITED")"
+                                                 BadgeStyle="@(director.HasCredential ? BadgeStyle.Success : BadgeStyle.Warning)" Variant="Variant.Outlined" />
+                                    @if (director.IsAdmin)
+                                    {
+                                        <span @ref="adminGuardAnchors[director.GrantId]"
+                                              @onmouseenter="@(() => TooltipService.Open(adminGuardAnchors[director.GrantId], AdminGuardTooltipText))">
+                                            <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Text"
+                                                          Size="ButtonSize.ExtraSmall" Disabled="true"
+                                                          aria-label="@($"Remove {director.DisplayLabel}")" />
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Text"
+                                                      Size="ButtonSize.ExtraSmall" Disabled="@isRemovingDirector"
+                                                      Click="@(() => RemoveDirectorAsync(director))"
+                                                      aria-label="@($"Remove {director.DisplayLabel}")" />
+                                    }
+                                </RadzenStack>
+                            </RadzenStack>
+                        }
+                    </div>
                 }
 
                 @if (directorErrorMessage is not null)

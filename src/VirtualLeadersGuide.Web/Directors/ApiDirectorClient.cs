@@ -11,8 +11,8 @@ namespace VirtualLeadersGuide.Web.Directors;
 
 /// <summary>
 /// Thin HTTP client over Api's <c>/api/users</c> and <c>/api/roleGrants</c> JSON:API resources, joined
-/// client-side into <see cref="UserRowDto"/> rows for the P2-12 (#43) Users screen and the EventEditor
-/// Directors section.
+/// client-side into <see cref="UserRowDto"/> rows for the P2-12 (#43) Users screen, and into
+/// <see cref="EventDirectorDto"/> rows for the EventEditor Directors section (P2-18, #113).
 /// </summary>
 /// <remarks>
 /// Mirrors <c>Events.ApiEventClient</c>'s shape - typed outcomes for expected non-2xx responses,
@@ -101,17 +101,25 @@ public sealed class ApiDirectorClient(InternalApiClient apiClient)
         return ToRow(document.Data, grants);
     }
 
-    /// <summary>Lists the Directors currently granted access to <paramref name="eventId"/> (EventEditor's Directors section).</summary>
-    public async Task<IReadOnlyList<UserRowDto>> GetDirectorsForEventAsync(Guid eventId, CancellationToken cancellationToken)
+    /// <summary>
+    /// Lists the Directors currently granted access to <paramref name="eventId"/> (EventEditor's Directors
+    /// section), each joined against the specific Event-scoped Grant that put them there - see
+    /// <see cref="EventDirectorDto.GrantId"/>.
+    /// </summary>
+    public async Task<IReadOnlyList<EventDirectorDto>> GetDirectorsForEventAsync(Guid eventId, CancellationToken cancellationToken)
     {
-        List<string> userIds = await GetDirectorUserIdsForEventAsync(eventId, cancellationToken);
-        if (userIds.Count == 0)
+        List<(Guid GrantId, string UserId)> grants = await GetDirectorGrantsForEventAsync(eventId, cancellationToken);
+        if (grants.Count == 0)
         {
             return [];
         }
 
-        IReadOnlyList<UserRowDto> users = await GetUsersByIdAsync(userIds, cancellationToken);
-        return users;
+        IReadOnlyList<UserRowDto> users = await GetUsersByIdAsync([.. grants.Select(g => g.UserId)], cancellationToken);
+        Dictionary<string, UserRowDto> usersById = users.ToDictionary(u => u.Id);
+
+        return [.. grants
+            .Where(grant => usersById.ContainsKey(grant.UserId))
+            .Select(grant => ToEventDirectorDto(grant.GrantId, usersById[grant.UserId]))];
     }
 
     /// <summary>
@@ -121,17 +129,23 @@ public sealed class ApiDirectorClient(InternalApiClient apiClient)
     /// </summary>
     public async Task<int> GetDirectorCountForEventAsync(Guid eventId, CancellationToken cancellationToken)
     {
-        List<string> userIds = await GetDirectorUserIdsForEventAsync(eventId, cancellationToken);
-        return userIds.Count;
+        List<(Guid GrantId, string UserId)> grants = await GetDirectorGrantsForEventAsync(eventId, cancellationToken);
+        return grants.Count;
     }
 
-    private async Task<List<string>> GetDirectorUserIdsForEventAsync(Guid eventId, CancellationToken cancellationToken)
+    /// <remarks>
+    /// Surfaces each Grant's own id alongside the User it targets - <see cref="GetDirectorsForEventAsync"/>
+    /// needs it for <see cref="RemoveEventAccessAsync"/>'s target; <see cref="GetDirectorCountForEventAsync"/>
+    /// only needs the count, same as before this pairing was added (P2-18, #113).
+    /// </remarks>
+    private async Task<List<(Guid GrantId, string UserId)>> GetDirectorGrantsForEventAsync(Guid eventId, CancellationToken cancellationToken)
     {
         string filter = $"and(equals(eventId,'{eventId}'),equals(roleId,'{RoleIds.Director}'))";
         RoleGrantCollectionDocument grantsDocument = await FetchAsync<RoleGrantCollectionDocument>(
             $"{RoleGrantsPath}?filter={Uri.EscapeDataString(filter)}&page[size]={MaxFetch}", cancellationToken);
         return [.. grantsDocument.Data
-            .Select(resource => resource.Attributes!.UserId).OfType<string>().Distinct()];
+            .Where(resource => resource.Id is not null && resource.Attributes?.UserId is not null)
+            .Select(resource => (Guid.Parse(resource.Id!), resource.Attributes!.UserId!))];
     }
 
     /// <summary>Grants a User the unscoped, platform-wide Director Role (ADR-0035) - the act an Invite performs.</summary>
@@ -168,6 +182,32 @@ public sealed class ApiDirectorClient(InternalApiClient apiClient)
 
         EnsureExpectedStatus(response, HttpStatusCode.Created);
         return GrantWriteOutcome.Created;
+    }
+
+    /// <summary>
+    /// Removes one Director's access to one Event - deletes the Event-scoped Grant identified by
+    /// <paramref name="grantId"/>, leaving the Director's Role and every other Event's Grant untouched
+    /// (P2-18, #113; CONTEXT.md's Grant entry: this is <em>Removed</em>, not Revoked). Mirrors
+    /// <c>Events.ApiEventClient.DeleteAsync</c>'s shape exactly, including treating
+    /// <see cref="GrantWriteOutcome.NotFound"/> as a case for the caller to read as silent success.
+    /// </summary>
+    public async Task<GrantWriteOutcome> RemoveEventAccessAsync(Guid grantId, CancellationToken cancellationToken)
+    {
+        using var request = NewRequest(HttpMethod.Delete, $"{RoleGrantsPath}/{grantId}");
+        using HttpResponseMessage response = await SendAsync(request, cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            return GrantWriteOutcome.Forbidden;
+        }
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return GrantWriteOutcome.NotFound;
+        }
+
+        EnsureExpectedStatus(response, HttpStatusCode.NoContent);
+        return GrantWriteOutcome.Removed;
     }
 
     private async Task<IReadOnlyList<UserRowDto>> GetAllUsersJoinedAsync(CancellationToken cancellationToken)
@@ -232,6 +272,17 @@ public sealed class ApiDirectorClient(InternalApiClient apiClient)
             EventGrantCount = materialized.Count(g => g.RoleId == RoleIds.Director && g.EventId is not null)
         };
     }
+
+    private static EventDirectorDto ToEventDirectorDto(Guid grantId, UserRowDto user) =>
+        new()
+        {
+            GrantId = grantId,
+            UserId = user.Id,
+            Email = user.Email,
+            DisplayName = user.DisplayName,
+            HasCredential = user.HasCredential,
+            IsAdmin = user.IsAdmin
+        };
 
     private static HttpRequestMessage NewRequest(HttpMethod method, string uri, object? body = null)
     {

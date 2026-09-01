@@ -37,6 +37,7 @@ After any completed run, the database holds exactly this and nothing else:
 | Event | 1 | Name `e2e-retained-event` - the literal constant, distinguishable from every transient `e2e-<label>-<guid>` Event by carrying no guid suffix |
 | Role grants (`UserRole`) | 3 | Director-unscoped x2 (director + invited), event-scoped x1 (director -> retained Event). Admin's grant is config-owned and resynced every login (ADR-0008), so it is never seeded here |
 | Deleted Event (P2-17, #112) | 0 | An Event a delete scenario creates and then deletes through the UI action under test - self-cleaning by the assertion path itself, not `TrackEvent`+`DisposeAsync` teardown. Its Grants go with it (ADR-0044's cascade); the retained `e2e-retained-event` above is never a delete scenario's target |
+| Removed Grant (P2-18, #113) | 0 | An Event-scoped Director Grant a removal scenario creates (on its own throwaway director + Event, per the "always create your own" rule below - never the retained fixture pair) and then removes through the UI action under test - self-cleaning by the assertion path itself, same as the deleted-Event row above. The Director's own account and Role are untouched and still get deleted by the owning test's `TrackUser` teardown |
 | Anything else | 0 | Deleted by the owning test or the run-end sweep, and confirmed by `AspireE2EFixture.DisposeAsync`'s own verification step |
 
 An Invite is a full `AspNetUsers` row (see `CONTEXT.md`'s Invite entry), not a lighter-weight thing - the
