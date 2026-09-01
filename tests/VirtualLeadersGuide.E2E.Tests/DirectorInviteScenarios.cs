@@ -10,7 +10,11 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// (#113): removing a Director's Event-scoped access from that same section - the two removal scenarios
 /// seed their throwaway Director's Grant directly via <c>Fixture.IdentityApi.GrantDirectorAsync</c> rather
 /// than through <see cref="AddDirectorToEventAsync"/>'s dropdown UI, since the subject under test is the
-/// Remove action, not how the Grant got there in the first place.
+/// Remove action, not how the Grant got there in the first place. Both removal scenarios scope their
+/// disappearance/still-visible assertion to <c>.vlg-directors-list</c> rather than a page-wide
+/// <c>GetByText(email)</c> - the removal confirm dialog's own message also names the Director's email, the
+/// same strict-mode collision commit <c>e666687</c> hit for P2-17's delete-Event dialog, so an unscoped
+/// locator can match both the dialog and the row at once while the dialog is still closing.
 /// <see cref="AspireE2EFixture.EmailSink"/> intercepts the invite email the same way
 /// <see cref="PasswordResetScenarios"/> intercepts a reset link. <c>IdentityApiClient.GrantDirectorAsync</c>
 /// (added for P2-9, #18) is deliberately unused here - the point of these scenarios is that the invite UI

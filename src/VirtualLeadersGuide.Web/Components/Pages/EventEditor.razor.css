@@ -28,12 +28,8 @@
         border-end-start-radius: 0;
     }
 
-/* ===========================================================================
-   Directors list row layout (P2-18, #113). The container itself carries no visual styling - it exists so
-   the E2E suite can scope a disappearance assertion to just these rows (a removed Director's email also
-   appears in the confirm dialog's own message, a collision the delete-Event E2E scenario already had to
-   work around - see DirectorInviteScenarios' remarks).
-   =========================================================================== */
+/* Directors list row layout (P2-18, #113) - see DirectorInviteScenarios' class remarks for why this
+   container exists as an E2E scoping target, not just row spacing. */
 
 .vlg-directors-list {
     display: flex;

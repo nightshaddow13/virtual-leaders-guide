@@ -153,7 +153,7 @@
                                               @onmouseenter="@(() => TooltipService.Open(adminGuardAnchors[director.GrantId], AdminGuardTooltipText))">
                                             <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Text"
                                                           Size="ButtonSize.ExtraSmall" Disabled="true"
-                                                          aria-label="@($"Remove {director.DisplayLabel}")" />
+                                                          aria-label="@director.RemoveButtonAriaLabel" />
                                         </span>
                                     }
                                     else
@@ -161,7 +161,7 @@
                                         <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Text"
                                                       Size="ButtonSize.ExtraSmall" Disabled="@isRemovingDirector"
                                                       Click="@(() => RemoveDirectorAsync(director))"
-                                                      aria-label="@($"Remove {director.DisplayLabel}")" />
+                                                      aria-label="@director.RemoveButtonAriaLabel" />
                                     }
                                 </RadzenStack>
                             </RadzenStack>

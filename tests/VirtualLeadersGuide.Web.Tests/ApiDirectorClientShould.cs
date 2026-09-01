@@ -11,7 +11,12 @@ namespace VirtualLeadersGuide.Web.Tests;
 /// response bodies as anonymous objects with already-lowercase names. Unlike <c>ApiEventClient</c>,
 /// <see cref="ApiDirectorClient"/> joins two resources (<c>/api/users</c>, <c>/api/roleGrants</c>) per call,
 /// so most responders here dispatch on <see cref="HttpRequestMessage.RequestUri"/>'s path rather than
-/// returning one fixed body.
+/// returning one fixed body. <c>MarkADirectorWhoAlsoHoldsAdmin_ForGetDirectorsForEventAsync</c> goes further
+/// still, dispatching on query string too - <see cref="ApiDirectorClient.GetDirectorsForEventAsync"/> makes
+/// two distinct <c>/api/roleGrants</c> calls (event-scoped grants, then every grant for the resolved users),
+/// and a single fixed body can't represent "one Director grant for this event" and "this User also holds
+/// Admin" at once without producing a spurious second row (ADR-0051's <see cref="EventDirectorDto.IsAdmin"/>
+/// needs the User's <em>other</em> grants, which the event-scoped fetch alone never returns).
 /// </remarks>
 public class ApiDirectorClientShould
 {
@@ -187,14 +192,6 @@ public class ApiDirectorClientShould
         Assert.False(director.IsAdmin);
     }
 
-    /// <remarks>
-    /// Distinguishes the two <c>/api/roleGrants</c> calls <see cref="ApiDirectorClient.GetDirectorsForEventAsync"/>
-    /// makes (event-scoped grants, then every grant for the resolved users) by query string, unlike this
-    /// class's other multi-call tests - a single fixed body can't represent "one Director grant for this
-    /// event" and "this User also holds Admin" at once without producing a spurious second row (ADR-0051's
-    /// <see cref="EventDirectorDto.IsAdmin"/> needs the User's <em>other</em> grants, which the event-scoped
-    /// fetch alone never returns).
-    /// </remarks>
     [Fact]
     public async Task MarkADirectorWhoAlsoHoldsAdmin_ForGetDirectorsForEventAsync()
     {

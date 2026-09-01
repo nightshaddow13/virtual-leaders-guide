@@ -12,6 +12,10 @@ namespace VirtualLeadersGuide.Web.Tests;
 /// <remarks>
 /// Covers the <c>PageState</c> transitions <c>OnParametersSetAsync</c>'s own <c>&lt;remarks&gt;</c>
 /// documents - no HTTP-level test exists for this page yet, unlike <c>Dashboard.razor</c>.
+/// <c>RenderADisabledRemoveButton_WhenADirectorAlsoHoldsAdmin_ForOnParametersSetAsync</c>'s handler
+/// dispatches on query string rather than reusing one fixed body for <c>/api/roleGrants</c> the way most
+/// tests in this class do - see <c>ApiDirectorClientShould</c>'s class remarks for why, at the client layer
+/// this page's rendering builds on.
 /// </remarks>
 public class EventEditorShould : BunitContext
 {
@@ -200,13 +204,6 @@ public class EventEditorShould : BunitContext
         Assert.False(removeButton.HasAttribute("disabled"));
     }
 
-    /// <remarks>
-    /// ADR-0051's guard, surfaced in the UI (ADR-0052's disabled-control tooltip pattern) - the
-    /// event-scoped-grants call and the resolved-Users call must disagree with each other for this scenario
-    /// to be representable at all, so this handler dispatches on query string rather than reusing one fixed
-    /// body for <c>/api/roleGrants</c> the way most tests in this class do - see <c>ApiDirectorClientShould.MarkADirectorWhoAlsoHoldsAdmin_ForGetDirectorsForEventAsync</c>'s
-    /// own remarks for the same reasoning at the client layer this page's rendering builds on.
-    /// </remarks>
     [Fact]
     public void RenderADisabledRemoveButton_WhenADirectorAlsoHoldsAdmin_ForOnParametersSetAsync()
     {

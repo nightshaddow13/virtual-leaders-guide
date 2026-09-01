@@ -41,7 +41,6 @@ public class DirectorRemovalConfirmationShould
         Assert.Contains("You can add them back from this page at any time", consequences);
     }
 
-    /// <remarks>Grilled decision (P2-18): the confirm button reads "Remove", not <c>ConfirmDialog</c>'s "Delete" default.</remarks>
     [Fact]
     public void SetTheConfirmTextToRemove_Always_ForBuildDialogParameters()
     {

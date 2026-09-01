@@ -16,10 +16,13 @@ public sealed class EventDirectorDto
     /// <summary>The Event-scoped <c>UserRole</c> row's own id - the target of <see cref="ApiDirectorClient.RemoveEventAccessAsync"/>.</summary>
     public required Guid GrantId { get; init; }
 
+    /// <summary>The <c>ApplicationUser.Id</c> this Grant targets - what <see cref="ApiDirectorClient.GrantEventAccessAsync"/> takes to create one.</summary>
     public required string UserId { get; init; }
 
+    /// <summary>The Director's email - falls back for <see cref="DisplayLabel"/> when <see cref="DisplayName"/> is unset.</summary>
     public required string Email { get; init; }
 
+    /// <summary>The Director's display name, where set.</summary>
     /// <remarks>Renders as the email when null, same convention as <see cref="UserRowDto.DisplayName"/>.</remarks>
     public string? DisplayName { get; init; }
 
@@ -35,4 +38,7 @@ public sealed class EventDirectorDto
 
     /// <summary>Display name where set, email otherwise - the label both the row and the removal confirm dialog use.</summary>
     public string DisplayLabel => DisplayName ?? Email;
+
+    /// <summary>The remove control's <c>aria-label</c> - shared by <c>EventEditor.razor</c>'s enabled and disabled (ADR-0051) button so the two can't drift.</summary>
+    public string RemoveButtonAriaLabel => $"Remove {DisplayLabel}";
 }
