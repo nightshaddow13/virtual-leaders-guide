@@ -240,6 +240,14 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
             await Expect(Page.Locator("#Name")).Not.ToBeVisibleAsync();
         });
 
+    /// <remarks>
+    /// <c>GetByText</c> calls against a badge word ("LIVE", "PAST", "CANCELLED") pass <c>Exact = true</c>
+    /// throughout this group - without it, a guid-suffixed Event name that happens to contain the same
+    /// substring (e.g. label "Go Live" -&gt; Name "e2e-Go Live &lt;guid&gt;", whose uppercased breadcrumb
+    /// literally contains "LIVE") collides with the badge and Playwright's strict mode rejects the locator
+    /// as ambiguous. Confirmed the hard way: an earlier draft of this group used unscoped, non-exact
+    /// <c>GetByText</c> and failed exactly this way against labels chosen without checking for the collision.
+    /// </remarks>
     [Fact(DisplayName = "Given a Draft Event, when an Admin marks it Live, then the dashboard shows a LIVE badge")]
     public async Task GivenADraftEvent_WhenAnAdminMarksItLive_ThenTheDashboardShowsALiveBadge() =>
         await RunAsync(async () =>
@@ -249,15 +257,23 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
 
             await Page.GotoAsync(EventEditorUrl(eventId));
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Go live" }).ClickAsync();
-            await Expect(Page.GetByText("LIVE")).ToBeVisibleAsync(
+            await Expect(Page.GetByText("LIVE", new PageGetByTextOptions { Exact = true })).ToBeVisibleAsync(
                 new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
 
             await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
             ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = name });
-            await Expect(row.GetByText("LIVE")).ToBeVisibleAsync(
+            await Expect(row.GetByText("LIVE", new LocatorGetByTextOptions { Exact = true })).ToBeVisibleAsync(
                 new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
         });
 
+    /// <remarks>
+    /// Waits for the STATUS filter dropdown itself to be visible before the first click, and for the
+    /// "Cancelled" option to be visible before the second - a fresh <c>GotoAsync</c> plus a negative
+    /// assertion (the just-cancelled Event isn't shown) doesn't guarantee the grid's own interactive circuit
+    /// has finished hydrating by the time the dropdown is clicked, unlike every other interaction in this
+    /// class, which always follows an assertion that positively waits on something. See this group's own
+    /// remarks on <c>Exact = true</c> for the "CANCELLED" collision risk.
+    /// </remarks>
     [Fact(DisplayName = "Given a Live Event, when an Admin cancels it through the Danger zone, then it leaves the default list but is reachable by filtering to Cancelled")]
     public async Task GivenALiveEvent_WhenAnAdminCancelsItThroughTheDangerZone_ThenItLeavesTheDefaultListButIsReachableByFilteringToCancelled() =>
         await RunAsync(async () =>
@@ -266,7 +282,7 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
             (Guid eventId, string name) = await CreateEventAsync("Cancel Me");
             await Page.GotoAsync(EventEditorUrl(eventId));
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Go live" }).ClickAsync();
-            await Expect(Page.GetByText("LIVE")).ToBeVisibleAsync(
+            await Expect(Page.GetByText("LIVE", new PageGetByTextOptions { Exact = true })).ToBeVisibleAsync(
                 new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
 
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Cancel event" }).ClickAsync();
@@ -274,18 +290,25 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
             await Expect(dialog).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
             await Expect(dialog.GetByText($"Cancel {name}?")).ToBeVisibleAsync();
             await dialog.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Cancel event", Exact = true }).ClickAsync();
-            await Expect(Page.GetByText("CANCELLED")).ToBeVisibleAsync(
+            await Expect(Page.GetByText("CANCELLED", new PageGetByTextOptions { Exact = true })).ToBeVisibleAsync(
                 new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
 
             await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
             await Expect(Page.GetByText(name)).Not.ToBeVisibleAsync();
 
-            await Page.Locator(".rz-dropdown").ClickAsync();
-            await Page.GetByRole(AriaRole.Option, new PageGetByRoleOptions { Name = "Cancelled" }).ClickAsync();
+            ILocator statusFilterDropdown = Page.Locator(".rz-dropdown");
+            await Expect(statusFilterDropdown).ToBeVisibleAsync(
+                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await statusFilterDropdown.ClickAsync();
+            ILocator cancelledOption = Page.GetByRole(AriaRole.Option, new PageGetByRoleOptions { Name = "Cancelled" });
+            await Expect(cancelledOption).ToBeVisibleAsync(
+                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await cancelledOption.ClickAsync();
             await Page.Keyboard.PressAsync("Escape");
+
             ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = name });
             await Expect(row).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
-            await Expect(row.GetByText("CANCELLED")).ToBeVisibleAsync();
+            await Expect(row.GetByText("CANCELLED", new LocatorGetByTextOptions { Exact = true })).ToBeVisibleAsync();
         });
 
     [Fact(DisplayName = "Given the cancel dialog is open, when an Admin dismisses it instead, then the Event stays Live")]
@@ -296,7 +319,7 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
             (Guid eventId, _) = await CreateEventAsync("Keep Live");
             await Page.GotoAsync(EventEditorUrl(eventId));
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Go live" }).ClickAsync();
-            await Expect(Page.GetByText("LIVE")).ToBeVisibleAsync(
+            await Expect(Page.GetByText("LIVE", new PageGetByTextOptions { Exact = true })).ToBeVisibleAsync(
                 new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
 
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Cancel event" }).ClickAsync();
@@ -305,7 +328,7 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
             await dialog.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Keep it live" }).ClickAsync();
 
             await Expect(dialog).Not.ToBeVisibleAsync();
-            await Expect(Page.GetByText("LIVE")).ToBeVisibleAsync(
+            await Expect(Page.GetByText("LIVE", new PageGetByTextOptions { Exact = true })).ToBeVisibleAsync(
                 new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
             await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Cancel event" })).ToBeVisibleAsync();
         });
@@ -336,11 +359,11 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
 
             await Page.GotoAsync(EventEditorUrl(eventId));
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Go live" }).ClickAsync();
-            await Expect(Page.GetByText("LIVE")).ToBeVisibleAsync(
+            await Expect(Page.GetByText("LIVE", new PageGetByTextOptions { Exact = true })).ToBeVisibleAsync(
                 new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
 
             await Page.GotoAsync(EventEditorUrl(eventId));
-            await Expect(Page.GetByText("PAST")).ToBeVisibleAsync(
+            await Expect(Page.GetByText("PAST", new PageGetByTextOptions { Exact = true })).ToBeVisibleAsync(
                 new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
 
             await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
