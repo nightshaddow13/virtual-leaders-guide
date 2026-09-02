@@ -240,6 +240,113 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
             await Expect(Page.Locator("#Name")).Not.ToBeVisibleAsync();
         });
 
+    [Fact(DisplayName = "Given a Draft Event, when an Admin marks it Live, then the dashboard shows a LIVE badge")]
+    public async Task GivenADraftEvent_WhenAnAdminMarksItLive_ThenTheDashboardShowsALiveBadge() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, string name) = await CreateEventAsync("Go Live");
+
+            await Page.GotoAsync(EventEditorUrl(eventId));
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Go live" }).ClickAsync();
+            await Expect(Page.GetByText("LIVE")).ToBeVisibleAsync(
+                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+
+            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
+            ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = name });
+            await Expect(row.GetByText("LIVE")).ToBeVisibleAsync(
+                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+        });
+
+    [Fact(DisplayName = "Given a Live Event, when an Admin cancels it through the Danger zone, then it leaves the default list but is reachable by filtering to Cancelled")]
+    public async Task GivenALiveEvent_WhenAnAdminCancelsItThroughTheDangerZone_ThenItLeavesTheDefaultListButIsReachableByFilteringToCancelled() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, string name) = await CreateEventAsync("Cancel Me");
+            await Page.GotoAsync(EventEditorUrl(eventId));
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Go live" }).ClickAsync();
+            await Expect(Page.GetByText("LIVE")).ToBeVisibleAsync(
+                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Cancel event" }).ClickAsync();
+            ILocator dialog = Page.Locator(".rz-dialog-content");
+            await Expect(dialog).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(dialog.GetByText($"Cancel {name}?")).ToBeVisibleAsync();
+            await dialog.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Cancel event", Exact = true }).ClickAsync();
+            await Expect(Page.GetByText("CANCELLED")).ToBeVisibleAsync(
+                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+
+            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
+            await Expect(Page.GetByText(name)).Not.ToBeVisibleAsync();
+
+            await Page.Locator(".rz-dropdown").ClickAsync();
+            await Page.GetByRole(AriaRole.Option, new PageGetByRoleOptions { Name = "Cancelled" }).ClickAsync();
+            await Page.Keyboard.PressAsync("Escape");
+            ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = name });
+            await Expect(row).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(row.GetByText("CANCELLED")).ToBeVisibleAsync();
+        });
+
+    [Fact(DisplayName = "Given the cancel dialog is open, when an Admin dismisses it instead, then the Event stays Live")]
+    public async Task GivenTheCancelDialogIsOpen_WhenAnAdminDismissesItInstead_ThenTheEventStaysLive() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, _) = await CreateEventAsync("Keep Live");
+            await Page.GotoAsync(EventEditorUrl(eventId));
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Go live" }).ClickAsync();
+            await Expect(Page.GetByText("LIVE")).ToBeVisibleAsync(
+                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Cancel event" }).ClickAsync();
+            ILocator dialog = Page.Locator(".rz-dialog-content");
+            await Expect(dialog).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await dialog.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Keep it live" }).ClickAsync();
+
+            await Expect(dialog).Not.ToBeVisibleAsync();
+            await Expect(Page.GetByText("LIVE")).ToBeVisibleAsync(
+                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Cancel event" })).ToBeVisibleAsync();
+        });
+
+    /// <remarks>
+    /// The one AC the SQLite-backed <c>EventsResourceShould</c> suite structurally cannot verify at the
+    /// collection level - EF Core's SQLite provider has never translated a <see cref="DateTimeOffset"/>
+    /// inequality comparison, so the default-list-hides-an-elapsed-Live-Event behavior is only provable
+    /// against the real engine (see <c>EventStatusFilterRewriter</c>'s remarks and ADR-0053). This is that
+    /// proof. Reloads the editor after going live rather than asserting on the immediate post-click state -
+    /// <c>EventEditor.razor.cs</c>'s <c>GoLiveAsync</c> optimistically sets <c>Live</c> locally without
+    /// re-fetching, so only a fresh <c>GET</c> exercises Api's own <c>OnSerialize</c> computing <c>Past</c>.
+    /// </remarks>
+    [Fact(DisplayName = "Given a Live Event whose Ends at has already elapsed, when an Admin views it, then it shows a PAST badge and leaves the default list")]
+    public async Task GivenALiveEventWhoseEndsAtHasElapsed_WhenAnAdminViewsIt_ThenItShowsAPastBadgeAndLeavesTheDefaultList() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, string name) = await CreateEventAsync("Already Over");
+
+            await Page.GotoAsync(EventEditorUrl(eventId));
+            await Page.Locator("#StartsAt").FillAsync("2020-06-12T09:00");
+            await Page.Locator("#EndsAt").FillAsync("2020-06-14T17:00");
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" }).ClickAsync();
+            await Expect(Page).ToHaveURLAsync(
+                new Uri(Fixture.WebBaseUrl, "dashboard").ToString(),
+                new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+
+            await Page.GotoAsync(EventEditorUrl(eventId));
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Go live" }).ClickAsync();
+            await Expect(Page.GetByText("LIVE")).ToBeVisibleAsync(
+                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+
+            await Page.GotoAsync(EventEditorUrl(eventId));
+            await Expect(Page.GetByText("PAST")).ToBeVisibleAsync(
+                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+
+            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
+            await Expect(Page.GetByText(name)).Not.ToBeVisibleAsync();
+        });
+
     /// <remarks>
     /// Scoped to the field's own container, not a bare page-wide <c>GetByText</c> - a collision on
     /// <c>Name</c> also collides <c>Slug</c> when it's left blank (Slug then derives from Name), which
