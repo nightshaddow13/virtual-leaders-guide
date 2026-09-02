@@ -24,12 +24,12 @@ public class Event : Identifiable<Guid>
     /// backstop for anything that writes this column outside this setter.
     /// </summary>
     /// <remarks>
-    /// Unique via a plain (non-filtered) index, deliberately — not an oversight. CONTEXT.md's Event/Slug
-    /// entries call out that Name stops being globally unique once a future archiving feature ships (an
-    /// archived Event and a new Event could then share a Name); that feature is out of scope here (P2-6,
-    /// #15), so a plain unique index is correct for right now. <see cref="EventResourceDefinition"/> maps a
-    /// collision on this index to a 409, not the 500 the raw index violation would otherwise produce - see
-    /// its remarks for why this check is a provisional stand-in, unlike <see cref="Slug"/>'s.
+    /// Unique only among Events whose <see cref="Status"/> is <see cref="EventStatus.Draft"/> or
+    /// (effectively) current <see cref="EventStatus.Live"/> - a <see cref="EventStatus.Past"/> or
+    /// <see cref="EventStatus.Cancelled"/> Event's Name may be reused (CONTEXT.md's Event entry). Enforced
+    /// entirely in <see cref="EventResourceDefinition.CheckForConflictsAsync"/>, not a database index - see
+    /// ADR-0053 for why no filtered index can express this rule (the same reasoning
+    /// <see cref="Passcode"/>'s remarks already give for why no DB constraint validates its shape either).
     /// </remarks>
     [Attr]
     public required string Name { get; set => field = value.Trim(); }
@@ -111,6 +111,26 @@ public class Event : Identifiable<Guid>
     /// </remarks>
     [Attr]
     public DateTimeOffset? EndsAt { get; set => field = value?.ToUniversalTime(); }
+
+    /// <summary>This Event's position in its lifecycle (CONTEXT.md's Status entry).</summary>
+    /// <remarks>
+    /// Defaults to <see cref="EventStatus.Draft"/> via this property initializer - not
+    /// <see cref="EventResourceDefinition.FillServerGeneratedDefaults"/> (that hook is for values that must be
+    /// *generated*, like <see cref="Slug"/>/<see cref="Passcode"/>; <see cref="EventStatus.Draft"/> is a
+    /// constant already applied on every construction path, JsonApiDotNetCore's own resource factory
+    /// included) and not EF's <c>HasDefaultValue</c> (that implies <c>ValueGenerated.OnAdd</c>, an unneeded
+    /// subtlety here). No <see cref="AttrCapabilities.AllowCreate"/> - a new Event is always Draft, matching
+    /// <see cref="Slug"/>/<see cref="Passcode"/>'s pattern. <see cref="AttrCapabilities.AllowSort"/> stays on
+    /// despite <see cref="EventStatus.Past"/> being computed, not stored (<see cref="EventResourceDefinition.OnSerialize"/>)
+    /// - <c>sort=status</c> orders by the raw stored value, so an elapsed <see cref="EventStatus.Live"/> row
+    /// sorts alongside current ones rather than with <see cref="EventStatus.Past"/> rows; see ADR-0053 for why
+    /// that's accepted rather than fixed, and why the Dashboard's STATUS column doesn't offer it as sortable.
+    /// Legal transitions and the 422 shape for illegal ones live in
+    /// <see cref="EventResourceDefinition.ValidateStatusTransitionAsync"/>.
+    /// </remarks>
+    [Attr(Capabilities = AttrCapabilities.AllowView | AttrCapabilities.AllowChange
+        | AttrCapabilities.AllowFilter | AttrCapabilities.AllowSort)]
+    public EventStatus Status { get; set; } = EventStatus.Draft;
 
     /// <summary>The Director (and future Event-scoped role) grants scoped to this Event.</summary>
     public ICollection<UserRole> RoleGrants { get; set; } = new List<UserRole>();

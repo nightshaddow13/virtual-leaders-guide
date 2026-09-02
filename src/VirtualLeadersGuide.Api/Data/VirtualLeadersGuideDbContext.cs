@@ -91,18 +91,21 @@ public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDb
     }
 
     /// <remarks>
-    /// <see cref="Event.Name"/>'s uniqueness index is plain, not filtered/archiving-aware — see the
-    /// <c>Name</c> remarks on <c>Event.cs</c> for why that's correct at this phase (out of scope for P2-6,
-    /// #15). <see cref="Event.Passcode"/> gets no CHECK constraint for its shape: it's ciphertext once
-    /// <see cref="BuildPasscodeConverter"/> runs, so no DB constraint could validate a plaintext shape anyway
-    /// — <c>PasscodeGenerator</c> upholds "never blank" instead, at the point a caller assigns it.
-    /// <see cref="Event.Slug"/> and <see cref="Event.Passcode"/> are both explicitly <c>IsRequired()</c> here
-    /// rather than left to convention, since both are typed <c>string?</c> at the C# level (see their
-    /// remarks on <c>Event.cs</c> for why) - the column stays <c>NOT NULL</c> regardless. Passcode's
-    /// converter is cast to the non-generic <see cref="ValueConverter"/> overload because
-    /// <see cref="DataProtectionStringConverter"/> is <c>ValueConverter&lt;string, string&gt;</c>, not exactly
-    /// nullability-compatible with a <c>string?</c> property for the generic overload, even though the
-    /// converter never actually receives a null at runtime (the same <c>NOT NULL</c> constraint guarantees
+    /// <see cref="Event.Name"/> carries no unique index at all - see its remarks on <c>Event.cs</c> and
+    /// ADR-0053 for why that rule lives entirely in <see cref="EventResourceDefinition.CheckForConflictsAsync"/>
+    /// instead. <see cref="Event.Status"/> stores as <c>string</c> (readable in the DB and in
+    /// <c>CK_Events_Status_Allowed</c> below, and matches the JSON:API wire shape - no persisted-enum
+    /// precedent existed before this column, so this sets it); its default lives on <see cref="Event.Status"/>'s
+    /// own property initializer, not here - see that property's remarks for why. <see cref="Event.Passcode"/>
+    /// gets no CHECK constraint for its shape: it's ciphertext once <see cref="BuildPasscodeConverter"/> runs,
+    /// so no DB constraint could validate a plaintext shape anyway — <c>PasscodeGenerator</c> upholds "never
+    /// blank" instead, at the point a caller assigns it. <see cref="Event.Slug"/> and <see cref="Event.Passcode"/>
+    /// are both explicitly <c>IsRequired()</c> here rather than left to convention, since both are typed
+    /// <c>string?</c> at the C# level (see their remarks on <c>Event.cs</c> for why) - the column stays
+    /// <c>NOT NULL</c> regardless. Passcode's converter is cast to the non-generic <see cref="ValueConverter"/>
+    /// overload because <see cref="DataProtectionStringConverter"/> is <c>ValueConverter&lt;string, string&gt;</c>,
+    /// not exactly nullability-compatible with a <c>string?</c> property for the generic overload, even though
+    /// the converter never actually receives a null at runtime (the same <c>NOT NULL</c> constraint guarantees
     /// that).
     /// </remarks>
     private void ConfigureEvents(EntityTypeBuilder<Event> entity)
@@ -110,12 +113,13 @@ public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDb
         entity.ToTable("Events", ConfigureEventCheckConstraints);
 
         entity.Property(e => e.Name).HasMaxLength(200);
-        entity.HasIndex(e => e.Name).IsUnique();
 
         entity.Property(e => e.Slug).HasMaxLength(100).IsRequired();
         entity.HasIndex(e => e.Slug).IsUnique();
 
         entity.Property(e => e.Passcode).HasConversion((ValueConverter)BuildPasscodeConverter()).IsRequired();
+
+        entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(16).IsRequired();
     }
 
     /// <remarks>
@@ -127,6 +131,7 @@ public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDb
         table.HasCheckConstraint("CK_Events_Name_NotEmpty", BuildNameNotEmptyCheckSql());
         table.HasCheckConstraint("CK_Events_Slug_Format", BuildSlugFormatCheckSql());
         table.HasCheckConstraint("CK_Events_Dates_Ordered", BuildDatesOrderedCheckSql());
+        table.HasCheckConstraint("CK_Events_Status_Allowed", BuildStatusAllowedCheckSql());
     }
 
     /// <remarks>
@@ -169,6 +174,14 @@ public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDb
     /// </remarks>
     private static string BuildDatesOrderedCheckSql() =>
         "EndsAt IS NULL OR (StartsAt IS NOT NULL AND EndsAt > StartsAt)";
+
+    /// <remarks>
+    /// The database-level backstop making "<see cref="EventStatus.Past"/> is never stored" an invariant, not
+    /// just a convention - see <see cref="Event.Status"/>'s remarks and ADR-0053. Bare unquoted column name
+    /// and string literals only, matching the portability bar the other constraint builders on this type set
+    /// (ADR-0014).
+    /// </remarks>
+    private static string BuildStatusAllowedCheckSql() => "Status IN ('Draft', 'Live', 'Cancelled')";
 
     /// <remarks>
     /// <see cref="Event.Passcode"/>'s <see cref="IDataProtector"/> can't be constructor-injected:

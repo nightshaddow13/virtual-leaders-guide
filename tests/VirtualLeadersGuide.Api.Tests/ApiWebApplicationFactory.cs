@@ -124,13 +124,31 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
     /// An optional <see cref="Event.StartsAt"/> to persist alongside the Event - for tests that need an
     /// already-set start to PATCH an end against, without a separate round trip through the Api itself.
     /// </param>
+    /// <param name="endsAt">
+    /// An optional <see cref="Event.EndsAt"/> to persist alongside the Event - for tests (P2-20, #115) that
+    /// need an already-elapsed or not-yet-elapsed end without a separate round trip through the Api itself.
+    /// </param>
+    /// <param name="status">
+    /// The <see cref="Event.Status"/> to persist - defaults to <see cref="EventStatus.Draft"/>, matching
+    /// <see cref="Event.Status"/>'s own default.
+    /// </param>
+    /// <param name="slug">
+    /// An explicit Slug, overriding the one <see cref="Event.Create"/> would otherwise derive from
+    /// <paramref name="name"/> - for tests (P2-20, #115) proving Name reuse is allowed for a terminal Event
+    /// without also colliding on Slug, which (unlike Name) stays permanently, unconditionally unique and would
+    /// otherwise collide too, since two Events sharing a Name derive the identical default Slug.
+    /// </param>
     /// <returns>The newly persisted <see cref="Event"/>.</returns>
-    public async Task<Event> CreateEventAsync(string? name = null, DateTimeOffset? startsAt = null)
+    public async Task<Event> CreateEventAsync(
+        string? name = null, DateTimeOffset? startsAt = null, DateTimeOffset? endsAt = null,
+        EventStatus status = EventStatus.Draft, string? slug = null)
     {
         using IServiceScope scope = Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
-        Event @event = Event.Create(name ?? $"Event {Guid.NewGuid()}");
+        Event @event = Event.Create(name ?? $"Event {Guid.NewGuid()}", slug);
         @event.StartsAt = startsAt;
+        @event.EndsAt = endsAt;
+        @event.Status = status;
 
         dbContext.Events.Add(@event);
         await dbContext.SaveChangesAsync();

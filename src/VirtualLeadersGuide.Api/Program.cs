@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.IdentityModel.Tokens;
 using VirtualLeadersGuide.Api;
 using VirtualLeadersGuide.Api.Authorization;
@@ -31,6 +32,7 @@ builder.Services.AddJsonApi<VirtualLeadersGuideDbContext>(options =>
     options.IncludeTotalResourceCount = true;
 });
 builder.Services.AddHttpContextAccessor();
+builder.Services.TryAddSingleton(TimeProvider.System);
 builder.Services.AddResourceDefinition<EventResourceDefinition>();
 builder.Services.AddResourceDefinition<UserRoleResourceDefinition>();
 builder.Services.AddResourceDefinition<ApplicationUserResourceDefinition>();

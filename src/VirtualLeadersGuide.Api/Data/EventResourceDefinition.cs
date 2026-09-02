@@ -24,7 +24,9 @@ namespace VirtualLeadersGuide.Api.Data;
 /// produces: <see cref="OnApplyFilter"/> silently narrows a collection request to only visible Events (no
 /// error, possibly an empty page), while a single-resource request for an Event outside the caller's access
 /// throws 403 - confirming the Event's existence rather than returning 404. Both are considered, not
-/// accidental (ADR-0031).
+/// accidental (ADR-0031). Since P2-20 (#115), <see cref="OnApplyFilter"/> also owns the Status-lifecycle
+/// concerns ADR-0044/ADR-0053 describe (the default-list hide, client status-filter rewriting) - see its own
+/// remarks for the current three-job shape, not just Director scoping.
 /// </remarks>
 public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, Guid>
 {
@@ -37,6 +39,8 @@ public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, G
 
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly VirtualLeadersGuideDbContext _dbContext;
+    private readonly ITargetedFields _targetedFields;
+    private readonly TimeProvider _timeProvider;
 
     /// <summary>Constructs the definition with the services it needs to authorize and default Event writes.</summary>
     /// <param name="resourceGraph">Passed through to <see cref="JsonApiResourceDefinition{TResource,TId}"/>.</param>
@@ -45,35 +49,46 @@ public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, G
     /// <see cref="EventAccessPolicy"/>) and <see cref="IJsonApiRequest"/> - see <see cref="CurrentPolicy"/> and
     /// <see cref="GetRequest"/>.
     /// </param>
-    /// <param name="dbContext">Backs <see cref="CheckForConflictsAsync"/>'s Name/Slug uniqueness pre-check.</param>
+    /// <param name="dbContext">Backs <see cref="CheckForConflictsAsync"/>'s Name/Slug uniqueness pre-check and <see cref="ValidateStatusTransitionAsync"/>'s pre-PATCH lookup.</param>
+    /// <param name="targetedFields">Tells <see cref="ValidateStatusTransitionAsync"/> whether a PATCH actually named <see cref="Event.Status"/>, so an ordinary Save changes skips the lookup entirely.</param>
+    /// <param name="timeProvider">The single clock source for every "is this Live row actually Past" check in this type - see <see cref="EffectiveStatus"/>.</param>
     public EventResourceDefinition(
-        IResourceGraph resourceGraph, IHttpContextAccessor httpContextAccessor, VirtualLeadersGuideDbContext dbContext)
+        IResourceGraph resourceGraph, IHttpContextAccessor httpContextAccessor, VirtualLeadersGuideDbContext dbContext,
+        ITargetedFields targetedFields, TimeProvider timeProvider)
         : base(resourceGraph)
     {
         _httpContextAccessor = httpContextAccessor;
         _dbContext = dbContext;
+        _targetedFields = targetedFields;
+        _timeProvider = timeProvider;
     }
 
     /// <inheritdoc/>
     /// <remarks>
-    /// An Admin's filter passes through unchanged. Otherwise, the request is narrowed to
-    /// <c>Id IN (assigned event ids)</c>, ANDed with whatever filter the caller already supplied - a
-    /// Director's <c>GET /api/events?filter=...</c> filters within their own Events, never sees others. A
-    /// single-resource request (<see cref="IJsonApiRequest.PrimaryId"/> set) is checked directly instead and
-    /// throws 403 when denied - see this type's remarks for why that differs from the collection case.
+    /// Three jobs in one pass, in order. (1) A single-resource request (<see cref="IJsonApiRequest.PrimaryId"/>
+    /// set) is authorized directly - 403 when a non-Admin can't read it - and never status-narrowed, so a
+    /// <see cref="EventStatus.Past"/>/<see cref="EventStatus.Cancelled"/> Event stays reachable by direct URL,
+    /// per the AC. (2) A client-supplied filter naming <see cref="Event.Status"/> is rewritten into its
+    /// effective form via <see cref="EventStatusFilterRewriter"/>, since <see cref="EventStatus.Past"/> is
+    /// never a stored value. (3) When no filter named Status at all, the default read-only collection view is
+    /// narrowed to <see cref="EventStatusFilterRewriter.DefaultVisibleStatuses"/>. Gated on
+    /// <see cref="IJsonApiRequest.IsReadOnly"/>, not just <c>PrimaryId is null</c> - JsonApiDotNetCore
+    /// re-reads a just-written resource to build a write response body (e.g. the 201 after a <c>POST</c>, or
+    /// re-fetching after a status-changing <c>PATCH</c>) via a query that also has no <c>PrimaryId</c>, and
+    /// that internal read must never be narrowed by the default hide - narrowing it could make the
+    /// response-building query find nothing for a resource a write just moved out of the default view (e.g.
+    /// a Cancel action). Finally ANDs in the Director scope filter for a non-Admin, unchanged from before this
+    /// story - an Admin's request now also goes through (2)/(3), unlike before P2-20, since the default-hide
+    /// rule applies to every caller's dashboard, not just a Director's.
     /// </remarks>
     public override FilterExpression? OnApplyFilter(FilterExpression? existingFilter)
     {
         var policy = CurrentPolicy();
-        if (policy.IsAdmin)
-        {
-            return existingFilter;
-        }
-
         IJsonApiRequest request = GetRequest();
+
         if (request.PrimaryId is not null)
         {
-            if (!policy.CanRead(Guid.Parse(request.PrimaryId)))
+            if (!policy.IsAdmin && !policy.CanRead(Guid.Parse(request.PrimaryId)))
             {
                 throw ForbiddenException();
             }
@@ -81,9 +96,50 @@ public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, G
             return existingFilter;
         }
 
-        FilterExpression scopeFilter = BuildAssignedEventsFilter(policy);
-        return existingFilter is null ? scopeFilter : new LogicalExpression(LogicalOperator.And, existingFilter, scopeFilter);
+        ResourceFieldChainExpression statusChain = StatusChain();
+        ResourceFieldChainExpression endsAtChain = EndsAtChain();
+        DateTimeOffset now = _timeProvider.GetUtcNow();
+        bool canCompareEndsAt = CanCompareEndsAt();
+
+        var rewriter = new EventStatusFilterRewriter(statusChain, endsAtChain, now, canCompareEndsAt);
+        FilterExpression? filter = existingFilter is null
+            ? null
+            : rewriter.Visit(existingFilter, null) as FilterExpression;
+
+        if (request.IsReadOnly && !rewriter.ClientNamedStatus)
+        {
+            filter = And(filter,
+                EventStatusFilterRewriter.DefaultVisibleStatuses(statusChain, endsAtChain, now, canCompareEndsAt));
+        }
+
+        if (!policy.IsAdmin)
+        {
+            filter = And(filter, BuildAssignedEventsFilter(policy));
+        }
+
+        return filter;
     }
+
+    private static FilterExpression? And(FilterExpression? left, FilterExpression right) =>
+        left is null ? right : new LogicalExpression(LogicalOperator.And, left, right);
+
+    private ResourceFieldChainExpression StatusChain() =>
+        new(ResourceType.GetAttributeByPropertyName(nameof(Event.Status)));
+
+    private ResourceFieldChainExpression EndsAtChain() =>
+        new(ResourceType.GetAttributeByPropertyName(nameof(Event.EndsAt)));
+
+    /// <remarks>
+    /// EF Core's SQLite provider (used by the Api test suite, ADR-0014) has never translated
+    /// <c>&gt;</c>/<c>&lt;</c>/<c>&gt;=</c>/<c>&lt;=</c> on <see cref="DateTimeOffset"/>, only <c>==</c>/<c>!=</c>
+    /// - a permanent provider limitation, not a bug (see <see cref="EventStatusFilterRewriter.LiveNotElapsed"/>'s
+    /// remarks for the citation). Production (SQL Server) has no such gap. Checked via
+    /// <see cref="Microsoft.EntityFrameworkCore.Infrastructure.DatabaseFacade.ProviderName"/> - a plain string
+    /// compare rather than the <c>Database.IsSqlite()</c> extension, since that extension lives in the
+    /// <c>Microsoft.EntityFrameworkCore.Sqlite</c> package, which this - the production - project deliberately
+    /// never references (it only ever talks to SQL Server; SQLite is test-only). See ADR-0053.
+    /// </remarks>
+    private bool CanCompareEndsAt() => _dbContext.Database.ProviderName != "Microsoft.EntityFrameworkCore.Sqlite";
 
     /// <inheritdoc/>
     /// <remarks>
@@ -95,8 +151,12 @@ public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, G
     /// pre-checks the <see cref="Event.Name"/>/<see cref="Event.Slug"/> unique indexes and throws a 409 naming
     /// whichever collided - see <see cref="CheckForConflictsAsync"/> for why this is a pre-check rather than
     /// catching the eventual <see cref="Microsoft.EntityFrameworkCore.DbUpdateException"/>. Also validates
-    /// <see cref="Event.StartsAt"/>/<see cref="Event.EndsAt"/>'s ordering rules, throwing a 422 naming
-    /// whichever attribute is wrong - see <see cref="ValidateDateRange"/>.
+    /// <see cref="Event.StartsAt"/>/<see cref="Event.EndsAt"/>'s ordering rules (<see cref="ValidateDateRange"/>)
+    /// and, on an update, <see cref="Event.Status"/>'s transition (<see cref="ValidateStatusTransitionAsync"/>) -
+    /// both throw a 422 naming whichever attribute is wrong. A <c>POST</c> naming <see cref="Event.Status"/>
+    /// needs no code here at all: <see cref="Event.Status"/> carries no <see cref="AttrCapabilities.AllowCreate"/>,
+    /// so JsonApiDotNetCore itself already rejects it with 422 at <c>/data/attributes/status</c> before this
+    /// method ever runs.
     /// </remarks>
     public override async Task OnWritingAsync(
         Event resource, WriteOperationKind writeOperation, CancellationToken cancellationToken)
@@ -124,9 +184,90 @@ public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, G
         {
             await CheckForConflictsAsync(resource, cancellationToken);
             ValidateDateRange(resource);
+            await ValidateStatusTransitionAsync(resource, writeOperation, cancellationToken);
         }
 
         await base.OnWritingAsync(resource, writeOperation, cancellationToken);
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Produces <see cref="EventStatus.Past"/> for a read - the only place it's ever produced, since it's
+    /// never stored (<see cref="Event.Status"/>'s remarks; ADR-0053). Fires for every primary and included
+    /// resource, on both collection and single reads. Safe to mutate <paramref name="resource"/> here: reads
+    /// run no-tracking, and on a write <c>SaveChanges</c> has already completed before serialization runs -
+    /// nothing this method does can reach the database. <c>CK_Events_Status_Allowed</c>
+    /// (<see cref="VirtualLeadersGuideDbContext"/>) is the belt-and-braces backstop regardless.
+    /// </remarks>
+    public override void OnSerialize(Event resource)
+    {
+        resource.Status = EffectiveStatus(resource.Status, resource.EndsAt, _timeProvider.GetUtcNow());
+    }
+
+    /// <remarks>
+    /// The one place "is this Live row actually Past" is computed - shared by <see cref="OnSerialize"/>,
+    /// <see cref="ValidateStatusTransitionAsync"/>, and <see cref="CheckForConflictsAsync"/>'s Name check, so
+    /// the rule can't drift between the three. <paramref name="endsAt"/> is deliberately <see langword="null"/>-safe:
+    /// a <see cref="EventStatus.Live"/> Event with no end date is never Past (CONTEXT.md's Starts at / Ends at
+    /// entry - an unset date isn't an elapsed one).
+    /// </remarks>
+    private static EventStatus EffectiveStatus(EventStatus stored, DateTimeOffset? endsAt, DateTimeOffset now) =>
+        stored == EventStatus.Live && endsAt is { } ends && ends <= now ? EventStatus.Past : stored;
+
+    /// <remarks>
+    /// Only for <see cref="WriteOperationKind.UpdateResource"/>, and only when the PATCH actually targeted
+    /// <see cref="Event.Status"/> (<see cref="ITargetedFields.Attributes"/>) - an ordinary Save changes that
+    /// never touches Status skips the lookup below entirely. JsonApiDotNetCore's
+    /// <c>EntityFrameworkCoreRepository.UpdateAsync</c> copies targeted attributes onto the database-loaded
+    /// entity before <see cref="OnWritingAsync"/> runs, so <paramref name="resource"/>'s
+    /// <see cref="Event.Status"/> here is already the PATCH's *target* value - the pre-PATCH value has to be
+    /// re-read via <see cref="Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AsNoTracking{TEntity}"/>,
+    /// the same pattern <see cref="CheckForConflictsAsync"/> already uses for its own cross-row check. Compares
+    /// the *effective* stored status (<see cref="EffectiveStatus"/>), not the raw one, so "a Past Event can't
+    /// be cancelled retroactively" (ADR-0044) falls out for free even though Past is stored as Live. A target
+    /// of <see cref="EventStatus.Past"/> is illegal automatically - no rule below permits it. A same-status
+    /// re-PATCH (<c>Cancelled</c> to <c>Cancelled</c> included) is a legal no-op, not a 422 - a defensive
+    /// allowance for a retried request; the Web client never constructs one deliberately.
+    /// </remarks>
+    private async Task ValidateStatusTransitionAsync(
+        Event resource, WriteOperationKind writeOperation, CancellationToken cancellationToken)
+    {
+        if (writeOperation != WriteOperationKind.UpdateResource)
+        {
+            return;
+        }
+
+        AttrAttribute statusAttribute = ResourceType.GetAttributeByPropertyName(nameof(Event.Status));
+        if (!_targetedFields.Attributes.Contains(statusAttribute))
+        {
+            return;
+        }
+
+        var stored = await _dbContext.Events.AsNoTracking()
+            .Where(e => e.Id == resource.Id)
+            .Select(e => new { e.Status, e.EndsAt })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (stored is null)
+        {
+            return;
+        }
+
+        EventStatus from = EffectiveStatus(stored.Status, stored.EndsAt, _timeProvider.GetUtcNow());
+        EventStatus to = resource.Status;
+
+        bool legal = from == to
+            || (from, to) is (EventStatus.Draft, EventStatus.Live) or (EventStatus.Live, EventStatus.Cancelled);
+
+        if (!legal)
+        {
+            throw new JsonApiException(new ErrorObject(HttpStatusCode.UnprocessableEntity)
+            {
+                Title = "Invalid status change.",
+                Detail = $"An Event cannot go from {from} to {to}.",
+                Source = new ErrorSource { Pointer = "/data/attributes/status" }
+            });
+        }
     }
 
     /// <remarks>
@@ -150,12 +291,17 @@ public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, G
     /// error's <c>source.pointer</c> - can't portably come from catching and inspecting that exception.
     /// Compares case-insensitively to match SQL Server's default (case-insensitive) collation, since SQLite's
     /// own default is case-sensitive and would otherwise let a same-database test pass while production's
-    /// real unique index still rejects it. A genuine concurrent double-submit still falls through to the
-    /// unique index itself and surfaces as a 500 - accepted, not handled here.
+    /// real unique index still rejects it. A genuine concurrent double-submit to <see cref="Event.Slug"/>
+    /// still falls through to that column's unique index and surfaces as a 500 - accepted, not handled here.
     ///
-    /// <see cref="Event.Name"/>'s check enforces today's provisional plain unique index (P2-6, #15) - see
-    /// that property's remarks for why it's expected to loosen once Event archiving exists, unlike
-    /// <see cref="Event.Slug"/>'s, which is a permanent domain invariant (it's the route key).
+    /// <see cref="Event.Name"/> carries no database index at all (ADR-0053) - this is the *only* place its
+    /// uniqueness rule is enforced, so a concurrent double-submit on Name never even reaches a 500; it's a
+    /// narrow, accepted race producing two same-named Events instead. The rule only ever considers
+    /// non-terminal Events - an effectively <see cref="EventStatus.Past"/> or <see cref="EventStatus.Cancelled"/>
+    /// row's Name is free to reuse (CONTEXT.md's Event entry) - via the same <see cref="EffectiveStatus"/>
+    /// helper <see cref="OnSerialize"/> and <see cref="ValidateStatusTransitionAsync"/> use, so all three agree
+    /// on what "Past" means. Unlike Name, <see cref="Event.Slug"/> is a permanent domain invariant (it's the
+    /// route key) and keeps its unconditional database-backed check below.
     ///
     /// Skips the Slug check when <see cref="Event.Slug"/> is <see langword="null"/> - never true for
     /// <see cref="WriteOperationKind.CreateResource"/> (<see cref="FillServerGeneratedDefaults"/> always runs
@@ -166,9 +312,14 @@ public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, G
     private async Task CheckForConflictsAsync(Event resource, CancellationToken cancellationToken)
     {
         string normalizedName = resource.Name.ToUpperInvariant();
+        DateTimeOffset now = _timeProvider.GetUtcNow();
 
-        bool nameTaken = await _dbContext.Events.AsNoTracking()
-            .AnyAsync(e => e.Id != resource.Id && e.Name.ToUpper() == normalizedName, cancellationToken);
+        var candidates = await _dbContext.Events.AsNoTracking()
+            .Where(e => e.Id != resource.Id && e.Name.ToUpper() == normalizedName)
+            .Select(e => new { e.Status, e.EndsAt })
+            .ToListAsync(cancellationToken);
+
+        bool nameTaken = candidates.Any(c => EffectiveStatus(c.Status, c.EndsAt, now) is EventStatus.Draft or EventStatus.Live);
 
         bool slugTaken = false;
         if (resource.Slug is not null)
