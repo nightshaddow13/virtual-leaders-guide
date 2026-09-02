@@ -45,7 +45,8 @@ public class ApiEventClientShould
         }));
         ApiEventClient client = CreateClient(handler);
 
-        (IReadOnlyList<EventDto> events, int total) = await client.GetEventsAsync(1, 10, null, CancellationToken.None);
+        (IReadOnlyList<EventDto> events, int total) =
+            await client.GetEventsAsync(1, 10, null, EventStatusFilter.Current, CancellationToken.None);
 
         Assert.Single(events);
         Assert.Equal(eventId, events[0].Id);
@@ -62,7 +63,8 @@ public class ApiEventClientShould
         }));
         ApiEventClient client = CreateClient(handler);
 
-        (IReadOnlyList<EventDto> events, int total) = await client.GetEventsAsync(1, 10, null, CancellationToken.None);
+        (IReadOnlyList<EventDto> events, int total) =
+            await client.GetEventsAsync(1, 10, null, EventStatusFilter.Current, CancellationToken.None);
 
         Assert.Equal(2, events.Count);
         Assert.Equal(2, total);
@@ -79,13 +81,57 @@ public class ApiEventClientShould
         });
         ApiEventClient client = CreateClient(handler);
 
-        await client.GetEventsAsync(2, 25, "-name", CancellationToken.None);
+        await client.GetEventsAsync(2, 25, "-name", EventStatusFilter.Current, CancellationToken.None);
 
         Assert.NotNull(capturedRequest);
         string query = capturedRequest!.RequestUri!.Query;
         Assert.Contains("page[number]=2", query, StringComparison.Ordinal);
         Assert.Contains("page[size]=25", query, StringComparison.Ordinal);
         Assert.Contains("sort=-name", query, StringComparison.Ordinal);
+    }
+
+    /// <remarks>
+    /// <see cref="EventStatusFilter.Current"/> is exactly what Api's own default collection view already
+    /// applies (<c>EventResourceDefinition.OnApplyFilter</c>) - sending a redundant <c>filter=</c> for it
+    /// would ask the same question twice.
+    /// </remarks>
+    [Fact]
+    public async Task OmitTheStatusFilter_WhenCurrentIsSupplied_ForGetEventsAsync()
+    {
+        HttpRequestMessage? capturedRequest = null;
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            capturedRequest = request;
+            return JsonApiResponse(HttpStatusCode.OK, new { data = Array.Empty<object>() });
+        });
+        ApiEventClient client = CreateClient(handler);
+
+        await client.GetEventsAsync(1, 10, null, EventStatusFilter.Current, CancellationToken.None);
+
+        Assert.DoesNotContain("filter=", capturedRequest!.RequestUri!.Query, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(EventStatusFilter.Draft, "equals(status,'Draft')")]
+    [InlineData(EventStatusFilter.Live, "equals(status,'Live')")]
+    [InlineData(EventStatusFilter.Past, "equals(status,'Past')")]
+    [InlineData(EventStatusFilter.Cancelled, "equals(status,'Cancelled')")]
+    [InlineData(EventStatusFilter.All, "any(status,'Draft','Live','Past','Cancelled')")]
+    public async Task IncludeTheMatchingStatusFilter_WhenASpecificStatusIsSupplied_ForGetEventsAsync(
+        EventStatusFilter status, string expectedFilter)
+    {
+        HttpRequestMessage? capturedRequest = null;
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            capturedRequest = request;
+            return JsonApiResponse(HttpStatusCode.OK, new { data = Array.Empty<object>() });
+        });
+        ApiEventClient client = CreateClient(handler);
+
+        await client.GetEventsAsync(1, 10, null, status, CancellationToken.None);
+
+        string decodedQuery = Uri.UnescapeDataString(capturedRequest!.RequestUri!.Query);
+        Assert.Contains($"filter={expectedFilter}", decodedQuery, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -131,6 +177,19 @@ public class ApiEventClientShould
 
         Assert.Null(@event?.StartsAt);
         Assert.Null(@event?.EndsAt);
+    }
+
+    [Fact]
+    public async Task MapStatus_WhenApiReturnsLive_ForGetEventAsync()
+    {
+        var eventId = Guid.NewGuid();
+        var handler = new StubHttpMessageHandler(
+            _ => JsonApiResponse(HttpStatusCode.OK, new { data = EventResource(eventId, status: "Live") }));
+        ApiEventClient client = CreateClient(handler);
+
+        (_, EventDto? @event) = await client.GetEventAsync(eventId, CancellationToken.None);
+
+        Assert.Equal(EventStatus.Live, @event?.Status);
     }
 
     [Fact]
@@ -388,6 +447,87 @@ public class ApiEventClientShould
         Assert.Equal(["/data/attributes/startsAt"], pointers);
     }
 
+    /// <remarks>
+    /// An ordinary <see cref="ApiEventClient.UpdateAsync"/> never sends <c>status</c> - <see cref="EventAttributesDto.Status"/>
+    /// stays on the omit-on-null rule (unlike <see cref="EventAttributesDto.StartsAt"/>/<see cref="EventAttributesDto.EndsAt"/>),
+    /// which is what keeps the general Save changes flow out of Api's transition validation entirely (P2-20,
+    /// #115) - only <see cref="ApiEventClient.SetStatusAsync"/> ever sends this attribute.
+    /// </remarks>
+    [Fact]
+    public async Task OmitStatus_WhenUpdatingAnEventsOtherFields_ForUpdateAsync()
+    {
+        string? capturedBody = null;
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            capturedBody = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
+        });
+        ApiEventClient client = CreateClient(handler);
+
+        await client.UpdateAsync(
+            Guid.NewGuid(), name: "Renamed", slug: null, passcode: null,
+            startsAt: null, endsAt: null, CancellationToken.None);
+
+        Assert.NotNull(capturedBody);
+        Assert.DoesNotContain("status", capturedBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task SendOnlyStatus_ForSetStatusAsync()
+    {
+        string? capturedBody = null;
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            capturedBody = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
+        });
+        ApiEventClient client = CreateClient(handler);
+
+        await client.SetStatusAsync(Guid.NewGuid(), EventStatus.Live, CancellationToken.None);
+
+        Assert.NotNull(capturedBody);
+        Assert.Contains("\"status\":\"Live\"", capturedBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("name", capturedBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("slug", capturedBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("passcode", capturedBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("startsAt", capturedBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("endsAt", capturedBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ReturnSuccess_WhenApiRespondsWithNoContent_ForSetStatusAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.NoContent));
+        ApiEventClient client = CreateClient(handler);
+
+        EventWriteOutcome outcome = await client.SetStatusAsync(Guid.NewGuid(), EventStatus.Live, CancellationToken.None);
+
+        Assert.Equal(EventWriteOutcome.Success, outcome);
+    }
+
+    [Fact]
+    public async Task ReturnForbidden_WhenApiRespondsWithForbidden_ForSetStatusAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.Forbidden));
+        ApiEventClient client = CreateClient(handler);
+
+        EventWriteOutcome outcome = await client.SetStatusAsync(Guid.NewGuid(), EventStatus.Live, CancellationToken.None);
+
+        Assert.Equal(EventWriteOutcome.Forbidden, outcome);
+    }
+
+    [Fact]
+    public async Task ReturnInvalid_WhenApiRespondsWithUnprocessableEntity_ForSetStatusAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.UnprocessableEntity));
+        ApiEventClient client = CreateClient(handler);
+
+        EventWriteOutcome outcome =
+            await client.SetStatusAsync(Guid.NewGuid(), EventStatus.Cancelled, CancellationToken.None);
+
+        Assert.Equal(EventWriteOutcome.Invalid, outcome);
+    }
+
     [Fact]
     public async Task SendADeleteRequestToTheEventsIdUri_WhenDeleting_ForDeleteAsync()
     {
@@ -457,7 +597,7 @@ public class ApiEventClientShould
         ApiEventClient client = CreateClient(handler);
 
         await Assert.ThrowsAsync<EventDataUnavailableException>(
-            () => client.GetEventsAsync(1, 10, null, CancellationToken.None));
+            () => client.GetEventsAsync(1, 10, null, EventStatusFilter.Current, CancellationToken.None));
     }
 
     [Fact]
@@ -467,7 +607,7 @@ public class ApiEventClientShould
         ApiEventClient client = CreateClient(handler);
 
         await Assert.ThrowsAsync<EventDataUnavailableException>(
-            () => client.GetEventsAsync(1, 10, null, CancellationToken.None));
+            () => client.GetEventsAsync(1, 10, null, EventStatusFilter.Current, CancellationToken.None));
     }
 
     private static ApiEventClient CreateClient(HttpMessageHandler apiHandler) =>
@@ -475,12 +615,12 @@ public class ApiEventClientShould
 
     private static object EventResource(
         Guid? id = null, string name = "Fall Camporee", string slug = "fall-camporee",
-        DateTimeOffset? startsAt = null, DateTimeOffset? endsAt = null) =>
+        DateTimeOffset? startsAt = null, DateTimeOffset? endsAt = null, string status = "Draft") =>
         new
         {
             type = "events",
             id = (id ?? Guid.NewGuid()).ToString(),
-            attributes = new { name, slug, passcode = "TigerLantern", startsAt, endsAt }
+            attributes = new { name, slug, passcode = "TigerLantern", status, startsAt, endsAt }
         };
 
     private static HttpResponseMessage JsonApiResponse<T>(HttpStatusCode statusCode, T body)

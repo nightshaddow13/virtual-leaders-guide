@@ -14,7 +14,7 @@
                  AlignItems="AlignItems.End" Gap="1rem" Style="margin-block-end: 1rem;">
         <div>
             <h1>@(accessView.IsAdmin ? "Events" : "My events")</h1>
-            <RadzenText TextStyle="TextStyle.Caption">@(accessView.IsAdmin ? "ALL EVENTS" : "ASSIGNED TO YOU") &middot; @totalCount</RadzenText>
+            <RadzenText TextStyle="TextStyle.Caption">@totalCount events</RadzenText>
         </div>
         @if (accessView.IsAdmin)
         {
@@ -23,15 +23,26 @@
     </RadzenStack>
 
     <RadzenDataGrid @ref="grid" TItem="EventDto" Data="@events" Count="@totalCount" LoadData="@LoadDataAsync"
-                     AllowPaging="true" PageSize="10" AllowSorting="true" IsLoading="@isLoading"
+                     AllowPaging="true" PageSize="10" AllowSorting="true" AllowFiltering="true"
+                     FilterMode="FilterMode.Simple" IsLoading="@isLoading"
                      EmptyText="@(accessView.IsAdmin ? "No Events yet." : "No Events are assigned to you yet.")">
         <Columns>
-            <RadzenDataGridColumn TItem="EventDto" Property="@nameof(EventDto.Name)" Title="Name" />
-            <RadzenDataGridColumn TItem="EventDto" Property="@nameof(EventDto.Slug)" Title="Event address">
+            <RadzenDataGridColumn TItem="EventDto" Property="@nameof(EventDto.Name)" Title="Name" Filterable="false" />
+            <RadzenDataGridColumn TItem="EventDto" Property="@nameof(EventDto.Slug)" Title="Event address" Filterable="false">
                 <Template Context="item">/e/@item.Slug</Template>
             </RadzenDataGridColumn>
-            <RadzenDataGridColumn TItem="EventDto" Property="@nameof(EventDto.StartsAt)" Title="Dates">
+            <RadzenDataGridColumn TItem="EventDto" Property="@nameof(EventDto.StartsAt)" Title="Dates" Filterable="false">
                 <Template Context="item">@FormatDates(item)</Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="EventDto" Title="Status" Sortable="false" Width="@StatusColumnWidth">
+                <Template Context="item">
+                    <RadzenBadge Text="@EventStatusDisplay.Text(item.Status)" BadgeStyle="@EventStatusDisplay.Style(item.Status)"
+                                 Variant="Variant.Outlined" />
+                </Template>
+                <FilterTemplate>
+                    <RadzenDropDown TValue="EventStatusFilter" Data="@statusFilterOptions" @bind-Value="statusFilter"
+                                    TextProperty="Text" ValueProperty="Key" Change="@(_ => grid!.Reload())" />
+                </FilterTemplate>
             </RadzenDataGridColumn>
             <RadzenDataGridColumn TItem="EventDto" Sortable="false" Filterable="false" Width="@ActionColumnWidth" TextAlign="TextAlign.Center">
                 <Template Context="item">

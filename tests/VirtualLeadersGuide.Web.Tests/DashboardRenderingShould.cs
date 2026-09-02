@@ -157,6 +157,7 @@ public class DashboardRenderingShould : BunitContext
                             name = "Undated Event",
                             slug = "undated-event",
                             passcode = "TigerLantern",
+                            status = "Draft",
                             startsAt = (DateTimeOffset?)null,
                             endsAt = (DateTimeOffset?)null
                         }
@@ -173,7 +174,55 @@ public class DashboardRenderingShould : BunitContext
         Assert.Equal(string.Empty, datesCell.TextContent.Trim());
     }
 
-    private static object EventResource(string name, string slug) => new
+    [Fact]
+    public void RenderAStatusBadge_WhenAnEventIsLive_ForLoadDataAsync()
+    {
+        Services.AddSingleton(ApiClientTestFactory.CreateEventClient(StubHttpMessageHandler.RespondingWithJson(
+            HttpStatusCode.OK, new { data = new[] { EventResource("Summer Camporee", "summer-camporee", "Live") } })));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("admin-1");
+        auth.SetRoles("Admin");
+
+        IRenderedComponent<Dashboard> cut = Render<Dashboard>();
+
+        Assert.Contains("LIVE", cut.Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RenderAStatusBadge_WhenAnEventIsCancelled_ForLoadDataAsync()
+    {
+        Services.AddSingleton(ApiClientTestFactory.CreateEventClient(StubHttpMessageHandler.RespondingWithJson(
+            HttpStatusCode.OK, new { data = new[] { EventResource("Fall Camporee", "fall-camporee", "Cancelled") } })));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("admin-1");
+        auth.SetRoles("Admin");
+
+        IRenderedComponent<Dashboard> cut = Render<Dashboard>();
+
+        Assert.Contains("CANCELLED", cut.Markup, StringComparison.Ordinal);
+    }
+
+    /// <remarks>
+    /// "@totalCount events" plain, not "ALL EVENTS · @totalCount" - once the default view is filtered to
+    /// Current (Draft + not-yet-elapsed Live, not literally everything), a static "ALL EVENTS" label would be
+    /// actively wrong the moment a Past/Cancelled Event exists (P2-20 grilling decision).
+    /// </remarks>
+    [Fact]
+    public void ShowThePlainEventCount_WithNoStatusWord_ForOnInitializedAsync()
+    {
+        Services.AddSingleton(ApiClientTestFactory.CreateEventClient(StubHttpMessageHandler.RespondingWithJson(
+            HttpStatusCode.OK, new { data = new[] { EventResource("Fall Camporee", "fall-camporee") }, meta = new { total = 1 } })));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("admin-1");
+        auth.SetRoles("Admin");
+
+        IRenderedComponent<Dashboard> cut = Render<Dashboard>();
+
+        Assert.Contains("1 events", cut.Markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("ALL EVENTS", cut.Markup, StringComparison.Ordinal);
+    }
+
+    private static object EventResource(string name, string slug, string status = "Draft") => new
     {
         type = "events",
         id = Guid.NewGuid().ToString(),
@@ -182,6 +231,7 @@ public class DashboardRenderingShould : BunitContext
             name,
             slug,
             passcode = "TigerLantern",
+            status,
             startsAt = new DateTimeOffset(2026, 6, 12, 9, 0, 0, TimeSpan.Zero),
             endsAt = new DateTimeOffset(2026, 6, 14, 17, 0, 0, TimeSpan.Zero)
         }

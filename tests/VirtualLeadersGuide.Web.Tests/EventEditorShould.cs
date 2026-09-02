@@ -180,6 +180,151 @@ public class EventEditorShould : BunitContext
     }
 
     [Fact]
+    public void ShowGoLive_WhenEditingAnExistingDraftEventAsAnAdmin_ForOnParametersSetAsync()
+    {
+        Guid eventId = Guid.NewGuid();
+        RegisterClients(
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = EventResource(eventId, status: "Draft") }),
+            StubHttpMessageHandler.RespondingWith(HttpStatusCode.NotFound));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("admin-1");
+        auth.SetRoles("Admin");
+
+        IRenderedComponent<EventEditor> cut = Render<EventEditor>(parameters => parameters
+            .Add(component => component.Id, eventId));
+
+        Assert.Contains(cut.FindAll("button"), button => button.TextContent.Contains("Go live", StringComparison.Ordinal));
+    }
+
+    /// <remarks>A not-yet-created Event has nothing to publish - there's no <c>loadedDto</c> at all until Save succeeds.</remarks>
+    [Fact]
+    public void HideGoLive_WhenCreatingANewEventAsAnAdmin_ForOnParametersSetAsync()
+    {
+        RegisterClients(
+            StubHttpMessageHandler.RespondingWith(HttpStatusCode.NotFound),
+            StubHttpMessageHandler.RespondingWith(HttpStatusCode.NotFound));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("admin-1");
+        auth.SetRoles("Admin");
+
+        IRenderedComponent<EventEditor> cut = Render<EventEditor>();
+
+        Assert.DoesNotContain(cut.FindAll("button"), button => button.TextContent.Contains("Go live", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("Live")]
+    [InlineData("Past")]
+    [InlineData("Cancelled")]
+    public void HideGoLive_WhenTheEventIsNotDraft_ForOnParametersSetAsync(string status)
+    {
+        Guid eventId = Guid.NewGuid();
+        RegisterClients(
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = EventResource(eventId, status: status) }),
+            StubHttpMessageHandler.RespondingWith(HttpStatusCode.NotFound));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("admin-1");
+        auth.SetRoles("Admin");
+
+        IRenderedComponent<EventEditor> cut = Render<EventEditor>(parameters => parameters
+            .Add(component => component.Id, eventId));
+
+        Assert.DoesNotContain(cut.FindAll("button"), button => button.TextContent.Contains("Go live", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ShowCancelEvent_WhenTheEventIsLive_ForOnParametersSetAsync()
+    {
+        Guid eventId = Guid.NewGuid();
+        RegisterClients(
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = EventResource(eventId, status: "Live") }),
+            StubHttpMessageHandler.RespondingWith(HttpStatusCode.NotFound));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("admin-1");
+        auth.SetRoles("Admin");
+
+        IRenderedComponent<EventEditor> cut = Render<EventEditor>(parameters => parameters
+            .Add(component => component.Id, eventId));
+
+        Assert.Contains(cut.FindAll("button"), button => button.TextContent.Contains("Cancel event", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("Draft")]
+    [InlineData("Past")]
+    [InlineData("Cancelled")]
+    public void HideCancelEvent_WhenTheEventIsNotLive_ForOnParametersSetAsync(string status)
+    {
+        Guid eventId = Guid.NewGuid();
+        RegisterClients(
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = EventResource(eventId, status: status) }),
+            StubHttpMessageHandler.RespondingWith(HttpStatusCode.NotFound));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("admin-1");
+        auth.SetRoles("Admin");
+
+        IRenderedComponent<EventEditor> cut = Render<EventEditor>(parameters => parameters
+            .Add(component => component.Id, eventId));
+
+        Assert.DoesNotContain(cut.FindAll("button"), button => button.TextContent.Contains("Cancel event", StringComparison.Ordinal));
+    }
+
+    /// <remarks>
+    /// <see cref="Event.Status"/> isn't a form field (Go live is a standalone action, not folded into
+    /// <c>EditForm</c>), so a <c>/status</c> 422 has no field to land a <c>ValidationMessage</c> on - it
+    /// routes to the page-level <c>statusErrorMessage</c> instead, mirroring <c>ShowEndsAtValidationMessage_WhenApiRespondsWithUnprocessableEntityOnSave_ForSaveAsync</c>'s
+    /// GET-vs-write dispatch but asserting the *absence* of a field-level message alongside the page-level one.
+    /// </remarks>
+    [Fact]
+    public void ShowAPageLevelError_WhenApiRejectsGoingLiveWithUnprocessableEntity_ForGoLiveAsync()
+    {
+        Guid eventId = Guid.NewGuid();
+        var eventHandler = new StubHttpMessageHandler(request => request.Method == HttpMethod.Get
+            ? new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new { data = EventResource(eventId, status: "Draft") }) }
+            : new HttpResponseMessage(HttpStatusCode.UnprocessableEntity)
+            {
+                Content = JsonContent.Create(new
+                {
+                    errors = new[]
+                    {
+                        new { title = "Invalid status change.", source = new { pointer = "/data/attributes/status" } }
+                    }
+                })
+            });
+        RegisterClients(eventHandler, StubHttpMessageHandler.RespondingWith(HttpStatusCode.NotFound));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("admin-1");
+        auth.SetRoles("Admin");
+
+        IRenderedComponent<EventEditor> cut = Render<EventEditor>(parameters => parameters
+            .Add(component => component.Id, eventId));
+        IElement goLiveButton = cut.FindAll("button")
+            .Single(button => button.TextContent.Contains("Go live", StringComparison.Ordinal));
+        goLiveButton.Click();
+
+        Assert.Contains("That change isn't allowed", cut.Markup, StringComparison.Ordinal);
+        Assert.Empty(cut.FindAll(".rz-messages-error li"));
+    }
+
+    [Fact]
+    public void HideGoLiveAndCancelEvent_WhenViewingAsAnAssignedDirector_ForOnParametersSetAsync()
+    {
+        Guid eventId = Guid.NewGuid();
+        RegisterClients(
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = EventResource(eventId, status: "Live") }),
+            StubHttpMessageHandler.RespondingWith(HttpStatusCode.NotFound));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("director-1");
+        auth.SetRoles("Director");
+
+        IRenderedComponent<EventEditor> cut = Render<EventEditor>(parameters => parameters
+            .Add(component => component.Id, eventId));
+
+        Assert.DoesNotContain(cut.FindAll("button"), button => button.TextContent.Contains("Go live", StringComparison.Ordinal));
+        Assert.DoesNotContain(cut.FindAll("button"), button => button.TextContent.Contains("Cancel event", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void RenderAnEnabledRemoveButtonPerDirector_WhenEditingAnExistingEventAsAnAdmin_ForOnParametersSetAsync()
     {
         Guid eventId = Guid.NewGuid();
@@ -270,7 +415,7 @@ public class EventEditorShould : BunitContext
             button => button.GetAttribute("aria-label")?.StartsWith("Remove ", StringComparison.Ordinal) == true);
     }
 
-    private static object EventResource(Guid id) => new
+    private static object EventResource(Guid id, string status = "Draft") => new
     {
         type = "events",
         id = id.ToString(),
@@ -279,6 +424,7 @@ public class EventEditorShould : BunitContext
             name = "Fall Camporee",
             slug = "fall-camporee",
             passcode = "TigerLantern",
+            status,
             startsAt = new DateTimeOffset(2026, 6, 12, 14, 0, 0, TimeSpan.Zero),
             endsAt = new DateTimeOffset(2026, 6, 14, 22, 0, 0, TimeSpan.Zero)
         }
