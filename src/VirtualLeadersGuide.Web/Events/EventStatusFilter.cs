@@ -12,10 +12,21 @@ namespace VirtualLeadersGuide.Web.Events;
 /// </remarks>
 public enum EventStatusFilter
 {
+    /// <summary>Draft plus not-yet-elapsed Live - sends no <c>filter=</c> at all, letting Api's own default collection view apply.</summary>
     Current,
+
+    /// <summary>Every Status - sent as <c>any(status,'Draft','Live','Past','Cancelled')</c>.</summary>
     All,
+
+    /// <summary>Only <see cref="EventStatus.Draft"/> Events.</summary>
     Draft,
+
+    /// <summary>Only not-yet-elapsed <see cref="EventStatus.Live"/> Events.</summary>
     Live,
+
+    /// <summary>Only effectively-<see cref="EventStatus.Past"/> Events (an elapsed Live row).</summary>
     Past,
+
+    /// <summary>Only <see cref="EventStatus.Cancelled"/> Events.</summary>
     Cancelled
 }
