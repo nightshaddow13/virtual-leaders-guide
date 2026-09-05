@@ -11,6 +11,13 @@ public sealed class EventDto
 
     public required string Passcode { get; init; }
 
+    /// <summary>This Event's position in its lifecycle (CONTEXT.md's Status entry).</summary>
+    /// <remarks>
+    /// <see cref="EventStatus.Past"/> is computed by Api at read time, never stored - what this DTO carries
+    /// is always the *effective* value already (Api's <c>OnSerialize</c>), never the raw stored column.
+    /// </remarks>
+    public required EventStatus Status { get; init; }
+
     /// <summary>When this Event starts, in UTC as Api stores it (CONTEXT.md's Starts at / Ends at entry).</summary>
     /// <remarks>
     /// <see langword="null"/> when unset - a real, valid state, not an incomplete one. Rendered to a viewer

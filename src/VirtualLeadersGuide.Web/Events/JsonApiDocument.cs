@@ -16,7 +16,7 @@ internal sealed class EventResourceObject
     public EventAttributesDto? Attributes { get; init; }
 }
 
-/// <summary>An Event's <c>name</c>/<c>slug</c>/<c>passcode</c>/<c>startsAt</c>/<c>endsAt</c> attributes, as sent or received in a request/response.</summary>
+/// <summary>An Event's <c>name</c>/<c>slug</c>/<c>passcode</c>/<c>status</c>/<c>startsAt</c>/<c>endsAt</c> attributes, as sent or received in a request/response.</summary>
 /// <remarks>
 /// Every property is nullable so a request can omit an attribute rather than send it as JSON <c>null</c> -
 /// a PATCH that included <c>"slug": null</c> would try to null out a <c>NOT NULL</c> column (see
@@ -32,6 +32,14 @@ internal sealed class EventAttributesDto
     public string? Slug { get; init; }
 
     public string? Passcode { get; init; }
+
+    /// <remarks>
+    /// Stays on the omit-on-null rule above, unlike <see cref="StartsAt"/>/<see cref="EndsAt"/> - here
+    /// <see langword="null"/> genuinely means "don't touch Status," which is what keeps an ordinary Save
+    /// changes on any Event (including a Past/Cancelled one) from tripping Api's transition validation. Only
+    /// <see cref="ApiEventClient.SetStatusAsync"/> ever sends this.
+    /// </remarks>
+    public EventStatus? Status { get; init; }
 
     /// <remarks>
     /// Deliberately opts out of the omit-on-null rule above (<see cref="JsonIgnoreCondition.Never"/>, not
@@ -52,6 +60,35 @@ internal sealed class EventAttributesDto
 internal sealed class EventDocument
 {
     public required EventResourceObject Data { get; init; }
+}
+
+/// <summary>
+/// The request body for <see cref="ApiEventClient.SetStatusAsync"/> - deliberately a separate, minimal
+/// envelope from <see cref="EventDocument"/>/<see cref="EventAttributesDto"/>, not a reuse of them with every
+/// other attribute left <see langword="null"/>. <see cref="EventAttributesDto.StartsAt"/>/<see cref="EventAttributesDto.EndsAt"/>
+/// carry <see cref="JsonIgnoreCondition.Never"/> (ADR-0042) - an <see cref="EventAttributesDto"/> constructed
+/// with only <c>Status</c> set would still serialize <c>"startsAt":null,"endsAt":null"</c> and silently clear
+/// both dates on every status change. This type has no dates to accidentally serialize at all.
+/// </summary>
+internal sealed class EventStatusDocument
+{
+    public required EventStatusResourceObject Data { get; init; }
+}
+
+/// <summary>See <see cref="EventStatusDocument"/>'s remarks.</summary>
+internal sealed class EventStatusResourceObject
+{
+    public required string Type { get; init; }
+
+    public required string Id { get; init; }
+
+    public required EventStatusAttributesDto Attributes { get; init; }
+}
+
+/// <summary>See <see cref="EventStatusDocument"/>'s remarks.</summary>
+internal sealed class EventStatusAttributesDto
+{
+    public required EventStatus Status { get; init; }
 }
 
 /// <summary>The response body for <c>GET /api/events</c>.</summary>

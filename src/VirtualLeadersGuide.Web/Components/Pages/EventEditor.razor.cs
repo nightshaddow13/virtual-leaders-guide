@@ -56,8 +56,10 @@ public partial class EventEditor
     private ValidationMessageStore? messageStore;
     private string? permissionLostMessage;
     private string? saveErrorMessage;
+    private string? statusErrorMessage;
     private bool isSaving;
     private bool isDeleting;
+    private bool isChangingStatus;
 
     private List<EventDirectorDto>? directorsForEvent;
     private List<UserRowDto>? candidateDirectors;
@@ -212,6 +214,22 @@ public partial class EventEditor
     /// (<see cref="DateTimeKind.Unspecified"/>) clock reading with no timezone of its own, understood to be
     /// in <see cref="viewerZone"/> (the entering Admin's browser - CONTEXT.md's Starts at / Ends at entry).
     /// </remarks>
+    /// <remarks>
+    /// <see cref="EventDto"/> is a plain immutable class, not a record - no <c>with</c> expression available -
+    /// so <see cref="GoLiveAsync"/>/<see cref="CancelEventAsync"/> rebuild it explicitly rather than re-fetching
+    /// the whole Event over another round trip just to pick up the one field they already know changed.
+    /// </remarks>
+    private static EventDto WithStatus(EventDto dto, EventStatus status) => new()
+    {
+        Id = dto.Id,
+        Name = dto.Name,
+        Slug = dto.Slug,
+        Passcode = dto.Passcode,
+        Status = status,
+        StartsAt = dto.StartsAt,
+        EndsAt = dto.EndsAt
+    };
+
     private DateTimeOffset? ToUtc(DateTime? localWallClock)
     {
         if (localWallClock is not { } value)
@@ -383,6 +401,70 @@ public partial class EventEditor
         }
 
         isDeleting = false;
+    }
+
+    /// <remarks>
+    /// Its own dedicated status-only PATCH (<see cref="ApiEventClient.SetStatusAsync"/>), never folded into
+    /// <see cref="SaveAsync"/>'s general Save changes flow - an Admin with unsaved edits in the form keeps
+    /// them; going live doesn't submit or discard the form (grilled decision, P2-20). No confirm dialog -
+    /// unlike Cancel event, publishing isn't destructive.
+    /// </remarks>
+    private Task GoLiveAsync() =>
+        ChangeStatusAsync(EventStatus.Live, "Event is live", "Something went wrong going live. Try again.");
+
+    /// <remarks>
+    /// Mirrors <see cref="DeleteAsync"/>'s dialog-then-write shape and <see cref="GoLiveAsync"/>'s
+    /// dedicated-PATCH-not-folded-into-Save discipline. Reuses <see cref="directorsForEvent"/>'s already-loaded
+    /// count for the confirm dialog's consequence list, same as <see cref="DeleteAsync"/>.
+    /// </remarks>
+    private async Task CancelEventAsync()
+    {
+        var parameters = EventCancelConfirmation.BuildDialogParameters(model!.Name!, directorsForEvent?.Count);
+        bool? confirmed = await DialogService.OpenAsync<ConfirmDialog>("Cancel this event?", parameters);
+        if (confirmed is not true)
+        {
+            return;
+        }
+
+        await ChangeStatusAsync(
+            EventStatus.Cancelled, "Event cancelled", "Something went wrong cancelling this Event. Try again.");
+    }
+
+    /// <remarks>
+    /// Shared by <see cref="GoLiveAsync"/>/<see cref="CancelEventAsync"/> - both are a dedicated status-only
+    /// PATCH with an identical outcome shape (success updates <see cref="loadedDto"/> and toasts; Forbidden is
+    /// claim-lag, same message <see cref="UpdateAsync"/> and <see cref="DeleteAsync"/> already use; anything
+    /// else, including a rejected transition, is a generic <see cref="statusErrorMessage"/>). Only the target
+    /// <see cref="EventStatus"/> and the two success/failure strings differ between the two callers.
+    /// </remarks>
+    private async Task ChangeStatusAsync(EventStatus target, string successMessage, string unavailableMessage)
+    {
+        statusErrorMessage = null;
+        isChangingStatus = true;
+
+        try
+        {
+            EventWriteOutcome outcome = await EventClient.SetStatusAsync(Id!.Value, target, CancellationToken.None);
+            if (outcome == EventWriteOutcome.Success)
+            {
+                loadedDto = WithStatus(loadedDto!, target);
+                NotificationService.Notify(NotificationSeverity.Success, successMessage);
+            }
+            else if (outcome == EventWriteOutcome.Forbidden)
+            {
+                permissionLostMessage = "You no longer have permission to edit this Event.";
+            }
+            else
+            {
+                statusErrorMessage = "That change isn't allowed - refresh and try again.";
+            }
+        }
+        catch (EventDataUnavailableException)
+        {
+            statusErrorMessage = unavailableMessage;
+        }
+
+        isChangingStatus = false;
     }
 
     /// <remarks>

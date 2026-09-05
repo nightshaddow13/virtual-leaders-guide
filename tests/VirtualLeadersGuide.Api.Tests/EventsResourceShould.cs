@@ -17,6 +17,22 @@ namespace VirtualLeadersGuide.Api.Tests;
 /// (<see cref="ApiWebApplicationFactory.AdminRoleClaim"/>/<see cref="ApiWebApplicationFactory.DirectorRoleClaim"/>)
 /// rather than real <c>UserRoles</c> rows - Api authorizes from JWT claims alone (ADR-0007's amendment).
 /// </remarks>
+/// <remarks>
+/// Status coverage (P2-20, #115) leans on a few facts worth stating once rather than per test: every
+/// single-resource <c>GET</c>/<c>PATCH</c> (by id) computes the effective <see cref="EventStatus"/> in memory
+/// after materialization (<see cref="EventResourceDefinition.OnSerialize"/>,
+/// <see cref="EventResourceDefinition.ValidateStatusTransitionAsync"/>,
+/// <see cref="EventResourceDefinition.CheckForConflictsAsync"/>'s Name check), never via a SQL-level
+/// <see cref="DateTimeOffset"/> inequality - only <em>collection</em>-level filtering needs
+/// <c>EventStatusFilterRewriter</c>'s SQLite provider-detection fallback (ADR-0053), so these tests are
+/// unaffected by that limitation regardless of provider. A single-resource request also never status-narrows
+/// (<see cref="EventResourceDefinition.OnApplyFilter"/>), which is what makes a Past/Cancelled Event
+/// "reachable by direct URL" true. Where a Name-reuse test gives its terminal Event an explicit, distinct
+/// Slug, it's because two Events sharing a Name otherwise derive the identical default Slug
+/// (<see cref="ApiWebApplicationFactory.CreateEventAsync"/>'s remarks) - without it, the new Event's own
+/// auto-derived Slug would collide and 409 for an unrelated reason, masking whether the Name-reuse rule
+/// under test actually works.
+/// </remarks>
 public class EventsResourceShould : IAsyncLifetime
 {
     private const string JsonApiMediaType = "application/vnd.api+json";
@@ -515,6 +531,309 @@ public class EventsResourceShould : IAsyncLifetime
         HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/events/{@event.Id}", body);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ReturnDraft_WhenAdminCreatesAnEventWithNoExplicitStatus_ForPost()
+    {
+        using HttpClient client = AdminClient();
+        var body = new { data = new { type = "events", attributes = new { name = $"Fall Camporee {Guid.NewGuid()}" } } };
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Post, "/api/events", body);
+
+        JsonElement attributes = await AttributesOfAsync(response);
+        Assert.Equal("Draft", attributes.GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task RejectWithUnprocessableEntity_WhenAPostBodySetsStatus_ForPost()
+    {
+        using HttpClient client = AdminClient();
+        var body = new
+        {
+            data = new
+            {
+                type = "events",
+                attributes = new { name = $"Fall Camporee {Guid.NewGuid()}", status = "Live" }
+            }
+        };
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Post, "/api/events", body);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        await AssertErrorPointersAsync(response, "/data/attributes/status");
+    }
+
+    [Fact]
+    public async Task SucceedWithNoContent_WhenAdminMarksADraftEventLive_ForPatch()
+    {
+        Event @event = await _factory.CreateEventAsync();
+        using HttpClient client = AdminClient();
+        var body = new
+        { data = new { type = "events", id = @event.Id.ToString(), attributes = new { status = "Live" } } };
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/events/{@event.Id}", body);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        HttpResponseMessage getResponse = await SendAsync(client, HttpMethod.Get, $"/api/events/{@event.Id}");
+        Assert.Equal("Live", (await AttributesOfAsync(getResponse)).GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task SucceedWithNoContent_WhenAdminCancelsALiveEvent_ForPatch()
+    {
+        Event @event = await _factory.CreateEventAsync(status: EventStatus.Live);
+        using HttpClient client = AdminClient();
+        var body = new
+        { data = new { type = "events", id = @event.Id.ToString(), attributes = new { status = "Cancelled" } } };
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/events/{@event.Id}", body);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        HttpResponseMessage getResponse = await SendAsync(client, HttpMethod.Get, $"/api/events/{@event.Id}");
+        Assert.Equal("Cancelled", (await AttributesOfAsync(getResponse)).GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task SucceedWithNoContent_WhenAdminRePatchesTheSameStatus_ForPatch()
+    {
+        Event @event = await _factory.CreateEventAsync(status: EventStatus.Live);
+        using HttpClient client = AdminClient();
+        var body = new
+        { data = new { type = "events", id = @event.Id.ToString(), attributes = new { status = "Live" } } };
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/events/{@event.Id}", body);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(EventStatus.Draft, "Cancelled")]
+    [InlineData(EventStatus.Live, "Draft")]
+    [InlineData(EventStatus.Draft, "Past")]
+    [InlineData(EventStatus.Live, "Past")]
+    [InlineData(EventStatus.Cancelled, "Live")]
+    [InlineData(EventStatus.Cancelled, "Draft")]
+    public async Task RejectWithUnprocessableEntity_WhenAnIllegalStatusTransitionIsAttempted_ForPatch(
+        EventStatus from, string to)
+    {
+        Event @event = await _factory.CreateEventAsync(status: from);
+        using HttpClient client = AdminClient();
+        var body = new
+        { data = new { type = "events", id = @event.Id.ToString(), attributes = new { status = to } } };
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/events/{@event.Id}", body);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        await AssertErrorPointersAsync(response, "/data/attributes/status");
+    }
+
+    [Fact]
+    public async Task RejectWithUnprocessableEntity_WhenCancellingAnAlreadyElapsedLiveEvent_ForPatch()
+    {
+        Event @event = await _factory.CreateEventAsync(
+            startsAt: DateTimeOffset.UtcNow.AddDays(-2), endsAt: DateTimeOffset.UtcNow.AddDays(-1),
+            status: EventStatus.Live);
+        using HttpClient client = AdminClient();
+        var body = new
+        { data = new { type = "events", id = @event.Id.ToString(), attributes = new { status = "Cancelled" } } };
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/events/{@event.Id}", body);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        await AssertErrorPointersAsync(response, "/data/attributes/status");
+    }
+
+    [Fact]
+    public async Task RejectWithUnprocessableEntity_WhenNamingPastOnAnAlreadyElapsedLiveEvent_ForPatch()
+    {
+        Event @event = await _factory.CreateEventAsync(
+            startsAt: DateTimeOffset.UtcNow.AddDays(-2), endsAt: DateTimeOffset.UtcNow.AddDays(-1),
+            status: EventStatus.Live);
+        using HttpClient client = AdminClient();
+        var body = new
+        { data = new { type = "events", id = @event.Id.ToString(), attributes = new { status = "Past" } } };
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/events/{@event.Id}", body);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        await AssertErrorPointersAsync(response, "/data/attributes/status");
+    }
+
+    [Fact]
+    public async Task RejectWithForbidden_WhenAnAssignedDirectorChangesStatus_ForPatch()
+    {
+        Event @event = await _factory.CreateEventAsync();
+        using HttpClient client = DirectorClient(@event.Id);
+        var body = new
+        { data = new { type = "events", id = @event.Id.ToString(), attributes = new { status = "Live" } } };
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/events/{@event.Id}", body);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ReturnPast_WhenALiveEventsEndHasElapsed_ForGetSingle()
+    {
+        Event @event = await _factory.CreateEventAsync(
+            startsAt: DateTimeOffset.UtcNow.AddDays(-2), endsAt: DateTimeOffset.UtcNow.AddDays(-1),
+            status: EventStatus.Live);
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Get, $"/api/events/{@event.Id}");
+
+        Assert.Equal("Past", (await AttributesOfAsync(response)).GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task ReturnDraft_WhenADraftEventsEndHasElapsed_ForGetSingle()
+    {
+        Event @event = await _factory.CreateEventAsync(
+            startsAt: DateTimeOffset.UtcNow.AddDays(-2), endsAt: DateTimeOffset.UtcNow.AddDays(-1));
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Get, $"/api/events/{@event.Id}");
+
+        Assert.Equal("Draft", (await AttributesOfAsync(response)).GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task ReturnLive_WhenALiveEventHasNoEnd_ForGetSingle()
+    {
+        Event @event = await _factory.CreateEventAsync(status: EventStatus.Live);
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Get, $"/api/events/{@event.Id}");
+
+        Assert.Equal("Live", (await AttributesOfAsync(response)).GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task ExcludeCancelledEvents_WhenNoStatusFilterIsSupplied_ForGetCollection()
+    {
+        Event visible = await _factory.CreateEventAsync();
+        Event cancelled = await _factory.CreateEventAsync(status: EventStatus.Cancelled);
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Get, "/api/events");
+
+        using JsonDocument document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        string[] ids = document.RootElement.GetProperty("data").EnumerateArray()
+            .Select(e => e.GetProperty("id").GetString()!).ToArray();
+        Assert.Contains(visible.Id.ToString(), ids);
+        Assert.DoesNotContain(cancelled.Id.ToString(), ids);
+    }
+
+    [Fact]
+    public async Task IncludeCancelledEvents_WhenFilteringOnCancelled_ForGetCollection()
+    {
+        Event cancelled = await _factory.CreateEventAsync(status: EventStatus.Cancelled);
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(
+            client, HttpMethod.Get, "/api/events?filter=equals(status,'Cancelled')");
+
+        using JsonDocument document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        string[] ids = document.RootElement.GetProperty("data").EnumerateArray()
+            .Select(e => e.GetProperty("id").GetString()!).ToArray();
+        Assert.Contains(cancelled.Id.ToString(), ids);
+    }
+
+    [Fact]
+    public async Task ExcludeCancelledEvents_WhenFilteringOnDraft_ForGetCollection()
+    {
+        Event draft = await _factory.CreateEventAsync();
+        Event cancelled = await _factory.CreateEventAsync(status: EventStatus.Cancelled);
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(
+            client, HttpMethod.Get, "/api/events?filter=equals(status,'Draft')");
+
+        using JsonDocument document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        string[] ids = document.RootElement.GetProperty("data").EnumerateArray()
+            .Select(e => e.GetProperty("id").GetString()!).ToArray();
+        Assert.Contains(draft.Id.ToString(), ids);
+        Assert.DoesNotContain(cancelled.Id.ToString(), ids);
+    }
+
+    [Fact]
+    public async Task IncludeAnUndatedLiveEvent_WhenFilteringOnLive_ForGetCollection()
+    {
+        Event live = await _factory.CreateEventAsync(status: EventStatus.Live);
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(
+            client, HttpMethod.Get, "/api/events?filter=equals(status,'Live')");
+
+        using JsonDocument document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        string[] ids = document.RootElement.GetProperty("data").EnumerateArray()
+            .Select(e => e.GetProperty("id").GetString()!).ToArray();
+        Assert.Contains(live.Id.ToString(), ids);
+    }
+
+    [Fact]
+    public async Task SucceedWithOk_WhenReadingACancelledEventDirectly_ForGetSingle()
+    {
+        Event cancelled = await _factory.CreateEventAsync(status: EventStatus.Cancelled);
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Get, $"/api/events/{cancelled.Id}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task SucceedWithCreated_WhenReusingACancelledEventsName_ForPost()
+    {
+        Event cancelled = await _factory.CreateEventAsync(
+            status: EventStatus.Cancelled, slug: $"cancelled-{Guid.NewGuid():n}");
+        using HttpClient client = AdminClient();
+        var body = new { data = new { type = "events", attributes = new { name = cancelled.Name } } };
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Post, "/api/events", body);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task SucceedWithCreated_WhenReusingAnEffectivelyPastEventsName_ForPost()
+    {
+        Event elapsed = await _factory.CreateEventAsync(
+            startsAt: DateTimeOffset.UtcNow.AddDays(-2), endsAt: DateTimeOffset.UtcNow.AddDays(-1),
+            status: EventStatus.Live, slug: $"elapsed-{Guid.NewGuid():n}");
+        using HttpClient client = AdminClient();
+        var body = new { data = new { type = "events", attributes = new { name = elapsed.Name } } };
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Post, "/api/events", body);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task SucceedWithNoContent_WhenRenamingAnEventToACancelledEventsName_ForPatch()
+    {
+        Event cancelled = await _factory.CreateEventAsync(
+            status: EventStatus.Cancelled, slug: $"cancelled-{Guid.NewGuid():n}");
+        Event draft = await _factory.CreateEventAsync();
+        using HttpClient client = AdminClient();
+        var body = new
+        { data = new { type = "events", id = draft.Id.ToString(), attributes = new { name = cancelled.Name } } };
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/events/{draft.Id}", body);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task SucceedWithNoContent_WhenAdminDeletesACancelledEvent_ForDelete()
+    {
+        Event cancelled = await _factory.CreateEventAsync(status: EventStatus.Cancelled);
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Delete, $"/api/events/{cancelled.Id}");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
 
     private HttpClient AdminClient() =>

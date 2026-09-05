@@ -76,9 +76,19 @@ public sealed class EventsApiClient(HttpClient httpClient, string internalJwtSig
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>The id and name of every matching Event, across all pages.</returns>
     /// <exception cref="InvalidOperationException">The list request did not succeed.</exception>
+    /// <remarks>
+    /// The <c>any(status,...)</c> half of the filter is load-bearing since P2-20 (#115): Api's default
+    /// collection view now hides effectively-<c>Past</c>/<c>Cancelled</c> Events (<c>EventResourceDefinition.OnApplyFilter</c>),
+    /// which would otherwise get ANDed into a bare <c>startsWith(name,'e2e-')</c> filter and silently hide any
+    /// leaked Past/Cancelled <c>e2e-</c> Event from this sweep - a leak this exact method exists to catch. All
+    /// four values are named explicitly, not just the three stored ones: <c>'Live'</c> rewrites to "Live and
+    /// not yet elapsed" and <c>'Past'</c> to "Live and elapsed" (<c>EventStatusFilterRewriter</c>), so naming
+    /// only the stored values would still miss elapsed rows.
+    /// </remarks>
     public async Task<IReadOnlyList<(Guid Id, string Name)>> ListE2EEventsAsync(CancellationToken cancellationToken)
     {
-        string uri = BuildUnpagedCollectionUri(EventsPath, "startsWith(name,'e2e-')");
+        string uri = BuildUnpagedCollectionUri(
+            EventsPath, "and(startsWith(name,'e2e-'),any(status,'Draft','Live','Past','Cancelled'))");
         using HttpRequestMessage request = NewRequest(HttpMethod.Get, uri);
 
         using HttpResponseMessage response = await SendAsync(request, cancellationToken);

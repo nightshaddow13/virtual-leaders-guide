@@ -35,6 +35,15 @@ public partial class ConfirmDialog
     [Parameter]
     public string ConfirmText { get; set; } = "Delete";
 
+    /// <summary>
+    /// Text on the dismiss (left) button. Defaults to "Cancel", which reads fine for every delete
+    /// confirmation - a caller whose own confirm action is itself named "Cancel" (P2-20, #115's "Cancel
+    /// event") overrides this, since "Cancel" / "Cancel event" side by side is genuinely ambiguous about
+    /// which button does what.
+    /// </summary>
+    [Parameter]
+    public string DismissText { get; set; } = "Cancel";
+
     /// <summary>Style of the confirm button. Defaults to <see cref="ButtonStyle.Danger"/>.</summary>
     [Parameter]
     public ButtonStyle ConfirmButtonStyle { get; set; } = ButtonStyle.Danger;

@@ -37,6 +37,10 @@ public sealed class ApiEventClient(InternalApiClient apiClient)
     /// A JSON:API sort expression (e.g. <c>"name"</c> or <c>"-name"</c>), or <see langword="null"/> for
     /// Api's default ordering.
     /// </param>
+    /// <param name="status">
+    /// Which Statuses to include - defaults to <see cref="EventStatusFilter.Current"/> (Draft plus
+    /// not-yet-elapsed Live), matching the Dashboard's default view.
+    /// </param>
     /// <param name="cancellationToken">Propagated to the underlying HTTP call.</param>
     /// <returns>
     /// The page of Events, and the total count of Events visible to the caller across all pages - never
@@ -44,9 +48,9 @@ public sealed class ApiEventClient(InternalApiClient apiClient)
     /// Events (possibly empty) rather than denied (ADR-0031).
     /// </returns>
     public async Task<(IReadOnlyList<EventDto> Events, int Total)> GetEventsAsync(
-        int pageNumber, int pageSize, string? sort, CancellationToken cancellationToken)
+        int pageNumber, int pageSize, string? sort, EventStatusFilter status, CancellationToken cancellationToken)
     {
-        using var request = NewRequest(HttpMethod.Get, BuildCollectionUri(pageNumber, pageSize, sort));
+        using var request = NewRequest(HttpMethod.Get, BuildCollectionUri(pageNumber, pageSize, sort, status));
         using HttpResponseMessage response = await SendAsync(request, cancellationToken);
 
         EnsureExpectedStatus(response, HttpStatusCode.OK);
@@ -187,6 +191,47 @@ public sealed class ApiEventClient(InternalApiClient apiClient)
         return (EventWriteOutcome.Success, []);
     }
 
+    /// <summary>
+    /// Changes an Event's Status - the "Go live" and "Cancel event" actions, each its own dedicated PATCH sending
+    /// only <c>status</c>, never folded into <see cref="UpdateAsync"/>'s general save.
+    /// </summary>
+    /// <param name="id">The Event whose Status is changing.</param>
+    /// <param name="status">The target Status - only <see cref="EventStatus.Live"/> (from Draft) and <see cref="EventStatus.Cancelled"/> (from Live) are ever legal targets a caller sends.</param>
+    /// <param name="cancellationToken">Propagated to the underlying HTTP call.</param>
+    /// <returns>
+    /// <see cref="EventWriteOutcome.Success"/> (Api returns 204); <see cref="EventWriteOutcome.Forbidden"/> if
+    /// the caller isn't an Admin; or <see cref="EventWriteOutcome.Invalid"/> if the transition is illegal
+    /// (ADR-0044) - e.g. a concurrent change already moved this Event somewhere the requested transition can't
+    /// start from.
+    /// </returns>
+    public async Task<EventWriteOutcome> SetStatusAsync(Guid id, EventStatus status, CancellationToken cancellationToken)
+    {
+        var body = new EventStatusDocument
+        {
+            Data = new EventStatusResourceObject
+            {
+                Type = ResourceType,
+                Id = id.ToString(),
+                Attributes = new EventStatusAttributesDto { Status = status }
+            }
+        };
+        using var request = NewRequest(HttpMethod.Patch, $"{EventsPath}/{id}", body);
+        using HttpResponseMessage response = await SendAsync(request, cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            return EventWriteOutcome.Forbidden;
+        }
+
+        if (response.StatusCode == HttpStatusCode.UnprocessableEntity)
+        {
+            return EventWriteOutcome.Invalid;
+        }
+
+        EnsureExpectedStatus(response, HttpStatusCode.NoContent);
+        return EventWriteOutcome.Success;
+    }
+
     /// <summary>Deletes an Event permanently - hard delete, no recovery path (ADR-0045). Admin-only (ADR-0031).</summary>
     /// <param name="id">The Event to delete.</param>
     /// <param name="cancellationToken">Propagated to the underlying HTTP call.</param>
@@ -213,7 +258,15 @@ public sealed class ApiEventClient(InternalApiClient apiClient)
         return EventWriteOutcome.Success;
     }
 
-    private static HttpRequestMessage NewRequest(HttpMethod method, string uri, EventDocument? body = null)
+    private static HttpRequestMessage NewRequest(HttpMethod method, string uri) => NewRequest<EventDocument>(method, uri, null);
+
+    /// <remarks>
+    /// Generic so <see cref="SetStatusAsync"/> can send its own minimal <see cref="EventStatusDocument"/>
+    /// envelope through the same request-building path as every other write, without forcing it through
+    /// <see cref="EventDocument"/>'s shape (see <see cref="EventStatusDocument"/>'s remarks for why that
+    /// would be actively wrong here).
+    /// </remarks>
+    private static HttpRequestMessage NewRequest<TBody>(HttpMethod method, string uri, TBody? body)
     {
         var request = new HttpRequestMessage(method, uri);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(JsonApiMediaType));
@@ -272,13 +325,43 @@ public sealed class ApiEventClient(InternalApiClient apiClient)
         Name = resource.Attributes!.Name!,
         Slug = resource.Attributes.Slug!,
         Passcode = resource.Attributes.Passcode!,
+        Status = resource.Attributes.Status!.Value,
         StartsAt = resource.Attributes.StartsAt,
         EndsAt = resource.Attributes.EndsAt
     };
 
-    private static string BuildCollectionUri(int pageNumber, int pageSize, string? sort)
+    /// <remarks>
+    /// Omits <c>filter=</c> entirely for <see cref="EventStatusFilter.Current"/> - it's exactly what Api's own
+    /// default collection view already applies (<c>EventResourceDefinition.OnApplyFilter</c>), so there's
+    /// nothing to ask for. <see cref="EventStatusFilter.All"/> asks for every Status explicitly, since
+    /// omitting the filter would ask for Current instead, not everything. Every value is PascalCase on the
+    /// wire - Api's filter parser is case-sensitive (ADR-0053).
+    /// </remarks>
+    private static string BuildCollectionUri(int pageNumber, int pageSize, string? sort, EventStatusFilter status)
     {
         string uri = $"{EventsPath}?page[number]={pageNumber}&page[size]={pageSize}";
-        return string.IsNullOrEmpty(sort) ? uri : $"{uri}&sort={Uri.EscapeDataString(sort)}";
+
+        if (!string.IsNullOrEmpty(sort))
+        {
+            uri += $"&sort={Uri.EscapeDataString(sort)}";
+        }
+
+        string? filter = status switch
+        {
+            EventStatusFilter.Current => null,
+            EventStatusFilter.All => "any(status,'Draft','Live','Past','Cancelled')",
+            EventStatusFilter.Draft => "equals(status,'Draft')",
+            EventStatusFilter.Live => "equals(status,'Live')",
+            EventStatusFilter.Past => "equals(status,'Past')",
+            EventStatusFilter.Cancelled => "equals(status,'Cancelled')",
+            _ => throw new ArgumentOutOfRangeException(nameof(status), status, null)
+        };
+
+        if (filter is not null)
+        {
+            uri += $"&filter={Uri.EscapeDataString(filter)}";
+        }
+
+        return uri;
     }
 }

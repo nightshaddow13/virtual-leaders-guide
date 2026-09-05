@@ -38,6 +38,11 @@
             <RadzenBadge Text="VIEW ONLY" BadgeStyle="BadgeStyle.Light" Variant="Variant.Outlined" />
         </div>
         <div class="vlg-readonly-field">
+            <RadzenText TextStyle="TextStyle.Overline">Status</RadzenText>
+            <RadzenBadge Text="@EventStatusDisplay.Text(loadedDto!.Status)" BadgeStyle="@EventStatusDisplay.Style(loadedDto.Status)"
+                         Variant="Variant.Outlined" />
+        </div>
+        <div class="vlg-readonly-field">
             <RadzenText TextStyle="TextStyle.Overline">Public address</RadzenText>
             <span>/e/@model.Slug</span>
         </div>
@@ -60,8 +65,20 @@
         </RadzenBreadCrumb>
         <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween"
                      AlignItems="AlignItems.End" Gap="1rem" Style="margin-block-end: 1rem;">
-            <h1>@(Id is null ? "New event" : "Edit event")</h1>
+            <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.75rem">
+                <h1>@(Id is null ? "New event" : "Edit event")</h1>
+                @if (loadedDto is not null)
+                {
+                    <RadzenBadge Text="@EventStatusDisplay.Text(loadedDto.Status)" BadgeStyle="@EventStatusDisplay.Style(loadedDto.Status)"
+                                 Variant="Variant.Outlined" />
+                }
+            </RadzenStack>
             <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
+                @if (loadedDto is { Status: EventStatus.Draft })
+                {
+                    <RadzenButton Text="Go live" ButtonStyle="ButtonStyle.Primary" Variant="Variant.Outlined"
+                                  Disabled="@(isChangingStatus || permissionLostMessage is not null)" Click="GoLiveAsync" />
+                }
                 <RadzenButton Text="Cancel" ButtonStyle="ButtonStyle.Light" Disabled="@isSaving"
                               Click="NavigateToDashboard" />
                 <RadzenButton Text="@(Id is null ? "Create event" : "Save changes")"
@@ -76,6 +93,10 @@
         @if (saveErrorMessage is not null)
         {
             <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" AllowClose="false" Text="@saveErrorMessage" />
+        }
+        @if (statusErrorMessage is not null)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" AllowClose="false" Text="@statusErrorMessage" />
         }
 
         <EditForm EditContext="editContext" OnValidSubmit="SaveAsync">
@@ -194,6 +215,11 @@
 
             <RadzenStack Orientation="Orientation.Vertical" Gap="0.5rem" Style="margin-block-start: 2rem;">
                 <h2>Danger zone</h2>
+                @if (loadedDto is { Status: EventStatus.Live })
+                {
+                    <RadzenButton Text="Cancel event" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Outlined"
+                                  Disabled="@isChangingStatus" Click="CancelEventAsync" Style="align-self: flex-start;" />
+                }
                 <RadzenButton Text="Delete event" ButtonStyle="ButtonStyle.Danger" Disabled="@isDeleting"
                               Click="DeleteAsync" Style="align-self: flex-start;" />
             </RadzenStack>

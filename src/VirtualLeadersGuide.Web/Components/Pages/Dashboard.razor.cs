@@ -48,8 +48,35 @@ public partial class Dashboard
     /// </remarks>
     private const string ActionColumnWidth = "128px";
 
+    /// <remarks>
+    /// Same fixed-table-layout reasoning as <see cref="ActionColumnWidth"/> - the STATUS column's own badge
+    /// plus the built-in filter row's <c>RadzenDropDown</c> both need room, or either clips against the
+    /// cell's padding box once the grid stops letting columns grow to fit content.
+    /// </remarks>
+    private const string StatusColumnWidth = "160px";
+
     private RadzenDataGrid<EventDto>? grid;
     private EventAccessView? accessView;
+    private EventStatusFilter statusFilter = EventStatusFilter.Current;
+
+    /// <remarks>
+    /// A real record, not a tuple - <c>RadzenDropDown</c> resolves <c>TextProperty</c>/<c>ValueProperty</c> by
+    /// reflection over property names, which a tuple's <c>Item1</c>/<c>Item2</c> can't satisfy (same reasoning
+    /// as <c>Users.razor.cs</c>'s own status filter). <see cref="EventStatusFilter.Current"/> reads "Current",
+    /// not "All" - it's Draft plus not-yet-elapsed Live, and a default reading "All" would be false the moment
+    /// a Past or Cancelled Event exists.
+    /// </remarks>
+    private static readonly IReadOnlyList<StatusFilterOption> statusFilterOptions =
+    [
+        new(EventStatusFilter.Current, "Current"),
+        new(EventStatusFilter.All, "All"),
+        new(EventStatusFilter.Draft, "Draft"),
+        new(EventStatusFilter.Live, "Live"),
+        new(EventStatusFilter.Past, "Past"),
+        new(EventStatusFilter.Cancelled, "Cancelled")
+    ];
+
+    private sealed record StatusFilterOption(EventStatusFilter Key, string Text);
 
     /// <remarks>
     /// Must start <see langword="null"/>, not an empty collection - <c>RadzenDataGrid</c> only invokes
@@ -129,7 +156,7 @@ public partial class Dashboard
         try
         {
             (IReadOnlyList<EventDto> pageEvents, int total) =
-                await EventClient.GetEventsAsync(pageNumber, pageSize, sort, CancellationToken.None);
+                await EventClient.GetEventsAsync(pageNumber, pageSize, sort, statusFilter, CancellationToken.None);
 
             events = pageEvents;
             totalCount = total;

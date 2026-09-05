@@ -34,13 +34,12 @@ definition of each value and the domain rules; this ADR covers the parts CONTEXT
 - **Delete is a separate, independent action, available from any Status** (Question 7) - Cancel exists to
   keep a record and tell people; Delete exists for "this shouldn't exist at all." Forcing one through the
   other adds friction a confirm dialog already covers.
-- **`Event.Name`'s unique index becomes filtered, excluding `Past` and `Cancelled`** (Question 17) - a
-  `Past`/`Cancelled` row no longer blocks a new Event from reusing its Name, matching `Event.cs`'s own
-  remarks anticipating exactly this. `Slug` is unaffected and stays permanently, unconditionally unique - it's
-  the route key, never revisited by this ADR. The filtered-index SQL needs to build on SQLite as well as SQL
-  Server (ADR-0014) - `VirtualLeadersGuideDbContext.ConfigureUserRoles`'s existing `HasFilter(...)` indexes are
-  the pattern to follow, but their filter strings as written are SQL-Server-shaped and need checking against
-  SQLite before reuse.
+- **`Event.Name`'s uniqueness rule excludes `Past` and `Cancelled`** (Question 17) - a `Past`/`Cancelled` row
+  no longer blocks a new Event from reusing its Name, matching `Event.cs`'s own remarks anticipating exactly
+  this. `Slug` is unaffected and stays permanently, unconditionally unique - it's the route key, never
+  revisited by this ADR. **This is enforced in application code, not a filtered DB index** - see ADR-0053 for
+  why a filtered index can't express this rule at all, superseding this bullet's original "filtered index"
+  framing.
 
 ## This supersedes #103, deliberately
 

@@ -6,13 +6,24 @@ using VirtualLeadersGuide.Identity.Contracts;
 namespace VirtualLeadersGuide.Api.Tests;
 
 /// <remarks>
-/// EF-model-level coverage of P2-6's (#15) acceptance criteria - Name/Slug uniqueness, the Name/Slug CHECK
-/// constraints, and the <c>UserRoles.EventId</c> FK - exercised directly against the DbContext rather than
-/// through HTTP, same pattern as <c>UserRoleSchemaShould</c>. ADR-0014: <c>EnsureCreatedAsync</c> builds
-/// this schema from the current EF model on SQLite, not by replaying the real SQL Server migration, so this
-/// is also what proves the SQL Server-flavored CHECK constraints (LIKE-based; see
-/// <see cref="VirtualLeadersGuideDbContext"/>) parse under SQLite too. See <c>EventPasscodeShould</c> for
-/// <see cref="Event.Passcode"/>'s encryption-at-rest coverage specifically.
+/// EF-model-level coverage of P2-6's (#15) and P2-20's (#115) acceptance criteria - Slug uniqueness (Name
+/// carries none, ADR-0053), the Name/Slug/Status CHECK constraints, the <c>UserRoles.EventId</c> FK, and
+/// <see cref="Event.Status"/>'s default - exercised directly against the DbContext rather than through HTTP,
+/// same pattern as <c>UserRoleSchemaShould</c>. ADR-0014: <c>EnsureCreatedAsync</c> builds this schema from
+/// the current EF model on SQLite, not by replaying the real SQL Server migration, so this is also what
+/// proves the SQL Server-flavored CHECK constraints (LIKE-based; see <see cref="VirtualLeadersGuideDbContext"/>)
+/// parse under SQLite too. See <c>EventPasscodeShould</c> for <see cref="Event.Passcode"/>'s
+/// encryption-at-rest coverage specifically.
+/// </remarks>
+/// <remarks>
+/// Two Status-specific facts this proves at the DB level rather than restating per test: (1) two Events
+/// sharing a Name now save successfully - <see cref="Event.Name"/> carries no unique index at all (ADR-0053),
+/// so a regression here would mean a future migration accidentally reintroduced one; the application-level
+/// uniqueness rule among non-terminal Events is <see cref="EventsResourceShould"/>'s job to exercise at the
+/// HTTP level, not this class's. (2) <c>CK_Events_Status_Allowed</c> is the database-level backstop for
+/// "<see cref="EventStatus.Past"/> is never stored" - since nothing in this app's own write path ever assigns
+/// <see cref="EventStatus.Past"/> to <see cref="Event.Status"/>, that constraint can only ever be exercised by
+/// writing it directly, which also doubles as the proof its SQL parses under SQLite, not just SQL Server.
 /// </remarks>
 public class EventSchemaShould : IAsyncLifetime
 {
@@ -40,7 +51,7 @@ public class EventSchemaShould : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ThrowDbUpdateException_WhenTwoEventsShareAName_ForSaveChanges()
+    public async Task SaveSuccessfully_WhenTwoEventsShareAName_ForSaveChanges()
     {
         using IServiceScope scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
@@ -49,6 +60,33 @@ public class EventSchemaShould : IAsyncLifetime
         await db.SaveChangesAsync();
 
         db.Events.Add(Event.Create("Fall Retreat", "fall-retreat-2"));
+        await db.SaveChangesAsync();
+
+        Assert.Equal(2, await db.Events.CountAsync());
+    }
+
+    [Fact]
+    public async Task DefaultToDraft_WhenAnEventIsCreatedWithoutAnExplicitStatus_ForSaveChanges()
+    {
+        using IServiceScope scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        var @event = Event.Create("Fall Retreat", "fall-retreat");
+
+        db.Events.Add(@event);
+        await db.SaveChangesAsync();
+
+        Assert.Equal(EventStatus.Draft, (await db.Events.FindAsync(@event.Id))!.Status);
+    }
+
+    [Fact]
+    public async Task ThrowDbUpdateException_WhenStatusIsDirectlySetToPast_ForSaveChanges()
+    {
+        using IServiceScope scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        var @event = Event.Create("Fall Retreat", "fall-retreat");
+        @event.Status = EventStatus.Past;
+
+        db.Events.Add(@event);
 
         await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
     }

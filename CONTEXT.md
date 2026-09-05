@@ -100,8 +100,9 @@ no venue timezone to anchor them to yet (see ADR-0043).
 _Avoid_: Start date / End date (they carry a time too), Schedule, Duration, Dates (as one field — they're two)
 
 **Status**:
-An Event's position in its lifecycle: `Draft` (the default for a new or duplicated Event — not yet shown to
-Directors), `Live` (published; an Admin sets this manually, independent of Starts at/Ends at), `Past`
+An Event's position in its lifecycle: `Draft` (the default for a new or duplicated Event — visible to any
+Director already granted access, same as any other Status; an Admin chooses when to publish it by marking it
+`Live`), `Live` (published; an Admin sets this manually, independent of Starts at/Ends at), `Past`
 (automatic once a `Live` Event's Ends at elapses — never applies to an Event still in `Draft`, since nothing
 was ever public to conclude), or `Cancelled` (manual, only reachable from `Live`, and terminal — the record
 that a gathering stopped happening, not a way to hide a `Draft` that never had an audience). `Past` and
