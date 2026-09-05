@@ -3,7 +3,12 @@ using VirtualLeadersGuide.Web.Events;
 
 namespace VirtualLeadersGuide.Web.Tests;
 
-/// <remarks>Mirrors <see cref="EventDeleteConfirmationShould"/>'s shape for <see cref="EventCancelConfirmation"/> (P2-20, #115).</remarks>
+/// <remarks>
+/// Mirrors <see cref="EventDeleteConfirmationShould"/>'s shape for <see cref="EventCancelConfirmation"/>
+/// (P2-20, #115), including its conventions: no consequence bullet ever reads "0 directors" - a zero count
+/// omits the bullet entirely - and a failed count degrades to explanatory text rather than blocking the
+/// dialog (ADR-0045).
+/// </remarks>
 public class EventCancelConfirmationShould
 {
     [Fact]
@@ -45,7 +50,6 @@ public class EventCancelConfirmationShould
         Assert.Contains("1 assigned director will see it as cancelled", consequences);
     }
 
-    /// <remarks>Matches <see cref="EventDeleteConfirmation"/>'s own convention: no consequence should read "0 directors" - the bullet is omitted entirely instead.</remarks>
     [Fact]
     public void OmitTheDirectorsBullet_WhenTheCountIsZero_ForBuildDialogParameters()
     {
@@ -56,7 +60,6 @@ public class EventCancelConfirmationShould
         Assert.DoesNotContain(consequences, c => c.Contains("director", StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <remarks>ADR-0045's degrade-not-block convention, same as <see cref="EventDeleteConfirmation"/>.</remarks>
     [Fact]
     public void DegradeToAnExplanatoryBullet_WhenTheDirectorCountIsNull_ForBuildDialogParameters()
     {

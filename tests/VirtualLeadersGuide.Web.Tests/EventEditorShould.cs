@@ -17,6 +17,13 @@ namespace VirtualLeadersGuide.Web.Tests;
 /// tests in this class do - see <c>ApiDirectorClientShould</c>'s class remarks for why, at the client layer
 /// this page's rendering builds on.
 /// </remarks>
+/// <remarks>
+/// Status coverage (P2-20, #115): a not-yet-created Event has nothing to publish - there's no
+/// <c>loadedDto</c> at all until Save succeeds, which is why Go live never shows on the New event page.
+/// <see cref="VirtualLeadersGuide.Web.Events.EventDto.Status"/> also isn't a form field (Go live is a standalone action, not folded into
+/// <c>EditForm</c>), so a <c>/status</c> 422 has no field to land a <c>ValidationMessage</c> on - it routes
+/// to the page-level <c>statusErrorMessage</c> instead.
+/// </remarks>
 public class EventEditorShould : BunitContext
 {
     /// <remarks>See <see cref="DashboardRenderingShould"/>'s constructor remarks.</remarks>
@@ -196,7 +203,6 @@ public class EventEditorShould : BunitContext
         Assert.Contains(cut.FindAll("button"), button => button.TextContent.Contains("Go live", StringComparison.Ordinal));
     }
 
-    /// <remarks>A not-yet-created Event has nothing to publish - there's no <c>loadedDto</c> at all until Save succeeds.</remarks>
     [Fact]
     public void HideGoLive_WhenCreatingANewEventAsAnAdmin_ForOnParametersSetAsync()
     {
@@ -269,12 +275,6 @@ public class EventEditorShould : BunitContext
         Assert.DoesNotContain(cut.FindAll("button"), button => button.TextContent.Contains("Cancel event", StringComparison.Ordinal));
     }
 
-    /// <remarks>
-    /// <see cref="Event.Status"/> isn't a form field (Go live is a standalone action, not folded into
-    /// <c>EditForm</c>), so a <c>/status</c> 422 has no field to land a <c>ValidationMessage</c> on - it
-    /// routes to the page-level <c>statusErrorMessage</c> instead, mirroring <c>ShowEndsAtValidationMessage_WhenApiRespondsWithUnprocessableEntityOnSave_ForSaveAsync</c>'s
-    /// GET-vs-write dispatch but asserting the *absence* of a field-level message alongside the page-level one.
-    /// </remarks>
     [Fact]
     public void ShowAPageLevelError_WhenApiRejectsGoingLiveWithUnprocessableEntity_ForGoLiveAsync()
     {

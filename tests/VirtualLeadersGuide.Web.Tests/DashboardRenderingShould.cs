@@ -16,6 +16,12 @@ namespace VirtualLeadersGuide.Web.Tests;
 /// not the grid's data loading or the Admin-vs-Director markup difference, neither of which is observable
 /// without an interactive render.
 /// </remarks>
+/// <remarks>
+/// Status coverage (P2-20, #115): the header caption reads plain "@totalCount events", not
+/// "ALL EVENTS · @totalCount" - once the default view is filtered to Current (Draft + not-yet-elapsed Live,
+/// not literally everything), a static "ALL EVENTS" label would be actively wrong the moment a Past/Cancelled
+/// Event exists.
+/// </remarks>
 public class DashboardRenderingShould : BunitContext
 {
     /// <remarks>
@@ -202,11 +208,6 @@ public class DashboardRenderingShould : BunitContext
         Assert.Contains("CANCELLED", cut.Markup, StringComparison.Ordinal);
     }
 
-    /// <remarks>
-    /// "@totalCount events" plain, not "ALL EVENTS · @totalCount" - once the default view is filtered to
-    /// Current (Draft + not-yet-elapsed Live, not literally everything), a static "ALL EVENTS" label would be
-    /// actively wrong the moment a Past/Cancelled Event exists (P2-20 grilling decision).
-    /// </remarks>
     [Fact]
     public void ShowThePlainEventCount_WithNoStatusWord_ForOnInitializedAsync()
     {

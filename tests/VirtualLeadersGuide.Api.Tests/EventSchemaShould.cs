@@ -15,6 +15,16 @@ namespace VirtualLeadersGuide.Api.Tests;
 /// parse under SQLite too. See <c>EventPasscodeShould</c> for <see cref="Event.Passcode"/>'s
 /// encryption-at-rest coverage specifically.
 /// </remarks>
+/// <remarks>
+/// Two Status-specific facts this proves at the DB level rather than restating per test: (1) two Events
+/// sharing a Name now save successfully - <see cref="Event.Name"/> carries no unique index at all (ADR-0053),
+/// so a regression here would mean a future migration accidentally reintroduced one; the application-level
+/// uniqueness rule among non-terminal Events is <see cref="EventsResourceShould"/>'s job to exercise at the
+/// HTTP level, not this class's. (2) <c>CK_Events_Status_Allowed</c> is the database-level backstop for
+/// "<see cref="EventStatus.Past"/> is never stored" - since nothing in this app's own write path ever assigns
+/// <see cref="EventStatus.Past"/> to <see cref="Event.Status"/>, that constraint can only ever be exercised by
+/// writing it directly, which also doubles as the proof its SQL parses under SQLite, not just SQL Server.
+/// </remarks>
 public class EventSchemaShould : IAsyncLifetime
 {
     private ApiWebApplicationFactory _factory = null!;
@@ -40,13 +50,6 @@ public class EventSchemaShould : IAsyncLifetime
         Assert.Equal(2, await db.Events.CountAsync());
     }
 
-    /// <remarks>
-    /// <see cref="Event.Name"/> carries no unique index at all (ADR-0053) - uniqueness among non-terminal
-    /// Events is an application-level rule in <c>EventResourceDefinition.CheckForConflictsAsync</c>, exercised
-    /// at the HTTP level by <see cref="EventsResourceShould"/>, not here. This is the DB-level proof that the
-    /// index really is gone, not merely unused - a regression here would mean a future migration accidentally
-    /// reintroduced it.
-    /// </remarks>
     [Fact]
     public async Task SaveSuccessfully_WhenTwoEventsShareAName_ForSaveChanges()
     {
@@ -75,13 +78,6 @@ public class EventSchemaShould : IAsyncLifetime
         Assert.Equal(EventStatus.Draft, (await db.Events.FindAsync(@event.Id))!.Status);
     }
 
-    /// <remarks>
-    /// The database-level backstop for "<see cref="EventStatus.Past"/> is never stored" (ADR-0053) - since
-    /// nothing in this app's own write path ever assigns <see cref="EventStatus.Past"/> to
-    /// <see cref="Event.Status"/>, this constraint can only ever be exercised by writing it directly, as this
-    /// test does. Also doubles as the proof <c>CK_Events_Status_Allowed</c>'s SQL parses under SQLite, not
-    /// just SQL Server (ADR-0014) - see this class's own remarks.
-    /// </remarks>
     [Fact]
     public async Task ThrowDbUpdateException_WhenStatusIsDirectlySetToPast_ForSaveChanges()
     {

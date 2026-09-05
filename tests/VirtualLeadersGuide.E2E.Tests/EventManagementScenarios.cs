@@ -14,6 +14,24 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// ADR-0039 for why a test whose subject is "what can this Director see" stays isolated even where nothing
 /// today would technically break by sharing.
 /// </remarks>
+/// <remarks>
+/// Status coverage (P2-20, #115) - three facts worth stating once rather than per scenario: (1) every
+/// <c>GetByText</c> against a badge word ("LIVE"/"PAST"/"CANCELLED") passes <c>Exact = true</c>, since a
+/// guid-suffixed Event name that happens to contain the same substring (e.g. label "Go Live" -&gt; Name
+/// "e2e-Go Live &lt;guid&gt;", whose uppercased breadcrumb literally contains "LIVE") otherwise collides with
+/// the badge under Playwright's strict mode - confirmed the hard way, an earlier draft without <c>Exact</c>
+/// failed exactly this way. (2) The STATUS filter dropdown interaction always waits for the dropdown, then
+/// the target option, to be visible before each click - a fresh <c>GotoAsync</c> plus a negative assertion
+/// (something isn't shown) doesn't guarantee the grid's interactive circuit has finished hydrating the way a
+/// positive wait does, unlike every other interaction in this class. (3) The elapsed-Live-shows-Past scenario
+/// is the one AC the SQLite-backed <c>EventsResourceShould</c> suite structurally cannot verify at the
+/// collection level - EF Core's SQLite provider has never translated a <see cref="DateTimeOffset"/> inequality
+/// comparison, so default-list-hides-an-elapsed-Live-Event is only provable against the real engine here (see
+/// <c>EventStatusFilterRewriter</c>'s remarks and ADR-0053); that scenario also reloads the editor after going
+/// live rather than asserting on the immediate post-click state, since <c>EventEditor.razor.cs</c>'s
+/// <c>GoLiveAsync</c> optimistically sets <c>Live</c> locally without re-fetching, so only a fresh
+/// <c>GET</c> exercises Api's own <c>OnSerialize</c> computing <c>Past</c>.
+/// </remarks>
 [Collection(nameof(AspireE2ECollection))]
 public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
 {
@@ -240,14 +258,6 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
             await Expect(Page.Locator("#Name")).Not.ToBeVisibleAsync();
         });
 
-    /// <remarks>
-    /// <c>GetByText</c> calls against a badge word ("LIVE", "PAST", "CANCELLED") pass <c>Exact = true</c>
-    /// throughout this group - without it, a guid-suffixed Event name that happens to contain the same
-    /// substring (e.g. label "Go Live" -&gt; Name "e2e-Go Live &lt;guid&gt;", whose uppercased breadcrumb
-    /// literally contains "LIVE") collides with the badge and Playwright's strict mode rejects the locator
-    /// as ambiguous. Confirmed the hard way: an earlier draft of this group used unscoped, non-exact
-    /// <c>GetByText</c> and failed exactly this way against labels chosen without checking for the collision.
-    /// </remarks>
     [Fact(DisplayName = "Given a Draft Event, when an Admin marks it Live, then the dashboard shows a LIVE badge")]
     public async Task GivenADraftEvent_WhenAnAdminMarksItLive_ThenTheDashboardShowsALiveBadge() =>
         await RunAsync(async () =>
@@ -266,14 +276,6 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
                 new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
         });
 
-    /// <remarks>
-    /// Waits for the STATUS filter dropdown itself to be visible before the first click, and for the
-    /// "Cancelled" option to be visible before the second - a fresh <c>GotoAsync</c> plus a negative
-    /// assertion (the just-cancelled Event isn't shown) doesn't guarantee the grid's own interactive circuit
-    /// has finished hydrating by the time the dropdown is clicked, unlike every other interaction in this
-    /// class, which always follows an assertion that positively waits on something. See this group's own
-    /// remarks on <c>Exact = true</c> for the "CANCELLED" collision risk.
-    /// </remarks>
     [Fact(DisplayName = "Given a Live Event, when an Admin cancels it through the Danger zone, then it leaves the default list but is reachable by filtering to Cancelled")]
     public async Task GivenALiveEvent_WhenAnAdminCancelsItThroughTheDangerZone_ThenItLeavesTheDefaultListButIsReachableByFilteringToCancelled() =>
         await RunAsync(async () =>
@@ -333,15 +335,6 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
             await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Cancel event" })).ToBeVisibleAsync();
         });
 
-    /// <remarks>
-    /// The one AC the SQLite-backed <c>EventsResourceShould</c> suite structurally cannot verify at the
-    /// collection level - EF Core's SQLite provider has never translated a <see cref="DateTimeOffset"/>
-    /// inequality comparison, so the default-list-hides-an-elapsed-Live-Event behavior is only provable
-    /// against the real engine (see <c>EventStatusFilterRewriter</c>'s remarks and ADR-0053). This is that
-    /// proof. Reloads the editor after going live rather than asserting on the immediate post-click state -
-    /// <c>EventEditor.razor.cs</c>'s <c>GoLiveAsync</c> optimistically sets <c>Live</c> locally without
-    /// re-fetching, so only a fresh <c>GET</c> exercises Api's own <c>OnSerialize</c> computing <c>Past</c>.
-    /// </remarks>
     [Fact(DisplayName = "Given a Live Event whose Ends at has already elapsed, when an Admin views it, then it shows a PAST badge and leaves the default list")]
     public async Task GivenALiveEventWhoseEndsAtHasElapsed_WhenAnAdminViewsIt_ThenItShowsAPastBadgeAndLeavesTheDefaultList() =>
         await RunAsync(async () =>

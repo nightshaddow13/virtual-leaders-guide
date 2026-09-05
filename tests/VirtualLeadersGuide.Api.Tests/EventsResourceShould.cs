@@ -17,6 +17,22 @@ namespace VirtualLeadersGuide.Api.Tests;
 /// (<see cref="ApiWebApplicationFactory.AdminRoleClaim"/>/<see cref="ApiWebApplicationFactory.DirectorRoleClaim"/>)
 /// rather than real <c>UserRoles</c> rows - Api authorizes from JWT claims alone (ADR-0007's amendment).
 /// </remarks>
+/// <remarks>
+/// Status coverage (P2-20, #115) leans on a few facts worth stating once rather than per test: every
+/// single-resource <c>GET</c>/<c>PATCH</c> (by id) computes the effective <see cref="EventStatus"/> in memory
+/// after materialization (<see cref="EventResourceDefinition.OnSerialize"/>,
+/// <see cref="EventResourceDefinition.ValidateStatusTransitionAsync"/>,
+/// <see cref="EventResourceDefinition.CheckForConflictsAsync"/>'s Name check), never via a SQL-level
+/// <see cref="DateTimeOffset"/> inequality - only <em>collection</em>-level filtering needs
+/// <c>EventStatusFilterRewriter</c>'s SQLite provider-detection fallback (ADR-0053), so these tests are
+/// unaffected by that limitation regardless of provider. A single-resource request also never status-narrows
+/// (<see cref="EventResourceDefinition.OnApplyFilter"/>), which is what makes a Past/Cancelled Event
+/// "reachable by direct URL" true. Where a Name-reuse test gives its terminal Event an explicit, distinct
+/// Slug, it's because two Events sharing a Name otherwise derive the identical default Slug
+/// (<see cref="ApiWebApplicationFactory.CreateEventAsync"/>'s remarks) - without it, the new Event's own
+/// auto-derived Slug would collide and 409 for an unrelated reason, masking whether the Name-reuse rule
+/// under test actually works.
+/// </remarks>
 public class EventsResourceShould : IAsyncLifetime
 {
     private const string JsonApiMediaType = "application/vnd.api+json";
@@ -529,11 +545,6 @@ public class EventsResourceShould : IAsyncLifetime
         Assert.Equal("Draft", attributes.GetProperty("status").GetString());
     }
 
-    /// <remarks>
-    /// <see cref="Event.Status"/> carries no <see cref="AttrCapabilities.AllowCreate"/> - this asserts
-    /// JsonApiDotNetCore's own built-in rejection of a no-AllowCreate attribute in a POST body, not code this
-    /// story wrote (<see cref="EventResourceDefinition.OnWritingAsync"/>'s remarks).
-    /// </remarks>
     [Fact]
     public async Task RejectWithUnprocessableEntity_WhenAPostBodySetsStatus_ForPost()
     {
@@ -583,11 +594,6 @@ public class EventsResourceShould : IAsyncLifetime
         Assert.Equal("Cancelled", (await AttributesOfAsync(getResponse)).GetProperty("status").GetString());
     }
 
-    /// <remarks>
-    /// A same-status re-PATCH (here, <c>Live</c> to <c>Live</c>) is a deliberate no-op, not a 422 - a
-    /// defensive allowance for a retried request; see <see cref="EventResourceDefinition.ValidateStatusTransitionAsync"/>'s
-    /// remarks. The Web client never constructs one deliberately.
-    /// </remarks>
     [Fact]
     public async Task SucceedWithNoContent_WhenAdminRePatchesTheSameStatus_ForPatch()
     {
@@ -622,16 +628,6 @@ public class EventsResourceShould : IAsyncLifetime
         await AssertErrorPointersAsync(response, "/data/attributes/status");
     }
 
-    /// <remarks>
-    /// A <c>Live</c> Event whose <see cref="Event.EndsAt"/> has already elapsed is effectively
-    /// <see cref="EventStatus.Past"/> (<see cref="EventResourceDefinition.OnSerialize"/>) - cancelling it is
-    /// exactly as illegal as cancelling a Past Event that was already Past when it went Live (ADR-0044:
-    /// "a Past Event can't be cancelled retroactively"). This is a single-resource PATCH, so it never touches
-    /// <see cref="EventResourceDefinition.OnApplyFilter"/>'s SQLite-limited collection filtering (see
-    /// <c>EventStatusFilterRewriter</c>'s remarks) - the elapsed check here runs in
-    /// <see cref="EventResourceDefinition.ValidateStatusTransitionAsync"/>, entirely in memory after
-    /// materialization, so it's fully correct under SQLite too.
-    /// </remarks>
     [Fact]
     public async Task RejectWithUnprocessableEntity_WhenCancellingAnAlreadyElapsedLiveEvent_ForPatch()
     {
@@ -641,6 +637,22 @@ public class EventsResourceShould : IAsyncLifetime
         using HttpClient client = AdminClient();
         var body = new
         { data = new { type = "events", id = @event.Id.ToString(), attributes = new { status = "Cancelled" } } };
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/events/{@event.Id}", body);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        await AssertErrorPointersAsync(response, "/data/attributes/status");
+    }
+
+    [Fact]
+    public async Task RejectWithUnprocessableEntity_WhenNamingPastOnAnAlreadyElapsedLiveEvent_ForPatch()
+    {
+        Event @event = await _factory.CreateEventAsync(
+            startsAt: DateTimeOffset.UtcNow.AddDays(-2), endsAt: DateTimeOffset.UtcNow.AddDays(-1),
+            status: EventStatus.Live);
+        using HttpClient client = AdminClient();
+        var body = new
+        { data = new { type = "events", id = @event.Id.ToString(), attributes = new { status = "Past" } } };
 
         HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/events/{@event.Id}", body);
 
@@ -661,14 +673,6 @@ public class EventsResourceShould : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
-    /// <remarks>
-    /// <see cref="EventResourceDefinition.OnSerialize"/> computes <see cref="EventStatus.Past"/> in memory
-    /// after materialization - a single-resource <c>GET</c> never goes through
-    /// <see cref="EventResourceDefinition.OnApplyFilter"/>'s collection-level filtering at all (single-resource
-    /// requests return their existing filter unchanged), so this is fully correct under SQLite despite the
-    /// provider's inability to translate a <see cref="DateTimeOffset"/> comparison to SQL - see
-    /// <c>EventStatusFilterRewriter</c>'s remarks for that separate, collection-only limitation.
-    /// </remarks>
     [Fact]
     public async Task ReturnPast_WhenALiveEventsEndHasElapsed_ForGetSingle()
     {
@@ -768,11 +772,6 @@ public class EventsResourceShould : IAsyncLifetime
         Assert.Contains(live.Id.ToString(), ids);
     }
 
-    /// <remarks>
-    /// A single-resource read (<see cref="EventResourceDefinition.OnApplyFilter"/> never status-narrows one) -
-    /// exactly the AC's "reachable by direct URL" - proven for <see cref="EventStatus.Cancelled"/> here since
-    /// <see cref="ReturnPast_WhenALiveEventsEndHasElapsed_ForGetSingle"/> already covers the computed-Past case.
-    /// </remarks>
     [Fact]
     public async Task SucceedWithOk_WhenReadingACancelledEventDirectly_ForGetSingle()
     {
@@ -784,20 +783,6 @@ public class EventsResourceShould : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
-    /// <remarks>
-    /// The AC this exists for: <see cref="Event.Name"/> stops being globally unique once a database index no
-    /// longer backs it (ADR-0053) - a <see cref="EventStatus.Cancelled"/> Event's Name is free to reuse. This
-    /// is <see cref="EventResourceDefinition.CheckForConflictsAsync"/>'s effective-status check operating
-    /// entirely on materialized values, so it's unaffected by the SQLite <see cref="DateTimeOffset"/>
-    /// limitation elsewhere in this story.
-    /// </remarks>
-    /// <remarks>
-    /// Uses an explicit, distinct Slug on the Cancelled Event - two Events sharing a Name otherwise derive
-    /// the identical default Slug (<see cref="ApiWebApplicationFactory.CreateEventAsync"/>'s remarks), and
-    /// <see cref="Event.Slug"/> stays permanently, unconditionally unique regardless of Status. Without this,
-    /// the new Event's own auto-derived Slug would collide with the Cancelled Event's Slug and this would 409
-    /// for an unrelated reason, masking whether the Name-reuse rule under test actually works.
-    /// </remarks>
     [Fact]
     public async Task SucceedWithCreated_WhenReusingACancelledEventsName_ForPost()
     {
@@ -811,7 +796,6 @@ public class EventsResourceShould : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
 
-    /// <remarks>See <see cref="SucceedWithCreated_WhenReusingACancelledEventsName_ForPost"/>'s remarks for why an explicit Slug is needed here too.</remarks>
     [Fact]
     public async Task SucceedWithCreated_WhenReusingAnEffectivelyPastEventsName_ForPost()
     {

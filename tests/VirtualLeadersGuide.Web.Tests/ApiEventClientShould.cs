@@ -11,6 +11,16 @@ namespace VirtualLeadersGuide.Web.Tests;
 /// shape without needing access to <see cref="ApiEventClient"/>'s <see langword="internal"/> envelope
 /// types - the same approach <c>EventsResourceShould</c> uses for request bodies on the Api side.
 /// </remarks>
+/// <remarks>
+/// Status coverage (P2-20, #115): <see cref="EventStatusFilter.Current"/> omits <c>filter=</c> entirely,
+/// since it's exactly what Api's own default collection view already applies
+/// (<c>EventResourceDefinition.OnApplyFilter</c>) - sending a redundant filter for it would ask the same
+/// question twice. An ordinary <see cref="ApiEventClient.UpdateAsync"/> never sends <c>status</c> at all -
+/// <see cref="EventAttributesDto.Status"/> stays on the omit-on-null rule (unlike
+/// <see cref="EventAttributesDto.StartsAt"/>/<see cref="EventAttributesDto.EndsAt"/>), which is what keeps
+/// the general Save changes flow out of Api's transition validation entirely; only
+/// <see cref="ApiEventClient.SetStatusAsync"/> ever sends that attribute.
+/// </remarks>
 public class ApiEventClientShould
 {
     private const string JsonApiMediaType = "application/vnd.api+json";
@@ -90,11 +100,6 @@ public class ApiEventClientShould
         Assert.Contains("sort=-name", query, StringComparison.Ordinal);
     }
 
-    /// <remarks>
-    /// <see cref="EventStatusFilter.Current"/> is exactly what Api's own default collection view already
-    /// applies (<c>EventResourceDefinition.OnApplyFilter</c>) - sending a redundant <c>filter=</c> for it
-    /// would ask the same question twice.
-    /// </remarks>
     [Fact]
     public async Task OmitTheStatusFilter_WhenCurrentIsSupplied_ForGetEventsAsync()
     {
@@ -447,12 +452,6 @@ public class ApiEventClientShould
         Assert.Equal(["/data/attributes/startsAt"], pointers);
     }
 
-    /// <remarks>
-    /// An ordinary <see cref="ApiEventClient.UpdateAsync"/> never sends <c>status</c> - <see cref="EventAttributesDto.Status"/>
-    /// stays on the omit-on-null rule (unlike <see cref="EventAttributesDto.StartsAt"/>/<see cref="EventAttributesDto.EndsAt"/>),
-    /// which is what keeps the general Save changes flow out of Api's transition validation entirely (P2-20,
-    /// #115) - only <see cref="ApiEventClient.SetStatusAsync"/> ever sends this attribute.
-    /// </remarks>
     [Fact]
     public async Task OmitStatus_WhenUpdatingAnEventsOtherFields_ForUpdateAsync()
     {

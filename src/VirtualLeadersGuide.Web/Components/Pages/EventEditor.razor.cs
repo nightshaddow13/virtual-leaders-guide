@@ -409,35 +409,8 @@ public partial class EventEditor
     /// them; going live doesn't submit or discard the form (grilled decision, P2-20). No confirm dialog -
     /// unlike Cancel event, publishing isn't destructive.
     /// </remarks>
-    private async Task GoLiveAsync()
-    {
-        statusErrorMessage = null;
-        isChangingStatus = true;
-
-        try
-        {
-            EventWriteOutcome outcome = await EventClient.SetStatusAsync(Id!.Value, EventStatus.Live, CancellationToken.None);
-            if (outcome == EventWriteOutcome.Success)
-            {
-                loadedDto = WithStatus(loadedDto!, EventStatus.Live);
-                NotificationService.Notify(NotificationSeverity.Success, "Event is live");
-            }
-            else if (outcome == EventWriteOutcome.Forbidden)
-            {
-                permissionLostMessage = "You no longer have permission to edit this Event.";
-            }
-            else
-            {
-                statusErrorMessage = "That change isn't allowed - refresh and try again.";
-            }
-        }
-        catch (EventDataUnavailableException)
-        {
-            statusErrorMessage = "Something went wrong going live. Try again.";
-        }
-
-        isChangingStatus = false;
-    }
+    private Task GoLiveAsync() =>
+        ChangeStatusAsync(EventStatus.Live, "Event is live", "Something went wrong going live. Try again.");
 
     /// <remarks>
     /// Mirrors <see cref="DeleteAsync"/>'s dialog-then-write shape and <see cref="GoLiveAsync"/>'s
@@ -446,8 +419,6 @@ public partial class EventEditor
     /// </remarks>
     private async Task CancelEventAsync()
     {
-        statusErrorMessage = null;
-
         var parameters = EventCancelConfirmation.BuildDialogParameters(model!.Name!, directorsForEvent?.Count);
         bool? confirmed = await DialogService.OpenAsync<ConfirmDialog>("Cancel this event?", parameters);
         if (confirmed is not true)
@@ -455,16 +426,29 @@ public partial class EventEditor
             return;
         }
 
+        await ChangeStatusAsync(
+            EventStatus.Cancelled, "Event cancelled", "Something went wrong cancelling this Event. Try again.");
+    }
+
+    /// <remarks>
+    /// Shared by <see cref="GoLiveAsync"/>/<see cref="CancelEventAsync"/> - both are a dedicated status-only
+    /// PATCH with an identical outcome shape (success updates <see cref="loadedDto"/> and toasts; Forbidden is
+    /// claim-lag, same message <see cref="UpdateAsync"/> and <see cref="DeleteAsync"/> already use; anything
+    /// else, including a rejected transition, is a generic <see cref="statusErrorMessage"/>). Only the target
+    /// <see cref="EventStatus"/> and the two success/failure strings differ between the two callers.
+    /// </remarks>
+    private async Task ChangeStatusAsync(EventStatus target, string successMessage, string unavailableMessage)
+    {
+        statusErrorMessage = null;
         isChangingStatus = true;
 
         try
         {
-            EventWriteOutcome outcome =
-                await EventClient.SetStatusAsync(Id!.Value, EventStatus.Cancelled, CancellationToken.None);
+            EventWriteOutcome outcome = await EventClient.SetStatusAsync(Id!.Value, target, CancellationToken.None);
             if (outcome == EventWriteOutcome.Success)
             {
-                loadedDto = WithStatus(loadedDto!, EventStatus.Cancelled);
-                NotificationService.Notify(NotificationSeverity.Success, "Event cancelled");
+                loadedDto = WithStatus(loadedDto!, target);
+                NotificationService.Notify(NotificationSeverity.Success, successMessage);
             }
             else if (outcome == EventWriteOutcome.Forbidden)
             {
@@ -477,7 +461,7 @@ public partial class EventEditor
         }
         catch (EventDataUnavailableException)
         {
-            statusErrorMessage = "Something went wrong cancelling this Event. Try again.";
+            statusErrorMessage = unavailableMessage;
         }
 
         isChangingStatus = false;

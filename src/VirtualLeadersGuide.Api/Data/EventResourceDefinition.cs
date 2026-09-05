@@ -225,9 +225,12 @@ public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, G
     /// the same pattern <see cref="CheckForConflictsAsync"/> already uses for its own cross-row check. Compares
     /// the *effective* stored status (<see cref="EffectiveStatus"/>), not the raw one, so "a Past Event can't
     /// be cancelled retroactively" (ADR-0044) falls out for free even though Past is stored as Live. A target
-    /// of <see cref="EventStatus.Past"/> is illegal automatically - no rule below permits it. A same-status
-    /// re-PATCH (<c>Cancelled</c> to <c>Cancelled</c> included) is a legal no-op, not a 422 - a defensive
-    /// allowance for a retried request; the Web client never constructs one deliberately.
+    /// of <see cref="EventStatus.Past"/> is illegal unconditionally, checked before the same-status allowance
+    /// below - without that ordering, naming <c>Past</c> explicitly on a row that's already effectively Past
+    /// (an elapsed Live Event) would read as a same-value no-op and slip through as a 204, which the AC
+    /// doesn't carve out an exception for. A same-status re-PATCH of anything else (<c>Cancelled</c> to
+    /// <c>Cancelled</c> included) is a legal no-op, not a 422 - a defensive allowance for a retried request;
+    /// the Web client never constructs one deliberately.
     /// </remarks>
     private async Task ValidateStatusTransitionAsync(
         Event resource, WriteOperationKind writeOperation, CancellationToken cancellationToken)
@@ -256,8 +259,8 @@ public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, G
         EventStatus from = EffectiveStatus(stored.Status, stored.EndsAt, _timeProvider.GetUtcNow());
         EventStatus to = resource.Status;
 
-        bool legal = from == to
-            || (from, to) is (EventStatus.Draft, EventStatus.Live) or (EventStatus.Live, EventStatus.Cancelled);
+        bool legal = to != EventStatus.Past
+            && (from == to || (from, to) is (EventStatus.Draft, EventStatus.Live) or (EventStatus.Live, EventStatus.Cancelled));
 
         if (!legal)
         {
