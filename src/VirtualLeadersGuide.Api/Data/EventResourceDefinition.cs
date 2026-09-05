@@ -96,20 +96,16 @@ public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, G
             return existingFilter;
         }
 
-        ResourceFieldChainExpression statusChain = StatusChain();
-        ResourceFieldChainExpression endsAtChain = EndsAtChain();
-        DateTimeOffset now = _timeProvider.GetUtcNow();
-        bool canCompareEndsAt = CanCompareEndsAt();
+        var filterContext = new EventStatusFilterContext(StatusChain(), EndsAtChain(), _timeProvider.GetUtcNow(), CanCompareEndsAt());
 
-        var rewriter = new EventStatusFilterRewriter(statusChain, endsAtChain, now, canCompareEndsAt);
+        var rewriter = new EventStatusFilterRewriter(filterContext);
         FilterExpression? filter = existingFilter is null
             ? null
             : rewriter.Visit(existingFilter, null) as FilterExpression;
 
         if (request.IsReadOnly && !rewriter.ClientNamedStatus)
         {
-            filter = And(filter,
-                EventStatusFilterRewriter.DefaultVisibleStatuses(statusChain, endsAtChain, now, canCompareEndsAt));
+            filter = And(filter, EventStatusFilterRewriter.DefaultVisibleStatuses(filterContext));
         }
 
         if (!policy.IsAdmin)

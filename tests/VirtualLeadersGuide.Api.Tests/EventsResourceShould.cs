@@ -811,6 +811,21 @@ public class EventsResourceShould : IAsyncLifetime
     }
 
     [Fact]
+    public async Task SucceedWithNoContent_WhenRenamingAnEventToACancelledEventsName_ForPatch()
+    {
+        Event cancelled = await _factory.CreateEventAsync(
+            status: EventStatus.Cancelled, slug: $"cancelled-{Guid.NewGuid():n}");
+        Event draft = await _factory.CreateEventAsync();
+        using HttpClient client = AdminClient();
+        var body = new
+        { data = new { type = "events", id = draft.Id.ToString(), attributes = new { name = cancelled.Name } } };
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/events/{draft.Id}", body);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    [Fact]
     public async Task SucceedWithNoContent_WhenAdminDeletesACancelledEvent_ForDelete()
     {
         Event cancelled = await _factory.CreateEventAsync(status: EventStatus.Cancelled);
