@@ -190,6 +190,119 @@ public class DirectorInviteServiceShould
         Assert.True(fixture.Identity.Contains(user.Id));
     }
 
+    [Fact]
+    public async Task ReturnDeletedAndDeleteTheUser_WhenTheTargetIsActivatedAndNotAdmin_ForDeleteAsync()
+    {
+        using Fixture fixture = Fixture.Create();
+        IdentityUserDto user = SeedUser("jo@pack44.org", hasPassword: true);
+        fixture.Identity.Seed(user);
+        ConfigureUserLookup(fixture, user.Id, hasCredential: true, isAdmin: false);
+
+        UserDeleteOutcome outcome = await fixture.Service.DeleteAsync(user.Id, "admin-1", CancellationToken.None);
+
+        Assert.Equal(UserDeleteOutcome.Deleted, outcome);
+        Assert.False(fixture.Identity.Contains(user.Id));
+    }
+
+    /// <remarks>The point of the "no activation gate" decision (ADR-0045): unlike <see cref="RevokeAsync"/>, <see cref="DeleteAsync"/> doesn't refuse an un-activated target.</remarks>
+    [Fact]
+    public async Task ReturnDeletedAndDeleteTheUser_WhenTheTargetIsUnActivated_ForDeleteAsync()
+    {
+        using Fixture fixture = Fixture.Create();
+        IdentityUserDto user = SeedUser("dana@troop7.org", hasPassword: false);
+        fixture.Identity.Seed(user);
+        ConfigureUserLookup(fixture, user.Id, hasCredential: false, isAdmin: false);
+
+        UserDeleteOutcome outcome = await fixture.Service.DeleteAsync(user.Id, "admin-1", CancellationToken.None);
+
+        Assert.Equal(UserDeleteOutcome.Deleted, outcome);
+        Assert.False(fixture.Identity.Contains(user.Id));
+    }
+
+    [Fact]
+    public async Task ReturnTargetIsSelf_WithoutDeletingAnything_WhenTheTargetIsTheCaller_ForDeleteAsync()
+    {
+        using Fixture fixture = Fixture.Create();
+        IdentityUserDto user = SeedUser("jo@pack44.org", hasPassword: true);
+        fixture.Identity.Seed(user);
+
+        UserDeleteOutcome outcome = await fixture.Service.DeleteAsync(user.Id, user.Id, CancellationToken.None);
+
+        Assert.Equal(UserDeleteOutcome.TargetIsSelf, outcome);
+        Assert.True(fixture.Identity.Contains(user.Id));
+    }
+
+    [Fact]
+    public async Task ReturnTargetIsAdmin_WithoutDeletingAnything_WhenTheTargetHoldsTheAdminRole_ForDeleteAsync()
+    {
+        using Fixture fixture = Fixture.Create();
+        IdentityUserDto user = SeedUser("jo@pack44.org", hasPassword: true);
+        fixture.Identity.Seed(user);
+        ConfigureUserLookup(fixture, user.Id, hasCredential: true, isAdmin: true);
+
+        UserDeleteOutcome outcome = await fixture.Service.DeleteAsync(user.Id, "admin-1", CancellationToken.None);
+
+        Assert.Equal(UserDeleteOutcome.TargetIsAdmin, outcome);
+        Assert.True(fixture.Identity.Contains(user.Id));
+    }
+
+    [Fact]
+    public async Task ReturnNotFound_ForDeleteAsync()
+    {
+        using Fixture fixture = Fixture.Create();
+
+        UserDeleteOutcome outcome = await fixture.Service.DeleteAsync("missing", "admin-1", CancellationToken.None);
+
+        Assert.Equal(UserDeleteOutcome.NotFound, outcome);
+    }
+
+    [Fact]
+    public async Task ReturnStoreUnavailable_WithoutDeletingAnything_WhenTheDirectorStoreFailsTheAdminCheck_ForDeleteAsync()
+    {
+        using Fixture fixture = Fixture.Create();
+        IdentityUserDto user = SeedUser("jo@pack44.org", hasPassword: true);
+        fixture.Identity.Seed(user);
+        fixture.RoleGrantsResponder = request => request.RequestUri!.AbsolutePath == $"/api/users/{user.Id}"
+            ? new HttpResponseMessage(HttpStatusCode.InternalServerError)
+            : null;
+
+        UserDeleteOutcome outcome = await fixture.Service.DeleteAsync(user.Id, "admin-1", CancellationToken.None);
+
+        Assert.Equal(UserDeleteOutcome.StoreUnavailable, outcome);
+        Assert.True(fixture.Identity.Contains(user.Id));
+    }
+
+    /// <remarks>
+    /// <see cref="ApiDirectorClient.GetUserAsync"/> derives <c>IsAdmin</c> from the joined <c>/api/roleGrants</c>
+    /// response, not from <c>/api/users</c>' own attributes - so unlike the <c>ReturnExistingUser</c> test
+    /// above, this also has to answer the roleGrants filter query, with an Admin grant only when
+    /// <paramref name="isAdmin"/> is set.
+    /// </remarks>
+    private static void ConfigureUserLookup(Fixture fixture, string userId, bool hasCredential, bool isAdmin)
+    {
+        fixture.RoleGrantsResponder = request =>
+        {
+            string path = request.RequestUri!.AbsolutePath;
+            if (path == $"/api/users/{userId}")
+            {
+                return JsonApiResponse(HttpStatusCode.OK, new
+                {
+                    data = new { type = "users", id = userId, attributes = new { email = "jo@pack44.org", displayName = (string?)null, hasCredential } }
+                });
+            }
+
+            if (path != "/api/roleGrants")
+            {
+                return null;
+            }
+
+            object[] grants = isAdmin
+                ? [new { type = "roleGrants", id = Guid.NewGuid().ToString(), attributes = new { userId, roleId = RoleIds.Admin, eventId = (Guid?)null } }]
+                : [];
+            return JsonApiResponse(HttpStatusCode.OK, new { data = grants });
+        };
+    }
+
     private static IdentityUserDto SeedUser(string email, bool hasPassword) => new()
     {
         Id = Guid.NewGuid().ToString(),
