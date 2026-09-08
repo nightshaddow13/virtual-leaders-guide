@@ -6,7 +6,6 @@ using AngleSharp.Dom;
 using Bunit;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
-using VirtualLeadersGuide.Identity.Contracts;
 using VirtualLeadersGuide.Web.Components.Pages;
 using VirtualLeadersGuide.Web.Identity;
 
@@ -158,9 +157,7 @@ public class UserDetailShould : BunitContext
         attributes = new { email = "pat@troop12.org", displayName = "Pat Riley", hasCredential, isAdmin = false, isDirector = true }
     };
 
-    private static object[] GrantsResource(bool isAdmin) => isAdmin
-        ? [new { type = "roleGrants", id = Guid.NewGuid().ToString(), attributes = new { userId = UserId, roleId = RoleIds.Admin, eventId = (Guid?)null } }]
-        : [];
+    private static object[] GrantsResource(bool isAdmin) => isAdmin ? AdminRoleGrantResource.ForUser(UserId) : [];
 
     private static HttpResponseMessage JsonResponse<T>(HttpStatusCode statusCode, T body)
     {

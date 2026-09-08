@@ -296,9 +296,7 @@ public class DirectorInviteServiceShould
                 return null;
             }
 
-            object[] grants = isAdmin
-                ? [new { type = "roleGrants", id = Guid.NewGuid().ToString(), attributes = new { userId, roleId = RoleIds.Admin, eventId = (Guid?)null } }]
-                : [];
+            object[] grants = isAdmin ? AdminRoleGrantResource.ForUser(userId) : [];
             return JsonApiResponse(HttpStatusCode.OK, new { data = grants });
         };
     }
