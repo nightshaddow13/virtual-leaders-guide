@@ -216,6 +216,50 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
                 new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
         });
 
+    [Fact(DisplayName = "Given an Admin viewing an activated User's detail page, when they delete the User and confirm, then the User disappears from the Users screen")]
+    public async Task GivenAnAdminViewingAnActivatedUsersDetailPage_WhenTheyDeleteTheUserAndConfirm_ThenTheUserDisappearsFromTheUsersScreen() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            IdentityUserDto user = await CreateTrackedUserAsync("e2e-delete-user", CancellationToken.None);
+
+            await SearchUsersAsync(user.Email!);
+            await OpenUserRowAsync(user.Email!);
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Delete user" }).ClickAsync();
+
+            ILocator dialog = Page.Locator(".rz-dialog-content");
+            await Expect(dialog).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(dialog).ToContainTextAsync(user.Email!);
+            await dialog.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Delete", Exact = true }).ClickAsync();
+
+            await Expect(Page).ToHaveURLAsync(
+                new Uri(Fixture.WebBaseUrl, "dashboard/users").ToString(),
+                new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+            await FilterUsersAsync(user.Email!);
+            await Expect(Page.GetByText(user.Email!)).Not.ToBeVisibleAsync();
+        });
+
+    /// <remarks>Doesn't re-check the Users grid the way the confirm scenario above does - the point here is that nothing navigated away, which the still-visible button already proves.</remarks>
+    [Fact(DisplayName = "Given the delete-User dialog is open, when an Admin cancels instead, then the User stays on their own detail page")]
+    public async Task GivenTheDeleteUserDialogIsOpen_WhenAnAdminCancelsInstead_ThenTheUserStaysOnTheirOwnDetailPage() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            IdentityUserDto user = await CreateTrackedUserAsync("e2e-cancel-delete-user", CancellationToken.None);
+
+            await SearchUsersAsync(user.Email!);
+            await OpenUserRowAsync(user.Email!);
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Delete user" }).ClickAsync();
+
+            ILocator dialog = Page.Locator(".rz-dialog-content");
+            await Expect(dialog).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await dialog.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Cancel", Exact = true }).ClickAsync();
+
+            await Expect(dialog).Not.ToBeVisibleAsync();
+            await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Delete user" }))
+                .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+        });
+
     /// <remarks>
     /// Same happens-before reasoning as <see cref="PasswordResetScenarios.EstablishNoEmailWasWrittenHappensBeforeAsync"/>:
     /// proving a negative needs a known email to land afterward, not a sleep.

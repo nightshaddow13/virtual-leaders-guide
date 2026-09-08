@@ -158,6 +158,61 @@ public sealed class DirectorInviteService(
         return RevokeOutcome.Revoked;
     }
 
+    /// <summary>
+    /// Deletes a User's account outright (P2-19, #114): the <c>ApplicationUser</c> row, and the database's
+    /// own cascade removes its <c>UserRole</c> rows - the Director Role, and every Event-scoped Grant.
+    /// </summary>
+    /// <param name="userId">The target User's id.</param>
+    /// <param name="callerUserId">The signed-in Admin's own id, for <see cref="UserDeleteOutcome.TargetIsSelf"/>.</param>
+    /// <param name="cancellationToken">Propagated to Api calls.</param>
+    /// <remarks>
+    /// Enforces ADR-0045's two guard rules itself, not just at the UI layer - a stale page can still reach
+    /// this call after its Danger zone button was rendered enabled. Unlike <see cref="RevokeAsync"/>, this
+    /// has no activation gate: it deletes an un-activated Invite's row just as readily as an activated
+    /// User's - the Users screen is what restricts Delete to the ACTIVE branch and Revoke to the INVITED
+    /// one, not this method. A caught <see cref="DirectorDataUnavailableException"/> from the Admin-check
+    /// fetch returns <see cref="UserDeleteOutcome.StoreUnavailable"/> rather than proceeding without
+    /// knowing whether the target holds Admin, matching <see cref="InviteAsync"/>'s own degrade-on-failure
+    /// shape.
+    /// </remarks>
+    public async Task<UserDeleteOutcome> DeleteAsync(
+        string userId, string callerUserId, CancellationToken cancellationToken)
+    {
+        if (userId == callerUserId)
+        {
+            return UserDeleteOutcome.TargetIsSelf;
+        }
+
+        ApplicationUser? user = await userManager.FindByIdAsync(userId);
+        if (user is null)
+        {
+            return UserDeleteOutcome.NotFound;
+        }
+
+        UserRowDto? row;
+        try
+        {
+            row = await directorClient.GetUserAsync(userId, cancellationToken);
+        }
+        catch (DirectorDataUnavailableException)
+        {
+            return UserDeleteOutcome.StoreUnavailable;
+        }
+
+        if (row is null)
+        {
+            return UserDeleteOutcome.NotFound;
+        }
+
+        if (row.IsAdmin)
+        {
+            return UserDeleteOutcome.TargetIsAdmin;
+        }
+
+        await userManager.DeleteAsync(user);
+        return UserDeleteOutcome.Deleted;
+    }
+
     /// <remarks>
     /// Mirrors <c>ForgotPassword.razor</c>'s own link-generation: <c>GenerateUserTokenAsync</c> (the
     /// <c>"Invite"</c> provider, not <c>GeneratePasswordResetTokenAsync</c>) -&gt; Base64Url -&gt;

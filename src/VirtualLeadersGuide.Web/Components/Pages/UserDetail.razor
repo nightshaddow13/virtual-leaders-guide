@@ -59,5 +59,24 @@
                 Assign Events from the Event's own Directors section, not from here (ADR-0035).
             </RadzenText>
         }
+
+        @if (user.HasCredential)
+        {
+            <RadzenStack Orientation="Orientation.Vertical" Gap="0.5rem" Style="margin-block-start: 2rem;">
+                <h2>Danger zone</h2>
+                @if (CanDelete)
+                {
+                    <RadzenButton Text="Delete user" ButtonStyle="ButtonStyle.Danger" Disabled="@isDeleting"
+                                  Click="DeleteAsync" Style="align-self: flex-start;" />
+                }
+                else
+                {
+                    <span @ref="deleteGuardAnchor" style="align-self: flex-start;"
+                          @onmouseenter="@(() => TooltipService.Open(deleteGuardAnchor, DeleteGuardTooltipText))">
+                        <RadzenButton Text="Delete user" ButtonStyle="ButtonStyle.Danger" Disabled="true" />
+                    </span>
+                }
+            </RadzenStack>
+        }
         break;
 }
