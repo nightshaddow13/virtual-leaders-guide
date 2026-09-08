@@ -144,8 +144,8 @@ Director may hold any number of Grants, including zero. Made by an Admin, from t
 never the reverse — and only to a User who already holds the Director Role (see Invite for how that's
 established). Stored as a `UserRole` row with a non-null `EventId`, exposed to Admins at `/api/roleGrants`.
 Taking one away is **Removed**, from the Event, leaving the Role itself untouched.
-_Avoid_: Assignment, Permission. Revoke (as the verb for this - reserved for undoing an un-activated Invite,
-a full teardown of the User itself, see Invite - a larger and different act than removing one Grant).
+_Avoid_: Assignment, Permission. Revoke or Delete (both are full teardowns of the User itself - see
+Invite/Delete - a larger and different act than removing one Grant).
 
 **Admin**:
 A platform-wide Role: holding it already is full access — can create, edit, and delete any Event's content,
@@ -176,8 +176,18 @@ An Admin creates a User by email before that person has ever signed in, and gran
 immediately, unscoped (see Director) — delivered via an app-sent email with a password-setup link, not a
 copyable link for the Admin to relay. Setting a password doesn't change what Role or Grants the person
 holds; it only lets them sign in to exercise them. An Admin can revoke an un-activated Invite outright,
-deleting the User and anything (the Role, any Grants assigned before activation) attached to it.
+removing the User and anything (the Role, any Grants assigned before activation) attached to it. See Delete
+for the equivalent teardown once the User has activated.
 _Avoid_: Invitation link, copy-link invite
+
+**Delete**:
+An Admin permanently removes a User's account - the row itself, and every Role and Grant it holds (the
+Director Role, and any Event-scoped Grants) - with no recovery path. Guarded against two targets: a User
+holding the Admin Role (remove them from the Admin allowlist instead - the database row isn't the source of
+truth there) and the signed-in Admin's own account (use Account settings' own flow instead). Distinct from
+Revoke, which undoes an un-activated Invite specifically - the Users screen only ever offers Delete for an
+activated account, Revoke for one that isn't, even though both end in the same row disappearing.
+_Avoid_: Remove (already means taking away one Grant, leaving the Role and the rest of the User intact)
 
 **Leaders Guide**:
 The public-facing destination for an Event — what a visitor reaches after entering the Passcode. Contains the
