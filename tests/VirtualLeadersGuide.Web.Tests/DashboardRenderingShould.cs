@@ -111,6 +111,99 @@ public class DashboardRenderingShould : BunitContext
         Assert.DoesNotContain(cut.FindAll("button"), button => button.GetAttribute("aria-label") == "Delete");
     }
 
+    /// <remarks>P2-21 (#116) - same Admin-only gate as Delete, one column over.</remarks>
+    [Fact]
+    public void ShowDuplicateIcon_WhenTheSignedInUserIsAnAdmin_ForOnInitializedAsync()
+    {
+        Services.AddSingleton(ApiClientTestFactory.CreateEventClient(StubHttpMessageHandler.RespondingWithJson(
+            HttpStatusCode.OK, new { data = new[] { EventResource("Fall Camporee", "fall-camporee") } })));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("admin-1");
+        auth.SetRoles("Admin");
+
+        IRenderedComponent<Dashboard> cut = Render<Dashboard>();
+
+        Assert.Contains(cut.FindAll("button"), button => button.GetAttribute("aria-label") == "Duplicate");
+    }
+
+    [Fact]
+    public void HideDuplicateIcon_WhenTheSignedInUserIsADirector_ForOnInitializedAsync()
+    {
+        Services.AddSingleton(ApiClientTestFactory.CreateEventClient(StubHttpMessageHandler.RespondingWithJson(
+            HttpStatusCode.OK, new { data = new[] { EventResource("Fall Camporee", "fall-camporee") } })));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("director-1");
+        auth.SetRoles("Director");
+
+        IRenderedComponent<Dashboard> cut = Render<Dashboard>();
+
+        Assert.DoesNotContain(cut.FindAll("button"), button => button.GetAttribute("aria-label") == "Duplicate");
+    }
+
+    /// <remarks>
+    /// P2-21 (#116, ADR-0054) - Duplicate makes no Api call, so this only has to prove the navigation carries
+    /// the row's own Starts at/Ends at (already in hand from the grid, per <c>BuildDuplicateUrl</c>'s remarks)
+    /// through to <c>EventEditor</c>'s query string. The expected escaped values are computed independently
+    /// here from <see cref="EventResource"/>'s own fixture dates, not by calling <c>BuildDuplicateUrl</c>
+    /// itself - this is checking the wiring, not re-deriving the same string.
+    /// </remarks>
+    [Fact]
+    public void NavigateToNewEventWithTheSourcesDates_WhenDuplicateIconIsClicked_ForBuildDuplicateUrl()
+    {
+        Services.AddSingleton(ApiClientTestFactory.CreateEventClient(StubHttpMessageHandler.RespondingWithJson(
+            HttpStatusCode.OK, new { data = new[] { EventResource("Fall Camporee", "fall-camporee") } })));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("admin-1");
+        auth.SetRoles("Admin");
+
+        IRenderedComponent<Dashboard> cut = Render<Dashboard>();
+        IElement duplicateButton = cut.FindAll("button")
+            .Single(button => button.GetAttribute("aria-label") == "Duplicate");
+        duplicateButton.Click();
+
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        string expectedStartsAt = Uri.EscapeDataString(new DateTimeOffset(2026, 6, 12, 9, 0, 0, TimeSpan.Zero).ToString("o"));
+        string expectedEndsAt = Uri.EscapeDataString(new DateTimeOffset(2026, 6, 14, 17, 0, 0, TimeSpan.Zero).ToString("o"));
+        Assert.Contains($"dashboard/events/new?startsAt={expectedStartsAt}&endsAt={expectedEndsAt}", navigation.Uri, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void NavigateToNewEventWithNoDateParameters_WhenDuplicatingAnEventWithNoDatesSet_ForBuildDuplicateUrl()
+    {
+        Services.AddSingleton(ApiClientTestFactory.CreateEventClient(StubHttpMessageHandler.RespondingWithJson(
+            HttpStatusCode.OK, new
+            {
+                data = new[]
+                {
+                    new
+                    {
+                        type = "events",
+                        id = Guid.NewGuid().ToString(),
+                        attributes = new
+                        {
+                            name = "Undated Event",
+                            slug = "undated-event",
+                            passcode = "TigerLantern",
+                            status = "Draft",
+                            startsAt = (DateTimeOffset?)null,
+                            endsAt = (DateTimeOffset?)null
+                        }
+                    }
+                }
+            })));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("admin-1");
+        auth.SetRoles("Admin");
+
+        IRenderedComponent<Dashboard> cut = Render<Dashboard>();
+        IElement duplicateButton = cut.FindAll("button")
+            .Single(button => button.GetAttribute("aria-label") == "Duplicate");
+        duplicateButton.Click();
+
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        Assert.EndsWith("dashboard/events/new", navigation.Uri, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void ShowAnInlineError_WhenTheEventStoreIsUnavailable_ForLoadDataAsync()
     {
