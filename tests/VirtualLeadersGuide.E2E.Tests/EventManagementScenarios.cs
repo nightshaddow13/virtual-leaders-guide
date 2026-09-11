@@ -33,6 +33,14 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// <c>GoLiveAsync</c> optimistically sets <c>Live</c> locally without re-fetching, so only a fresh
 /// <c>GET</c> exercises Api's own <c>OnSerialize</c> computing <c>Past</c>.
 /// </remarks>
+/// <remarks>
+/// Duplicate coverage (P2-21, #116, ADR-0054) - proves the full deviation from the issue's own filed AC in
+/// one pass: the source's dates land pre-filled but its Name doesn't (the Admin types a fresh one), the
+/// source going Live first proves the duplicate is Draft regardless of the source's Status (nothing here ever
+/// sets the duplicate's Status directly - it's Draft because nothing ever moved it), and Slug/Passcode are
+/// read directly off the source's own edit form rather than re-derived, so the "never the source's" comparison
+/// is against what the source actually has, not an assumption about what it should be.
+/// </remarks>
 [Collection(nameof(AspireE2ECollection))]
 public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
 {
@@ -364,14 +372,6 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
             await Expect(Page.GetByText(name)).Not.ToBeVisibleAsync();
         });
 
-    /// <remarks>
-    /// P2-21 (#116, ADR-0054) - proves the full deviation from the issue's own filed AC in one pass: the
-    /// source's dates land pre-filled but its Name doesn't (the Admin types a fresh one), the source going
-    /// Live first proves the duplicate is Draft regardless of the source's Status (unlike Starts at/Ends at,
-    /// nothing here ever sets the duplicate's Status directly - it's Draft because nothing ever moved it),
-    /// and Slug/Passcode are read directly off the source's own edit form (not re-derived) so the "never the
-    /// source's" comparison is against what the source actually has, not an assumption about what it should be.
-    /// </remarks>
     [Fact(DisplayName = "Given a Live Event with dates set, when an Admin duplicates it, then the new Event pre-fills the dates, needs its own Name, and lands Draft with a fresh Slug and Passcode")]
     public async Task GivenALiveEventWithDatesSet_WhenAnAdminDuplicatesIt_ThenTheNewEventPreFillsTheDatesNeedsItsOwnNameAndLandsDraftWithAFreshSlugAndPasscode() =>
         await RunAsync(async () =>

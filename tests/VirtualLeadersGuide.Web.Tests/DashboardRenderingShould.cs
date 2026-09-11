@@ -22,6 +22,12 @@ namespace VirtualLeadersGuide.Web.Tests;
 /// not literally everything), a static "ALL EVENTS" label would be actively wrong the moment a Past/Cancelled
 /// Event exists.
 /// </remarks>
+/// <remarks>
+/// Duplicate coverage (P2-21, #116, ADR-0054): <c>NavigateToNewEventWithTheSourcesDates_...</c> computes its
+/// expected escaped query values independently from <see cref="EventResource"/>'s own fixture dates, rather
+/// than calling <c>BuildDuplicateUrl</c> itself - that's deliberate, not an oversight to simplify later:
+/// calling the same production helper the assertion is checking would make the test tautological.
+/// </remarks>
 public class DashboardRenderingShould : BunitContext
 {
     /// <remarks>
@@ -111,7 +117,6 @@ public class DashboardRenderingShould : BunitContext
         Assert.DoesNotContain(cut.FindAll("button"), button => button.GetAttribute("aria-label") == "Delete");
     }
 
-    /// <remarks>P2-21 (#116) - same Admin-only gate as Delete, one column over.</remarks>
     [Fact]
     public void ShowDuplicateIcon_WhenTheSignedInUserIsAnAdmin_ForOnInitializedAsync()
     {
@@ -140,13 +145,6 @@ public class DashboardRenderingShould : BunitContext
         Assert.DoesNotContain(cut.FindAll("button"), button => button.GetAttribute("aria-label") == "Duplicate");
     }
 
-    /// <remarks>
-    /// P2-21 (#116, ADR-0054) - Duplicate makes no Api call, so this only has to prove the navigation carries
-    /// the row's own Starts at/Ends at (already in hand from the grid, per <c>BuildDuplicateUrl</c>'s remarks)
-    /// through to <c>EventEditor</c>'s query string. The expected escaped values are computed independently
-    /// here from <see cref="EventResource"/>'s own fixture dates, not by calling <c>BuildDuplicateUrl</c>
-    /// itself - this is checking the wiring, not re-deriving the same string.
-    /// </remarks>
     [Fact]
     public void NavigateToNewEventWithTheSourcesDates_WhenDuplicateIconIsClicked_ForBuildDuplicateUrl()
     {
