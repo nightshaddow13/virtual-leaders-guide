@@ -112,10 +112,10 @@ _Avoid_: Archived, Active/Inactive — "archived" is not a stored value here; it
 "Status is `Past` or `Cancelled`," used only to describe hiding an Event from the default dashboard list.
 
 **Duplicate**:
-An Admin action that creates a new Event by copying another's fields (Name, Starts at/Ends at, and any future
-content) as a starting point, rather than typing one in from scratch. The new Event gets its own Slug and
-Passcode — never the source's — and always starts in `Draft` Status, regardless of the source's. Directors
-are never copied - a Grant is a decision about one specific Event.
+An Admin action that creates a new Event as a starting point from another's Starts at/Ends at (and any future
+content) - never its Name, which the Admin always types fresh, same as Slug and Passcode, which are always
+freshly generated. Always starts in `Draft` Status, regardless of the source's. Directors are never copied - a
+Grant is a decision about one specific Event.
 _Avoid_: Template, Clone, Copy (as the verb - this app says Duplicate)
 
 **User**:

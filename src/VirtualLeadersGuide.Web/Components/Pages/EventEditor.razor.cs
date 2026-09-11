@@ -45,6 +45,20 @@ public partial class EventEditor
     [Parameter]
     public Guid? Id { get; set; }
 
+    /// <remarks>
+    /// P2-21 (#116, ADR-0054): <c>Dashboard.razor.cs</c>'s <c>BuildDuplicateUrl</c> is the only writer of this
+    /// query parameter - it carries a duplicated Event's source Starts at, round-trip ("o") formatted, so this
+    /// page can pre-fill <see cref="EventFormModel.StartsAtLocal"/> without a second Api round trip for data
+    /// the Dashboard already had in hand. Only consumed on the <c>Id is null</c> path of
+    /// <see cref="OnParametersSetAsync"/> - irrelevant, and never sent, when editing an existing Event.
+    /// </remarks>
+    [SupplyParameterFromQuery(Name = "startsAt")]
+    private string? DuplicateStartsAtQuery { get; set; }
+
+    /// <remarks>See <see cref="DuplicateStartsAtQuery"/> - same mechanism, for Ends at.</remarks>
+    [SupplyParameterFromQuery(Name = "endsAt")]
+    private string? DuplicateEndsAtQuery { get; set; }
+
     [CascadingParameter]
     private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
 
@@ -90,6 +104,17 @@ public partial class EventEditor
     /// </remarks>
     private EventDto? loadedDto;
 
+    /// <remarks>
+    /// P2-21 (#116): the <c>Id is null</c> counterpart to <see cref="loadedDto"/> - parsed once from
+    /// <see cref="DuplicateStartsAtQuery"/>/<see cref="DuplicateEndsAtQuery"/> in
+    /// <see cref="OnParametersSetAsync"/>, retained so <see cref="OnAfterRenderAsync"/> can re-derive
+    /// <see cref="EventFormModel.StartsAtLocal"/>/<see cref="EventFormModel.EndsAtLocal"/> from it once the
+    /// real <see cref="viewerZone"/> is known, the same two-phase dance <see cref="loadedDto"/> already does
+    /// for an existing Event. <see langword="null"/>/<see langword="null"/> on an ordinary new Event, where
+    /// neither query parameter was ever sent.
+    /// </remarks>
+    private (DateTimeOffset? StartsAt, DateTimeOffset? EndsAt) duplicateSource;
+
     /// <remarks>See <c>Dashboard.razor.cs</c>'s identically-named field - same UTC-fallback-until-resolved shape.</remarks>
     private TimeZoneInfo viewerZone = TimeZoneInfo.Utc;
 
@@ -127,7 +152,12 @@ public partial class EventEditor
                 return;
             }
 
-            model = new EventFormModel();
+            duplicateSource = (ParseQueryDate(DuplicateStartsAtQuery), ParseQueryDate(DuplicateEndsAtQuery));
+            model = new EventFormModel
+            {
+                StartsAtLocal = ToLocalWallClock(duplicateSource.StartsAt),
+                EndsAtLocal = ToLocalWallClock(duplicateSource.EndsAt)
+            };
             BuildEditContext();
             state = PageState.Admin;
             return;
@@ -183,9 +213,11 @@ public partial class EventEditor
     /// Interop is only legal once the circuit has connected - <paramref name="firstRender"/> is the earliest
     /// safe point (matches <c>Dashboard.razor.cs</c>). <see cref="OnParametersSetAsync"/> already ran by
     /// then and populated <see cref="EventFormModel.StartsAtLocal"/>/<see cref="EventFormModel.EndsAtLocal"/>
-    /// against the UTC fallback, so they're re-derived here from <see cref="loadedDto"/> once the real zone
-    /// is known, then re-rendered - a signed-in Admin from a non-UTC zone would otherwise see a Start/End
-    /// that's shifted from what's actually stored for the brief window before the circuit connects.
+    /// against the UTC fallback, so they're re-derived here - from <see cref="loadedDto"/> when editing an
+    /// existing Event, from <see cref="duplicateSource"/> (P2-21, #116) when <c>Id is null</c> - once the real
+    /// zone is known, then re-rendered. Either way, a signed-in Admin from a non-UTC zone would otherwise see
+    /// a Start/End that's shifted from what's actually stored (or what the duplicated source carried) for the
+    /// brief window before the circuit connects.
     /// </remarks>
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -201,12 +233,27 @@ public partial class EventEditor
             model.StartsAtLocal = ToLocalWallClock(loadedDto.StartsAt);
             model.EndsAtLocal = ToLocalWallClock(loadedDto.EndsAt);
         }
+        else if (model is not null && Id is null)
+        {
+            model.StartsAtLocal = ToLocalWallClock(duplicateSource.StartsAt);
+            model.EndsAtLocal = ToLocalWallClock(duplicateSource.EndsAt);
+        }
 
         StateHasChanged();
     }
 
     private DateTime? ToLocalWallClock(DateTimeOffset? utc) =>
         utc is null ? null : TimeZoneInfo.ConvertTime(utc.Value, viewerZone).DateTime;
+
+    /// <remarks>
+    /// A missing or malformed query value (no <c>startsAt</c>/<c>endsAt</c> at all - an ordinary "+ New event"
+    /// click - or a tampered/hand-edited URL) is treated as "nothing to pre-fill", not an error state: the
+    /// form still renders, just blank, exactly like a plain new Event. <see cref="DateTimeOffset.TryParse(string?, out DateTimeOffset)"/>'s
+    /// round-trip parsing matches <c>Dashboard.razor.cs</c>'s <c>BuildDuplicateUrl</c>, which always writes
+    /// with the <c>"o"</c> format.
+    /// </remarks>
+    private static DateTimeOffset? ParseQueryDate(string? value) =>
+        value is not null && DateTimeOffset.TryParse(value, out DateTimeOffset parsed) ? parsed : null;
 
     /// <remarks>
     /// The inverse of <see cref="ToLocalWallClock"/> - <paramref name="localWallClock"/> is what

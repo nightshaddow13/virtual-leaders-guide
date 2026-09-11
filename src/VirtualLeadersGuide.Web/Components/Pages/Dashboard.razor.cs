@@ -41,12 +41,13 @@ public partial class Dashboard
     /// <remarks>
     /// Not the icon buttons' own ~44px each: the grid renders with a fixed table layout
     /// (<c>rz-grid-table-fixed</c>), so a column can never grow to fit its content - one narrower than the
-    /// buttons clips them against the cell's padding box instead of just looking cramped. Two buttons (Edit/
-    /// View plus, for an Admin, Delete - P2-17, #112) at ~44px each, a 4px gap between them, and the same
-    /// breathing room on both sides that 76px reserved for one button, comes to 128px. The buttons themselves
-    /// are icon-only, not text - see ADR-0037 for the row-action convention this establishes.
+    /// buttons clips them against the cell's padding box instead of just looking cramped. Three buttons for an
+    /// Admin (Edit, Duplicate - P2-21, #116, and Delete - P2-17, #112; a Director only ever sees the first) at
+    /// ~44px each, two 4px gaps between them, and the same breathing room on both sides that 76px reserved for
+    /// one button, comes to 172px. The buttons themselves are icon-only, not text - see ADR-0037 for the
+    /// row-action convention this establishes.
     /// </remarks>
-    private const string ActionColumnWidth = "128px";
+    private const string ActionColumnWidth = "172px";
 
     /// <remarks>
     /// Same fixed-table-layout reasoning as <see cref="ActionColumnWidth"/> - the STATUS column's own badge
@@ -169,6 +170,32 @@ public partial class Dashboard
         }
 
         isLoading = false;
+    }
+
+    /// <remarks>
+    /// P2-21 (#116, ADR-0054): Duplicate makes no API call of its own - it navigates to the same "New event"
+    /// route <c>+ New event</c> already opens, carrying only <paramref name="source"/>'s Starts at/Ends at
+    /// through the query string so <c>EventEditor</c> opens with those two fields pre-filled and everything
+    /// else (Name, Slug, Passcode) blank, same as an ordinary new Event. The round-trip ("o") format matches
+    /// what <see cref="DateTimeOffset.TryParse(string?, out DateTimeOffset)"/> on the receiving end expects.
+    /// A <see langword="null"/> date is omitted entirely, not sent as an empty parameter - there's nothing for
+    /// the receiving side to parse either way, and omitting keeps the URL from claiming a value exists.
+    /// </remarks>
+    private static string BuildDuplicateUrl(EventDto source)
+    {
+        var query = new List<string>();
+
+        if (source.StartsAt is { } startsAt)
+        {
+            query.Add($"startsAt={Uri.EscapeDataString(startsAt.ToString("o"))}");
+        }
+
+        if (source.EndsAt is { } endsAt)
+        {
+            query.Add($"endsAt={Uri.EscapeDataString(endsAt.ToString("o"))}");
+        }
+
+        return query.Count == 0 ? "dashboard/events/new" : $"dashboard/events/new?{string.Join('&', query)}";
     }
 
     /// <remarks>

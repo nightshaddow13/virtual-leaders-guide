@@ -52,6 +52,8 @@
                                       Click="@(() => NavigationManager.NavigateTo($"dashboard/events/{item.Id}"))" />
                         @if (accessView.IsAdmin)
                         {
+                            <RadzenButton Icon="content_copy" ButtonStyle="ButtonStyle.Light" aria-label="Duplicate"
+                                          Click="@(() => NavigationManager.NavigateTo(BuildDuplicateUrl(item)))" />
                             <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" aria-label="Delete"
                                           Click="@(() => DeleteAsync(item))" />
                         }

@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 using VirtualLeadersGuide.Identity.Contracts;
 
@@ -31,6 +32,14 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// live rather than asserting on the immediate post-click state, since <c>EventEditor.razor.cs</c>'s
 /// <c>GoLiveAsync</c> optimistically sets <c>Live</c> locally without re-fetching, so only a fresh
 /// <c>GET</c> exercises Api's own <c>OnSerialize</c> computing <c>Past</c>.
+/// </remarks>
+/// <remarks>
+/// Duplicate coverage (P2-21, #116, ADR-0054) - proves the full deviation from the issue's own filed AC in
+/// one pass: the source's dates land pre-filled but its Name doesn't (the Admin types a fresh one), the
+/// source going Live first proves the duplicate is Draft regardless of the source's Status (nothing here ever
+/// sets the duplicate's Status directly - it's Draft because nothing ever moved it), and Slug/Passcode are
+/// read directly off the source's own edit form rather than re-derived, so the "never the source's" comparison
+/// is against what the source actually has, not an assumption about what it should be.
 /// </remarks>
 [Collection(nameof(AspireE2ECollection))]
 public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
@@ -361,6 +370,75 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
 
             await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
             await Expect(Page.GetByText(name)).Not.ToBeVisibleAsync();
+        });
+
+    [Fact(DisplayName = "Given a Live Event with dates set, when an Admin duplicates it, then the new Event pre-fills the dates, needs its own Name, and lands Draft with a fresh Slug and Passcode")]
+    public async Task GivenALiveEventWithDatesSet_WhenAnAdminDuplicatesIt_ThenTheNewEventPreFillsTheDatesNeedsItsOwnNameAndLandsDraftWithAFreshSlugAndPasscode() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid sourceId, string sourceName) = await CreateEventAsync("Duplicate Source");
+
+            await Page.GotoAsync(EventEditorUrl(sourceId));
+            await Page.Locator("#StartsAt").FillAsync("2028-06-12T09:00");
+            await Page.Locator("#EndsAt").FillAsync("2028-06-14T17:00");
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" }).ClickAsync();
+            await Expect(Page).ToHaveURLAsync(
+                new Uri(Fixture.WebBaseUrl, "dashboard").ToString(),
+                new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+
+            await Page.GotoAsync(EventEditorUrl(sourceId));
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Go live" }).ClickAsync();
+            await Expect(Page.GetByText("LIVE", new PageGetByTextOptions { Exact = true })).ToBeVisibleAsync(
+                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            string sourceSlug = await Page.Locator("#Slug").InputValueAsync();
+            string sourcePasscode = await Page.Locator("#Passcode").InputValueAsync();
+
+            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
+            ILocator sourceRow = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = sourceName });
+            await sourceRow.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Duplicate" }).ClickAsync();
+
+            await Expect(Page).ToHaveURLAsync(
+                new Regex(@"dashboard/events/new\?startsAt=.*&endsAt=.*"),
+                new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(Page.Locator("#Name")).ToHaveValueAsync(string.Empty);
+            await Expect(Page.GetByText("Directors")).Not.ToBeVisibleAsync();
+            await Expect(Page.Locator("#StartsAt")).ToHaveValueAsync("2028-06-12T09:00");
+            await Expect(Page.Locator("#EndsAt")).ToHaveValueAsync("2028-06-14T17:00");
+
+            string duplicateName = $"e2e-Duplicated {Guid.NewGuid():n}";
+            await Page.Locator("#Name").FillAsync(duplicateName);
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create event" }).ClickAsync();
+            await Expect(Page).ToHaveURLAsync(
+                new Regex(@"dashboard/events/[0-9a-f-]{36}$"), new PageAssertionsToHaveURLOptions { Timeout = 20_000 });
+
+            string path = new Uri(Page.Url).AbsolutePath;
+            Guid duplicateId = Guid.Parse(path[(path.LastIndexOf('/') + 1)..]);
+            TrackEvent(duplicateId);
+
+            Assert.NotEqual(sourceId, duplicateId);
+            await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Go live" })).ToBeVisibleAsync(
+                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            string duplicateSlug = await Page.Locator("#Slug").InputValueAsync();
+            string duplicatePasscode = await Page.Locator("#Passcode").InputValueAsync();
+            Assert.NotEqual(sourceSlug, duplicateSlug);
+            Assert.NotEqual(sourcePasscode, duplicatePasscode);
+        });
+
+    [Fact(DisplayName = "Given a Director, when viewing the dashboard, then no duplicate action is available")]
+    public async Task GivenADirector_WhenViewingTheDashboard_ThenNoDuplicateActionIsAvailable() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid assignedEventId, string assignedName) = await CreateEventAsync("Director Viewable Duplicate");
+            await SignOutAsync();
+
+            await CreateAndSignInDirectorAsync(assignedEventId);
+
+            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
+            ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = assignedName });
+            await Expect(row).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(row.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Duplicate" })).Not.ToBeVisibleAsync();
         });
 
     /// <remarks>
