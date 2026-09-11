@@ -8,7 +8,10 @@ using VirtualLeadersGuide.Identity.Contracts;
 
 namespace VirtualLeadersGuide.Api.Data;
 
-/// <summary>Adds the app's Role/UserRole/Event tables alongside <see cref="IdentityDbContext{TUser}"/>'s own.</summary>
+/// <summary>
+/// Adds the app's Role/UserRole/Event/Page/InfoPage/PageType tables alongside
+/// <see cref="IdentityDbContext{TUser}"/>'s own.
+/// </summary>
 /// <remarks>
 /// See ADR-0017/ADR-0024 and CONTEXT.md's <c>User</c> entry for why <see cref="Role"/>/<see cref="UserRole"/>
 /// are a separate, app-owned concept, and why <see cref="ApplicationUser"/> — not a domain <c>User</c> row —
@@ -16,6 +19,13 @@ namespace VirtualLeadersGuide.Api.Data;
 /// (ADR-0017's Consequences), same as <c>AspNetRoles</c> — see <c>IdentityEntitiesAreNotJsonApiResourcesShould</c>
 /// and <c>DomainAuthorizationEntitiesAreNotJsonApiResourcesShould</c>. <see cref="UserRole"/> is exposed,
 /// Admin-only, at <c>/api/roleGrants</c> (P2-8, #17; ADR-0033) — see <c>UserRoleResourceDefinition</c>.
+/// </remarks>
+/// <remarks>
+/// <see cref="Page"/>/<see cref="InfoPage"/>/<see cref="PageType"/> (P5-15, #20) are mapped Table-Per-Type -
+/// see ADR-0055. None of the three is <c>Identifiable&lt;Guid&gt;</c> yet, so none is exposed as a
+/// JsonApiDotNetCore resource regardless of the missing <c>[Resource]</c> attribute (see <see cref="Page"/>'s
+/// remarks for why that distinction matters) - see <c>PageEntitiesAreNotJsonApiResourcesShould</c>. P5-16
+/// (#21) is what turns <see cref="InfoPage"/> into a resource.
 /// </remarks>
 public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDbContext> options)
     : IdentityDbContext<ApplicationUser>(options)
@@ -35,6 +45,17 @@ public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDb
     /// <summary>Every <see cref="Event"/> row.</summary>
     public DbSet<Event> Events => Set<Event>();
 
+    /// <remarks>
+    /// <see cref="PageType"/> stays a plain POCO, never exposed as a JsonApiDotNetCore resource, same posture
+    /// as <see cref="Role"/> - see <c>PageEntitiesAreNotJsonApiResourcesShould</c>.
+    /// </remarks>
+    public DbSet<PageType> PageTypes => Set<PageType>();
+
+    /// <summary>Every <see cref="Page"/> row (base table - every row also has a matching subtype row).</summary>
+    public DbSet<Page> Pages => Set<Page>();
+
+    public DbSet<InfoPage> InfoPages => Set<InfoPage>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -42,6 +63,9 @@ public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDb
         builder.Entity<Role>(ConfigureRoles);
         builder.Entity<UserRole>(ConfigureUserRoles);
         builder.Entity<Event>(ConfigureEvents);
+        builder.Entity<PageType>(ConfigurePageTypes);
+        builder.Entity<Page>(ConfigurePages);
+        builder.Entity<InfoPage>(ConfigureInfoPages);
     }
 
     private static void ConfigureRoles(EntityTypeBuilder<Role> entity)
@@ -182,6 +206,56 @@ public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDb
     /// (ADR-0014).
     /// </remarks>
     private static string BuildStatusAllowedCheckSql() => "Status IN ('Draft', 'Live', 'Cancelled')";
+
+    private static void ConfigurePageTypes(EntityTypeBuilder<PageType> entity)
+    {
+        entity.ToTable("PageTypes");
+        entity.Property(pt => pt.Name).HasMaxLength(64);
+        entity.HasIndex(pt => pt.Name).IsUnique();
+        entity.HasData(new PageType { Id = PageTypeIds.InfoPage, Name = "InfoPage" });
+    }
+
+    /// <remarks>
+    /// <see cref="Microsoft.EntityFrameworkCore.RelationalEntityTypeBuilderExtensions.UseTptMappingStrategy{TEntity}"/>
+    /// is explicit rather than left to convention - see ADR-0055 for why TPT over TPH. The
+    /// <see cref="Page"/>→<see cref="Event"/> foreign key cascades, the same considered choice ADR-0044 made
+    /// for <see cref="UserRole"/>'s grant→Event foreign key: a Page is meaningless once its Event is gone. The
+    /// <see cref="Page"/>→<see cref="PageType"/> foreign key restricts, mirroring <see cref="UserRole"/>'s own
+    /// grant→Role foreign key - a lookup row can't be deleted out from under live rows.
+    /// </remarks>
+    private static void ConfigurePages(EntityTypeBuilder<Page> entity)
+    {
+        entity.ToTable("Pages", ConfigurePageCheckConstraints);
+        entity.UseTptMappingStrategy();
+
+        entity.Property(p => p.Title).HasMaxLength(200);
+
+        entity.HasOne(p => p.Event)
+            .WithMany()
+            .HasForeignKey(p => p.EventId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        entity.HasOne(p => p.PageType)
+            .WithMany(pt => pt.Pages)
+            .HasForeignKey(p => p.PageTypeId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        entity.HasIndex(p => p.EventId);
+    }
+
+    /// <remarks>
+    /// <see cref="Page.Title"/>'s setter already trims (<c>Page.cs</c>); this is the backstop for anything
+    /// that writes the column outside that setter, matching <see cref="BuildNameNotEmptyCheckSql"/>'s
+    /// portable <c>TRIM</c> form (ADR-0014: no <c>LEN()</c>/<c>LENGTH()</c> comparison is portable).
+    /// </remarks>
+    private static void ConfigurePageCheckConstraints(TableBuilder<Page> table) =>
+        table.HasCheckConstraint("CK_Pages_Title_NotEmpty", "TRIM(Title) <> ''");
+
+    /// <remarks>
+    /// <see cref="InfoPage.MarkdownContent"/> gets no max length - free-form authored content
+    /// (CONTEXT.md's InfoPage entry), same posture as <see cref="Event.Passcode"/> carrying no length cap.
+    /// </remarks>
+    private static void ConfigureInfoPages(EntityTypeBuilder<InfoPage> entity) => entity.ToTable("InfoPages");
 
     /// <remarks>
     /// <see cref="Event.Passcode"/>'s <see cref="IDataProtector"/> can't be constructor-injected:
