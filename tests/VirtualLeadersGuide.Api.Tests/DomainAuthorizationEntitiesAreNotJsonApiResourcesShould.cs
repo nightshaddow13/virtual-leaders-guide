@@ -1,6 +1,3 @@
-using System.Net;
-using System.Net.Http.Headers;
-
 namespace VirtualLeadersGuide.Api.Tests;
 
 /// <remarks>
@@ -11,34 +8,9 @@ namespace VirtualLeadersGuide.Api.Tests;
 /// <c>/api/roleGrants</c> (not <c>/api/userRoles</c> - see <c>UserRole</c>'s <c>[Resource(PublicName = ...)]</c>)
 /// - see <c>RoleGrantsResourceShould</c> for its positive coverage.
 /// </remarks>
-public class DomainAuthorizationEntitiesAreNotJsonApiResourcesShould : IAsyncLifetime
+public class DomainAuthorizationEntitiesAreNotJsonApiResourcesShould : NonResourceEntityShouldBase
 {
-    private const string JsonApiMediaType = "application/vnd.api+json";
-
-    private ApiWebApplicationFactory _factory = null!;
-    private HttpClient _client = null!;
-
-    public async Task InitializeAsync()
-    {
-        _factory = new ApiWebApplicationFactory();
-        await _factory.InitializeDatabaseAsync();
-        _client = _factory.CreateAuthenticatedClient();
-    }
-
-    public Task DisposeAsync()
-    {
-        _client.Dispose();
-        return _factory.DisposeAsync().AsTask();
-    }
-
     [Fact]
-    public async Task ReturnNotFound_WhenRequestingRolesAsAJsonApiResource_ForGetCollection()
-    {
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/roles");
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(JsonApiMediaType));
-
-        HttpResponseMessage response = await _client.SendAsync(request);
-
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-    }
+    public Task ReturnNotFound_WhenRequestingRolesAsAJsonApiResource_ForGetCollection() =>
+        AssertNotFoundAsync("/api/roles");
 }

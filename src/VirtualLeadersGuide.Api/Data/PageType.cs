@@ -12,9 +12,12 @@ namespace VirtualLeadersGuide.Api.Data;
 /// </remarks>
 public class PageType
 {
+    /// <summary>This PageType's identity (see <see cref="PageTypeIds"/> for the well-known value).</summary>
     public int Id { get; set; }
 
+    /// <summary>This PageType's display name (e.g. <c>"InfoPage"</c>).</summary>
     public required string Name { get; set; }
 
+    /// <summary>Every <see cref="Page"/> tagged with this PageType.</summary>
     public ICollection<Page> Pages { get; set; } = new List<Page>();
 }

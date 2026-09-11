@@ -21,11 +21,13 @@ namespace VirtualLeadersGuide.Api.Data;
 /// </remarks>
 public abstract class Page
 {
+    /// <summary>This Page's identity, shared with its subtype row's own primary key under TPT.</summary>
     public Guid Id { get; set; }
 
-    /// <summary>The Event this Page belongs to.</summary>
+    /// <summary>The <see cref="Event.Id"/> this Page belongs to.</summary>
     public required Guid EventId { get; set; }
 
+    /// <summary>The Event this Page belongs to.</summary>
     public Event? Event { get; set; }
 
     /// <summary>This Page's display title.</summary>
@@ -39,5 +41,6 @@ public abstract class Page
     /// <summary>The <see cref="PageType.Id"/> naming this Page's subtype (see <see cref="PageTypeIds"/>).</summary>
     public int PageTypeId { get; set; }
 
+    /// <summary>This Page's subtype (see <see cref="PageTypeId"/>).</summary>
     public PageType? PageType { get; set; }
 }
