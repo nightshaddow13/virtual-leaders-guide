@@ -1,4 +1,4 @@
-<Project Sdk="Aspire.AppHost.Sdk/13.4.6">
+<Project Sdk="Aspire.AppHost.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -6,12 +6,17 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <UserSecretsId>a8c36518-af46-4b6d-87a8-b128078f725f</UserSecretsId>
+    <!-- Aspire 13.5's SDK warns (ASPIRE010) unless AspireUseCliBundle=true, which resolves DCP/the
+         dashboard from an installed `aspire` CLI instead of NuGet. This repo deliberately has no `aspire`
+         CLI dependency - local dev and CI both use dotnet run/dotnet test only - so the NuGet-resolved
+         default stays as-is; suppress rather than adopt the CLI bundle. -->
+    <NoWarn>$(NoWarn);ASPIRE010</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Aspire.Hosting.SqlServer" Version="13.4.6" />
-    <PackageReference Include="Aspire.Hosting.Azure.Sql" Version="13.4.6" />
-    <PackageReference Include="Aspire.Hosting.Azure.Storage" Version="13.4.6" />
+    <PackageReference Include="Aspire.Hosting.SqlServer" />
+    <PackageReference Include="Aspire.Hosting.Azure.Sql" />
+    <PackageReference Include="Aspire.Hosting.Azure.Storage" />
   </ItemGroup>
 
   <ItemGroup>

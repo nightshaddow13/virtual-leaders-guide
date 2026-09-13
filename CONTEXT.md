@@ -189,6 +189,19 @@ Revoke, which undoes an un-activated Invite specifically - the Users screen only
 activated account, Revoke for one that isn't, even though both end in the same row disappearing.
 _Avoid_: Remove (already means taking away one Grant, leaving the Role and the rest of the User intact)
 
+**Unlock**:
+What a visitor does by entering a valid Passcode for an Event — the act itself, and the resulting state of
+that visitor's browser having read access to that Event's Leaders Guide. Scoped to one Event and to one
+visitor's browser (via a signed cookie, ADR-0003); unrelated to signing in, and never produces a User, Role,
+or Grant — those are for Admin/Director identities only. A visitor is either unlocked for an Event or not;
+there's no partial or expiring-before-the-cookie-expires state. The reverse implication does hold: a
+signed-in Admin, or a Director holding a Grant for that specific Event, is already treated as unlocked for
+it without entering the Passcode — read access they already hold by Role/Grant substitutes for the gate a
+passcode-less visitor has to clear. This extends to any future Event-scoped role a signed-in User might hold
+(e.g. a logged-in Participant, #44) the same way.
+_Avoid_: Grant (already means an Admin-made, Event-scoped extension of a Director's Role — a fact about a
+person with an identity; a visitor who unlocked a guide has none of that), Session, Access token, Login.
+
 **Leaders Guide**:
 The public-facing destination for an Event — what a visitor reaches after entering the Passcode. Contains the
 Event's Activity schedule, map, and InfoPages. One Event has exactly one Leaders Guide. This is the platform's
