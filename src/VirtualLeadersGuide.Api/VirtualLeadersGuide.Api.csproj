@@ -25,10 +25,6 @@
          random token, using the real EFF Large Wordlist. -->
     <PackageReference Include="PasswordGenerator" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
-    <!-- Pinned to match Microsoft.Data.SqlClient.Extensions.Azure's version exactly: EF Core SqlServer
-         10.0.10 otherwise resolves the core package one patch behind (7.0.1), and that skew makes the
-         Active Directory Managed Identity provider fail to load (AmbiguousMatchException from
-         SqlAuthenticationProviderManager's reflection-based provider discovery). -->
     <PackageReference Include="Microsoft.Data.SqlClient" />
     <PackageReference Include="Microsoft.Data.SqlClient.Extensions.Azure" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design">

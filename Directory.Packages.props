@@ -24,6 +24,10 @@
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
     <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.10" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.10" />
+    <!-- Pinned to match Microsoft.Data.SqlClient.Extensions.Azure's version exactly: EF Core SqlServer
+         10.0.11 otherwise depends on Microsoft.Data.SqlClient 6.1.6, and that skew makes the Active
+         Directory Managed Identity provider fail to load (AmbiguousMatchException from
+         SqlAuthenticationProviderManager's reflection-based provider discovery). -->
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.0.2" />
     <PackageVersion Include="Microsoft.Data.SqlClient.Extensions.Azure" Version="7.0.2" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10" />
