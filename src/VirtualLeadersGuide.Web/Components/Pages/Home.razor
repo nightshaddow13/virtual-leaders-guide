@@ -3,12 +3,7 @@
 
 @using VirtualLeadersGuide.Web.Components.Account.Shared
 
-@* Wireframe 1b (split screen) - #72's picked direction. Static SSR, no @rendermode: the form POSTs back to
-   this same page (Login.razor's shape), and the whole point of the public surface is staying circuit-free
-   on a scale-to-zero deployment (ADR-0034). SiteHeader/SiteFooter (1a's chrome) wrap this via MainLayout;
-   this file is content only - 1b's own embedded brand and "STAFF SIGN IN" are dropped. Static SSR also
-   means a RadzenButton's Click is silently inert here (ADR-0034) - every failure state below keeps the
-   form itself visible with an inline error, rather than swapping to a dead-end panel that would need one. *@
+@* See Home.razor.cs's own /// remarks for why this is static SSR, content-only, and never uses RadzenButton. *@
 
 <PageTitle>Virtual Leaders Guide</PageTitle>
 

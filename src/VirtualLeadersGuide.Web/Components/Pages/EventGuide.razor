@@ -3,10 +3,7 @@
 
 @using VirtualLeadersGuide.Web.Components.Account.Shared
 
-@* Wireframes 1c (locked splash) + 1g (wrong-passcode error). Static SSR, same reasoning as Home.razor -
-   the passcode form POSTs back here, and a RadzenButton's Click would be inert with no circuit (ADR-0034),
-   so every dead-end state below uses a real <a>, styled like a Radzen button the way SiteHeader's own
-   real-anchor nav links already do, rather than RadzenButton. *@
+@* See EventGuide.razor.cs's own /// remarks for why this is static SSR and never uses RadzenButton. *@
 
 <PageTitle>@(loadedEvent?.Name ?? "Event")</PageTitle>
 

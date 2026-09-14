@@ -10,6 +10,17 @@ using VirtualLeadersGuide.Web.PublicGuide;
 
 namespace VirtualLeadersGuide.Web.Components.Pages;
 
+/// <summary>
+/// An Event's public gated guide (P4-2, #72) - wireframes 1c (locked splash) and 1g (wrong-passcode error).
+/// </summary>
+/// <remarks>
+/// Static SSR, same reasoning as <c>Home.razor</c> - the passcode form POSTs back here, and a
+/// <c>RadzenButton</c>'s <c>Click</c> would be inert with no circuit (ADR-0034), so every dead-end state
+/// uses a real <c>&lt;a&gt;</c>, styled like a Radzen button the way <c>SiteHeader</c>'s own real-anchor nav
+/// links already do, rather than <c>RadzenButton</c>. <c>EventGuide.razor.css</c>'s banner strip is
+/// token-built, no photo asset (matches <c>Home.razor.css</c>'s own "token-built for now" note - #138
+/// tracks sourcing real imagery for the whole public surface).
+/// </remarks>
 public partial class EventGuide
 {
     [Inject]

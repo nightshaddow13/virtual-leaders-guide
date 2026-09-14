@@ -1,7 +1,4 @@
-/* Wireframe 1b's split screen. A bespoke two-pane hero, not a form-field grid - ADR-0038 is still the first
-   question, but Radzen's Row/Column system has no notion of "reorder these two panes per breakpoint" the
-   way this layout needs (form first in DOM for a11y/tab order, visually right on desktop, visually first
-   again once stacked on mobile) - see ADR-0040 for why custom CSS is warranted once that's been asked. */
+/* See Home.razor.cs's own /// remarks for why this bespoke split-pane layout is custom CSS, not Radzen's Row/Column grid. */
 
 .vlg-split {
     display: grid;

@@ -19,6 +19,9 @@ namespace VirtualLeadersGuide.Api.PublicGuide;
 /// </remarks>
 public static class PublicGuideEndpoints
 {
+    /// <summary>Maps this type's two endpoints - Event lookup by Slug, and a Passcode check - onto <paramref name="app"/>.</summary>
+    /// <param name="app">The route builder to map onto - typically the top-level <c>WebApplication</c> in <c>Program.cs</c>.</param>
+    /// <returns><paramref name="app"/>, for chaining alongside this project's other <c>Map*Endpoints</c> calls.</returns>
     public static IEndpointRouteBuilder MapPublicGuideEndpoints(this IEndpointRouteBuilder app)
     {
         RouteGroupBuilder group = app.MapGroup(PublicGuideRoutes.GroupPrefix);

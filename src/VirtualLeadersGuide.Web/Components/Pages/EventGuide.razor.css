@@ -1,5 +1,4 @@
-/* Wireframe 1c's locked splash. Token-built banner strip, no photo asset (matches Home.razor.css's own
-   "token-built for now" note - #138 tracks sourcing real imagery for the whole public surface). */
+/* See EventGuide.razor.cs's own /// remarks for why this banner strip is token-built, no photo asset. */
 
 .vlg-guide-banner {
     padding: 2.5rem;

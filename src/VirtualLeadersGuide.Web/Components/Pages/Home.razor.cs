@@ -7,6 +7,20 @@ using VirtualLeadersGuide.Web.PublicGuide;
 
 namespace VirtualLeadersGuide.Web.Components.Pages;
 
+/// <summary>The public home page (P4-2, #72) - wireframe 1b's split screen, "Find your event".</summary>
+/// <remarks>
+/// Static SSR, no <c>@rendermode</c>: the form POSTs back to this same page (<c>Login.razor</c>'s shape),
+/// and the whole point of the public surface is staying circuit-free on a scale-to-zero deployment
+/// (ADR-0034). <c>SiteHeader</c>/<c>SiteFooter</c> (1a's chrome) wrap this via <c>MainLayout</c>; this
+/// component is content only - 1b's own embedded brand and "STAFF SIGN IN" are dropped. Static SSR also
+/// means a <c>RadzenButton</c>'s <c>Click</c> is silently inert here (ADR-0034) - every failure state keeps
+/// the form itself visible with an inline error, rather than swapping to a dead-end panel that would need
+/// one. <c>Home.razor.css</c>'s split-pane layout is a bespoke two-pane hero, not a form-field grid -
+/// ADR-0038 is still the first question, but Radzen's Row/Column system has no notion of "reorder these two
+/// panes per breakpoint" the way this layout needs (form first in DOM for a11y/tab order, visually right on
+/// desktop, visually first again once stacked on mobile) - see ADR-0040 for why custom CSS is warranted
+/// once that's been asked.
+/// </remarks>
 public partial class Home
 {
     [Inject]
