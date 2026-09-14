@@ -1,0 +1,3 @@
+interface:
+  display_name: "Plan Story"
+  short_description: "Plan a P#-## backlog story from its issue"
