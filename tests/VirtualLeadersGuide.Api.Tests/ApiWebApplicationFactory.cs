@@ -138,10 +138,15 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
     /// without also colliding on Slug, which (unlike Name) stays permanently, unconditionally unique and would
     /// otherwise collide too, since two Events sharing a Name derive the identical default Slug.
     /// </param>
+    /// <param name="passcode">
+    /// An explicit Passcode, overriding the one <see cref="Event.Create"/> would otherwise generate - for
+    /// tests (P4-2, #72) that need to know the plaintext value to submit against the public passcode-check
+    /// endpoint, rather than a random one they'd have no way to read back.
+    /// </param>
     /// <returns>The newly persisted <see cref="Event"/>.</returns>
     public async Task<Event> CreateEventAsync(
         string? name = null, DateTimeOffset? startsAt = null, DateTimeOffset? endsAt = null,
-        EventStatus status = EventStatus.Draft, string? slug = null)
+        EventStatus status = EventStatus.Draft, string? slug = null, string? passcode = null)
     {
         using IServiceScope scope = Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
@@ -149,6 +154,10 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
         @event.StartsAt = startsAt;
         @event.EndsAt = endsAt;
         @event.Status = status;
+        if (passcode is not null)
+        {
+            @event.Passcode = passcode;
+        }
 
         dbContext.Events.Add(@event);
         await dbContext.SaveChangesAsync();

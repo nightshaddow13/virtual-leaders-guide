@@ -33,6 +33,16 @@ namespace VirtualLeadersGuide.Api.Tests;
 /// auto-derived Slug would collide and 409 for an unrelated reason, masking whether the Name-reuse rule
 /// under test actually works.
 /// </remarks>
+/// <remarks>
+/// PasscodeVersion coverage (P4-2, #72; ADR-0057): a <c>PATCH</c> that actually changes the decrypted
+/// Passcode gets <c>200</c>, not the <c>204</c> an ordinary Save gets - JsonApiDotNetCore's own rule for a
+/// write that changes an attribute beyond what the client sent (here, <see cref="Event.PasscodeVersion"/>).
+/// <c>EventEditor.razor</c> pre-fills its Passcode field with the Event's current value and resends it on
+/// every Save whether or not the Admin changed it, so the bump has to key off the decrypted value actually
+/// differing, not off <c>Passcode</c> merely being targeted -
+/// <c>LeavePasscodeVersionUnchanged_WhenAPatchResendsTheSamePasscode_ForPatch</c> is the regression test for
+/// exactly that; an ordinary Save that never names Passcode at all is the separate, simpler case right after it.
+/// </remarks>
 public class EventsResourceShould : IAsyncLifetime
 {
     private const string JsonApiMediaType = "application/vnd.api+json";
@@ -92,6 +102,71 @@ public class EventsResourceShould : IAsyncLifetime
         HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/events/{@event.Id}", body);
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task IncrementPasscodeVersion_WhenAPatchActuallyChangesPasscode_ForPatch()
+    {
+        Event @event = await _factory.CreateEventAsync(passcode: "TigerLantern");
+        using HttpClient client = AdminClient();
+        var body = new
+        {
+            data = new
+            {
+                type = "events", id = @event.Id.ToString(),
+                attributes = new { passcode = "NewPasscode" }
+            }
+        };
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/events/{@event.Id}", body);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        JsonElement attributes = await AttributesOfAsync(response);
+        Assert.Equal(2, attributes.GetProperty("passcodeVersion").GetInt32());
+    }
+
+    [Fact]
+    public async Task LeavePasscodeVersionUnchanged_WhenAPatchResendsTheSamePasscode_ForPatch()
+    {
+        Event @event = await _factory.CreateEventAsync(passcode: "TigerLantern");
+        using HttpClient client = AdminClient();
+        var body = new
+        {
+            data = new
+            {
+                type = "events", id = @event.Id.ToString(),
+                attributes = new { name = $"Renamed {Guid.NewGuid()}", passcode = "TigerLantern" }
+            }
+        };
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/events/{@event.Id}", body);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        HttpResponseMessage getResponse = await SendAsync(client, HttpMethod.Get, $"/api/events/{@event.Id}");
+        JsonElement attributes = await AttributesOfAsync(getResponse);
+        Assert.Equal(1, attributes.GetProperty("passcodeVersion").GetInt32());
+    }
+
+    [Fact]
+    public async Task LeavePasscodeVersionUnchanged_WhenAPatchDoesNotNamePasscode_ForPatch()
+    {
+        Event @event = await _factory.CreateEventAsync(passcode: "TigerLantern");
+        using HttpClient client = AdminClient();
+        var body = new
+        {
+            data = new
+            {
+                type = "events", id = @event.Id.ToString(),
+                attributes = new { name = $"Renamed {Guid.NewGuid()}" }
+            }
+        };
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/events/{@event.Id}", body);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        HttpResponseMessage getResponse = await SendAsync(client, HttpMethod.Get, $"/api/events/{@event.Id}");
+        JsonElement attributes = await AttributesOfAsync(getResponse);
+        Assert.Equal(1, attributes.GetProperty("passcodeVersion").GetInt32());
     }
 
     [Fact]

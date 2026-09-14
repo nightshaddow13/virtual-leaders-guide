@@ -13,6 +13,7 @@ using VirtualLeadersGuide.Api;
 using VirtualLeadersGuide.Api.Authorization;
 using VirtualLeadersGuide.Api.Data;
 using VirtualLeadersGuide.Api.Identity;
+using VirtualLeadersGuide.Api.PublicGuide;
 using VirtualLeadersGuide.Identity.Contracts;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -54,6 +55,7 @@ app.UseJsonApi();
 app.MapControllers().RequireAuthorization(InternalJwtDefaults.PolicyName);
 app.MapInternalIdentityEndpoints();
 app.MapInternalAuthorizationEndpoints();
+app.MapPublicGuideEndpoints();
 
 app.MapDefaultEndpoints();
 
