@@ -187,7 +187,7 @@ public sealed class ApiEventClient(InternalApiClient apiClient)
             return (EventWriteOutcome.Invalid, await ReadErrorPointersAsync(response, cancellationToken));
         }
 
-        EnsureExpectedStatus(response, HttpStatusCode.NoContent);
+        EnsureExpectedStatus(response, HttpStatusCode.NoContent, HttpStatusCode.OK);
         return (EventWriteOutcome.Success, []);
     }
 
@@ -299,9 +299,16 @@ public sealed class ApiEventClient(InternalApiClient apiClient)
         }
     }
 
-    private static void EnsureExpectedStatus(HttpResponseMessage response, HttpStatusCode expected)
+    /// <remarks>
+    /// Takes one or more acceptable codes - <see cref="UpdateAsync"/> passes both
+    /// <see cref="HttpStatusCode.NoContent"/> and <see cref="HttpStatusCode.OK"/>, since JsonApiDotNetCore
+    /// returns the full updated resource (200), not 204, whenever a write changes an attribute beyond what
+    /// the client sent - which a Passcode-changing PATCH now always does, via <c>Event.PasscodeVersion</c>
+    /// (P4-2, #72; ADR-0057).
+    /// </remarks>
+    private static void EnsureExpectedStatus(HttpResponseMessage response, params ReadOnlySpan<HttpStatusCode> expected)
     {
-        if (response.StatusCode != expected)
+        if (!expected.Contains(response.StatusCode))
         {
             throw new EventDataUnavailableException(
                 $"The Event store (Api) returned an unexpected {(int)response.StatusCode} response.",

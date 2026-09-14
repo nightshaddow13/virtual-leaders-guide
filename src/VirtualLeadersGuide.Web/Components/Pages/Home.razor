@@ -1,7 +1,52 @@
-﻿@page "/"
+@page "/"
+@attribute [ExcludeFromInteractiveRouting]
 
-<PageTitle>Home</PageTitle>
+@using VirtualLeadersGuide.Web.Components.Account.Shared
 
-<h1>Hello, world!</h1>
+@* Wireframe 1b (split screen) - #72's picked direction. Static SSR, no @rendermode: the form POSTs back to
+   this same page (Login.razor's shape), and the whole point of the public surface is staying circuit-free
+   on a scale-to-zero deployment (ADR-0034). SiteHeader/SiteFooter (1a's chrome) wrap this via MainLayout;
+   this file is content only - 1b's own embedded brand and "STAFF SIGN IN" are dropped. Static SSR also
+   means a RadzenButton's Click is silently inert here (ADR-0034) - every failure state below keeps the
+   form itself visible with an inline error, rather than swapping to a dead-end panel that would need one. *@
 
-Welcome to your new app.
+<PageTitle>Virtual Leaders Guide</PageTitle>
+
+<div class="vlg-split">
+    <section class="vlg-split-form">
+        <h1>Find your event</h1>
+        <p>Enter the event address and the passcode from your leader packet.</p>
+
+        @if (errorMessage is not null)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" AllowClose="false" Text="@errorMessage" />
+        }
+
+        <EditForm Model="Input" method="post" OnValidSubmit="FindEventAsync" FormName="find-event">
+            <DataAnnotationsValidator />
+            <div class="vlg-field">
+                <label for="Input.Address">Event address</label>
+                <div class="vlg-slug-field">
+                    <span class="vlg-slug-prefix">/e/</span>
+                    <InputText id="Input.Address" @bind-Value="Input.Address" class="rz-textbox rz-input-md"
+                               placeholder="summer-camporee" autocomplete="off" />
+                </div>
+                <ValidationMessage For="() => Input.Address" class="rz-messages-error" />
+            </div>
+            <div class="vlg-field">
+                <label for="Input.Passcode">Passcode</label>
+                <InputText id="Input.Passcode" @bind-Value="Input.Passcode" class="rz-textbox rz-input-md"
+                           placeholder="TigerLantern" autocomplete="off" />
+                <ValidationMessage For="() => Input.Passcode" class="rz-messages-error" />
+            </div>
+            <PrimarySubmitButton Text="Open guide →" />
+        </EditForm>
+
+        <p class="vlg-split-helper">Don't have a passcode? Ask your event Director.</p>
+    </section>
+
+    <div class="vlg-split-art" aria-hidden="true">
+        <span class="vlg-split-art-mark"></span>
+        <p class="vlg-split-art-tagline">Everything your unit needs for the weekend, in one place.</p>
+    </div>
+</div>

@@ -1,0 +1,65 @@
+/* Wireframe 1c's locked splash. Token-built banner strip, no photo asset (matches Home.razor.css's own
+   "token-built for now" note - #138 tracks sourcing real imagery for the whole public surface). */
+
+.vlg-guide-banner {
+    padding: 2.5rem;
+    margin-block-end: 1.5rem;
+    border-radius: var(--vlg-radius-lg);
+    background-color: var(--vlg-pine);
+    background-image: linear-gradient(160deg, var(--vlg-pine) 0%, var(--vlg-moss) 100%);
+    color: var(--vlg-on-primary);
+}
+
+    .vlg-guide-banner h1 {
+        margin-block: 0.25rem 0;
+    }
+
+.vlg-guide-dates {
+    margin: 0;
+    opacity: 0.85;
+}
+
+.vlg-guide-lock {
+    max-width: 28rem;
+    padding: 2rem;
+    border: 1px solid var(--vlg-line);
+    border-radius: var(--vlg-radius-lg);
+    background-color: var(--vlg-surface);
+    box-shadow: var(--vlg-shadow);
+}
+
+    .vlg-guide-lock h2 {
+        margin-block-start: 0;
+    }
+
+.vlg-guide-helper {
+    margin-block-start: 0.75rem;
+    font-size: 0.8125rem;
+    color: var(--vlg-ink-faint);
+}
+
+.vlg-guide-chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-block-start: 1.25rem;
+    padding-block-start: 1.25rem;
+    border-block-start: 1px dashed var(--vlg-line);
+}
+
+.vlg-guide-chip {
+    padding: 0.25rem 0.625rem;
+    border-radius: var(--vlg-radius);
+    background-color: var(--vlg-canvas-sunk);
+    color: var(--vlg-locked);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.vlg-guide-chip-note {
+    font-size: 0.75rem;
+    color: var(--vlg-locked);
+}

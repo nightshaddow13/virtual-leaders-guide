@@ -51,7 +51,7 @@ public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, G
     /// </param>
     /// <param name="dbContext">Backs <see cref="CheckForConflictsAsync"/>'s Name/Slug uniqueness pre-check and <see cref="ValidateStatusTransitionAsync"/>'s pre-PATCH lookup.</param>
     /// <param name="targetedFields">Tells <see cref="ValidateStatusTransitionAsync"/> whether a PATCH actually named <see cref="Event.Status"/>, so an ordinary Save changes skips the lookup entirely.</param>
-    /// <param name="timeProvider">The single clock source for every "is this Live row actually Past" check in this type - see <see cref="EffectiveStatus"/>.</param>
+    /// <param name="timeProvider">The single clock source for every "is this Live row actually Past" check in this type - see <see cref="EventStatusRules.EffectiveStatus"/>.</param>
     public EventResourceDefinition(
         IResourceGraph resourceGraph, IHttpContextAccessor httpContextAccessor, VirtualLeadersGuideDbContext dbContext,
         ITargetedFields targetedFields, TimeProvider timeProvider)
@@ -152,7 +152,9 @@ public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, G
     /// both throw a 422 naming whichever attribute is wrong. A <c>POST</c> naming <see cref="Event.Status"/>
     /// needs no code here at all: <see cref="Event.Status"/> carries no <see cref="AttrCapabilities.AllowCreate"/>,
     /// so JsonApiDotNetCore itself already rejects it with 422 at <c>/data/attributes/status</c> before this
-    /// method ever runs.
+    /// method ever runs. On an update that actually changes <see cref="Event.Passcode"/>, also bumps
+    /// <see cref="Event.PasscodeVersion"/> (P4-2, #72; ADR-0057) - see
+    /// <see cref="BumpPasscodeVersionIfChangedAsync"/> for why "targeted" alone isn't the right condition.
     /// </remarks>
     public override async Task OnWritingAsync(
         Event resource, WriteOperationKind writeOperation, CancellationToken cancellationToken)
@@ -181,9 +183,47 @@ public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, G
             await CheckForConflictsAsync(resource, cancellationToken);
             ValidateDateRange(resource);
             await ValidateStatusTransitionAsync(resource, writeOperation, cancellationToken);
+            await BumpPasscodeVersionIfChangedAsync(resource, writeOperation, cancellationToken);
         }
 
         await base.OnWritingAsync(resource, writeOperation, cancellationToken);
+    }
+
+    /// <remarks>
+    /// Only for <see cref="WriteOperationKind.UpdateResource"/>, and only when the PATCH actually targeted
+    /// <see cref="Event.Passcode"/> (<see cref="ITargetedFields.Attributes"/>) - mirrors
+    /// <see cref="ValidateStatusTransitionAsync"/>'s own targeted-fields guard. Targeting the attribute isn't
+    /// enough on its own, though: <c>EventEditor.razor</c> pre-fills its Passcode field with the Event's
+    /// current value and resends it on every Save, whether or not the Admin actually changed it, so
+    /// "targeted" alone would bump - and revoke every outstanding Unlock - on an ordinary rename that never
+    /// touched the Passcode. This does the same pre-PATCH lookup <see cref="ValidateStatusTransitionAsync"/>
+    /// already does for the identical reason (targeted attributes are copied onto <paramref name="resource"/>
+    /// before <see cref="OnWritingAsync"/> runs, so the persisted value needs a separate, untracked read) and
+    /// only bumps when the decrypted plaintext actually differs (P4-2, #72; ADR-0057).
+    /// </remarks>
+    private async Task BumpPasscodeVersionIfChangedAsync(
+        Event resource, WriteOperationKind writeOperation, CancellationToken cancellationToken)
+    {
+        if (writeOperation != WriteOperationKind.UpdateResource)
+        {
+            return;
+        }
+
+        AttrAttribute passcodeAttribute = ResourceType.GetAttributeByPropertyName(nameof(Event.Passcode));
+        if (!_targetedFields.Attributes.Contains(passcodeAttribute))
+        {
+            return;
+        }
+
+        var stored = await _dbContext.Events.AsNoTracking()
+            .Where(e => e.Id == resource.Id)
+            .Select(e => new { e.Passcode })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (stored is not null && stored.Passcode != resource.Passcode)
+        {
+            resource.PasscodeVersion++;
+        }
     }
 
     /// <inheritdoc/>
@@ -197,18 +237,8 @@ public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, G
     /// </remarks>
     public override void OnSerialize(Event resource)
     {
-        resource.Status = EffectiveStatus(resource.Status, resource.EndsAt, _timeProvider.GetUtcNow());
+        resource.Status = EventStatusRules.EffectiveStatus(resource.Status, resource.EndsAt, _timeProvider.GetUtcNow());
     }
-
-    /// <remarks>
-    /// The one place "is this Live row actually Past" is computed - shared by <see cref="OnSerialize"/>,
-    /// <see cref="ValidateStatusTransitionAsync"/>, and <see cref="CheckForConflictsAsync"/>'s Name check, so
-    /// the rule can't drift between the three. <paramref name="endsAt"/> is deliberately <see langword="null"/>-safe:
-    /// a <see cref="EventStatus.Live"/> Event with no end date is never Past (CONTEXT.md's Starts at / Ends at
-    /// entry - an unset date isn't an elapsed one).
-    /// </remarks>
-    private static EventStatus EffectiveStatus(EventStatus stored, DateTimeOffset? endsAt, DateTimeOffset now) =>
-        stored == EventStatus.Live && endsAt is { } ends && ends <= now ? EventStatus.Past : stored;
 
     /// <remarks>
     /// Only for <see cref="WriteOperationKind.UpdateResource"/>, and only when the PATCH actually targeted
@@ -219,7 +249,7 @@ public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, G
     /// <see cref="Event.Status"/> here is already the PATCH's *target* value - the pre-PATCH value has to be
     /// re-read via <see cref="Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AsNoTracking{TEntity}"/>,
     /// the same pattern <see cref="CheckForConflictsAsync"/> already uses for its own cross-row check. Compares
-    /// the *effective* stored status (<see cref="EffectiveStatus"/>), not the raw one, so "a Past Event can't
+    /// the *effective* stored status (<see cref="EventStatusRules.EffectiveStatus"/>), not the raw one, so "a Past Event can't
     /// be cancelled retroactively" (ADR-0044) falls out for free even though Past is stored as Live. A target
     /// of <see cref="EventStatus.Past"/> is illegal unconditionally, checked before the same-status allowance
     /// below - without that ordering, naming <c>Past</c> explicitly on a row that's already effectively Past
@@ -252,7 +282,7 @@ public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, G
             return;
         }
 
-        EventStatus from = EffectiveStatus(stored.Status, stored.EndsAt, _timeProvider.GetUtcNow());
+        EventStatus from = EventStatusRules.EffectiveStatus(stored.Status, stored.EndsAt, _timeProvider.GetUtcNow());
         EventStatus to = resource.Status;
 
         bool legal = to != EventStatus.Past
@@ -297,9 +327,11 @@ public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, G
     /// uniqueness rule is enforced, so a concurrent double-submit on Name never even reaches a 500; it's a
     /// narrow, accepted race producing two same-named Events instead. The rule only ever considers
     /// non-terminal Events - an effectively <see cref="EventStatus.Past"/> or <see cref="EventStatus.Cancelled"/>
-    /// row's Name is free to reuse (CONTEXT.md's Event entry) - via the same <see cref="EffectiveStatus"/>
-    /// helper <see cref="OnSerialize"/> and <see cref="ValidateStatusTransitionAsync"/> use, so all three agree
-    /// on what "Past" means. Unlike Name, <see cref="Event.Slug"/> is a permanent domain invariant (it's the
+    /// row's Name is free to reuse (CONTEXT.md's Event entry) - via the same
+    /// <see cref="EventStatusRules.EffectiveStatus"/> helper <see cref="OnSerialize"/> and
+    /// <see cref="ValidateStatusTransitionAsync"/> use, so all three (now four, with
+    /// <see cref="VirtualLeadersGuide.Api.PublicGuide.PublicGuideEndpoints"/>) agree on what "Past" means. Unlike Name,
+    /// <see cref="Event.Slug"/> is a permanent domain invariant (it's the
     /// route key) and keeps its unconditional database-backed check below.
     ///
     /// Skips the Slug check when <see cref="Event.Slug"/> is <see langword="null"/> - never true for
@@ -318,7 +350,7 @@ public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, G
             .Select(e => new { e.Status, e.EndsAt })
             .ToListAsync(cancellationToken);
 
-        bool nameTaken = candidates.Any(c => EffectiveStatus(c.Status, c.EndsAt, now) is EventStatus.Draft or EventStatus.Live);
+        bool nameTaken = candidates.Any(c => EventStatusRules.EffectiveStatus(c.Status, c.EndsAt, now) is EventStatus.Draft or EventStatus.Live);
 
         bool slugTaken = false;
         if (resource.Slug is not null)

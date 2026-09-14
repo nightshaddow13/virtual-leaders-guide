@@ -143,6 +143,10 @@
                     {
                         <RadzenText TextStyle="TextStyle.Caption" TagName="TagName.Div" Style="margin-block-start: 0.25rem;">Leave blank to generate one.</RadzenText>
                     }
+                    else
+                    {
+                        <RadzenText TextStyle="TextStyle.Caption" TagName="TagName.Div" Style="margin-block-start: 0.25rem;">Changing this locks out anyone who has already unlocked this guide - they'll need the new Passcode to get back in.</RadzenText>
+                    }
                     <ValidationMessage For="() => model!.Passcode" class="rz-messages-error" />
                 </div>
             </fieldset>

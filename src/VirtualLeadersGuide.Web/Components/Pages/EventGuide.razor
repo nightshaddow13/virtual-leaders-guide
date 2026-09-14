@@ -1,0 +1,95 @@
+@page "/e/{Slug}"
+@attribute [ExcludeFromInteractiveRouting]
+
+@using VirtualLeadersGuide.Web.Components.Account.Shared
+
+@* Wireframes 1c (locked splash) + 1g (wrong-passcode error). Static SSR, same reasoning as Home.razor -
+   the passcode form POSTs back here, and a RadzenButton's Click would be inert with no circuit (ADR-0034),
+   so every dead-end state below uses a real <a>, styled like a Radzen button the way SiteHeader's own
+   real-anchor nav links already do, rather than RadzenButton. *@
+
+<PageTitle>@(loadedEvent?.Name ?? "Event")</PageTitle>
+
+@switch (state)
+{
+    case PageState.NotFound:
+        <StatusPanel Title="We couldn't find an event at that address"
+                     Message="Double check the address from your leader packet, or search again.">
+            <a class="rz-button rz-button-md rz-variant-filled rz-primary rz-shade-default" href="/">
+                <span class="rz-button-box"><span class="rz-button-text">Search again</span></span>
+            </a>
+        </StatusPanel>
+        break;
+
+    case PageState.Unavailable:
+        <StatusPanel Title="Something went wrong" Message="The event lookup didn't respond.">
+            <a class="rz-button rz-button-md rz-variant-filled rz-primary rz-shade-default" href="e/@Slug">
+                <span class="rz-button-box"><span class="rz-button-text">Try again</span></span>
+            </a>
+        </StatusPanel>
+        break;
+
+    case PageState.Cancelled:
+        <StatusPanel Title="This event was cancelled"
+                     Message="Its Leaders Guide is no longer available. Contact your event Director for more information." />
+        break;
+
+    case PageState.Locked:
+        <div class="vlg-guide-banner">
+            <RadzenText TextStyle="TextStyle.Overline">Event</RadzenText>
+            <h1>@loadedEvent!.Name</h1>
+            @if (DateRangeText is { Length: > 0 })
+            {
+                <p class="vlg-guide-dates">@DateRangeText</p>
+            }
+        </div>
+
+        <div class="vlg-guide-lock">
+            <h2>Unlock this guide</h2>
+
+            @if (passcodeErrorMessage is not null)
+            {
+                <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" AllowClose="false" Text="@passcodeErrorMessage" />
+            }
+
+            <EditForm Model="Input" method="post" OnValidSubmit="UnlockAsync" FormName="unlock">
+                <DataAnnotationsValidator />
+                <div class="vlg-field">
+                    <label for="Input.Passcode">Passcode</label>
+                    <InputText id="Input.Passcode" @bind-Value="Input.Passcode" class="rz-textbox rz-input-md"
+                               placeholder="TigerLantern" autocomplete="off" />
+                    <ValidationMessage For="() => Input.Passcode" class="rz-messages-error" />
+                </div>
+                <PrimarySubmitButton Text="Unlock" />
+            </EditForm>
+
+            <p class="vlg-guide-helper">Schedule, map and info pages stay hidden until unlocked.</p>
+
+            @if (passcodeErrorMessage is not null)
+            {
+                <p class="vlg-guide-helper"><a href="/">Wrong event? Search by event address</a></p>
+            }
+
+            <div class="vlg-guide-chips" aria-hidden="true">
+                <span class="vlg-guide-chip">Schedule</span>
+                <span class="vlg-guide-chip">Map</span>
+                <span class="vlg-guide-chip">Info pages</span>
+                <span class="vlg-guide-chip-note">Locked</span>
+            </div>
+        </div>
+        break;
+
+    case PageState.Unlocked:
+        <div class="vlg-guide-banner">
+            <RadzenText TextStyle="TextStyle.Overline">Event</RadzenText>
+            <h1>@loadedEvent!.Name</h1>
+            @if (DateRangeText is { Length: > 0 })
+            {
+                <p class="vlg-guide-dates">@DateRangeText</p>
+            }
+        </div>
+
+        <RadzenAlert AlertStyle="AlertStyle.Success" Variant="Variant.Flat" AllowClose="false"
+                     Text="This guide is unlocked. Its schedule, map and info pages aren't published yet." />
+        break;
+}

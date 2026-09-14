@@ -85,6 +85,23 @@ public class Event : Identifiable<Guid>
     [Attr(Capabilities = AttrCapabilities.AllowView | AttrCapabilities.AllowChange)]
     public required string? Passcode { get; set; }
 
+    /// <summary>
+    /// The generation of <see cref="Passcode"/> currently in effect - starts at <c>1</c>, incremented every
+    /// time <see cref="Passcode"/> is written (P4-2, #72; ADR-0057).
+    /// </summary>
+    /// <remarks>
+    /// What a visitor's Unlock cookie is checked against, so that changing a live Event's Passcode revokes
+    /// every outstanding Unlock for it - see ADR-0057 for why this beat a passcode fingerprint, and why the
+    /// bump lives in <see cref="EventResourceDefinition.OnWritingAsync"/> rather than a setter here (EF Core
+    /// calls a property's setter on every read from the database too, which would bump on every load rather
+    /// than only on an actual Passcode write). <see cref="AttrCapabilities.AllowView"/> only - an ordinary,
+    /// non-secret integer visible for support/debugging, but never client-writable
+    /// (<see cref="AttrCapabilities.AllowCreate"/>/<see cref="AttrCapabilities.AllowChange"/> both absent): a
+    /// client changes it only as a side effect of writing <see cref="Passcode"/> itself, never directly.
+    /// </remarks>
+    [Attr(Capabilities = AttrCapabilities.AllowView)]
+    public int PasscodeVersion { get; set; } = 1;
+
     /// <summary>When this Event starts — a specific date and time, not a bare calendar day (CONTEXT.md's Starts at / Ends at entry).</summary>
     /// <remarks>
     /// Nullable and independent of <see cref="Name"/>/<see cref="Slug"/>/<see cref="Passcode"/> - an Event
