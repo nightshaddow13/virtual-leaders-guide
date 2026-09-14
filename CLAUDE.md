@@ -34,3 +34,9 @@ Stories that add or visibly change UI need a wireframe before planning starts â€
 missing. Doesn't apply to test-only, backend-only, or infra stories. Wireframes and design tokens live in a
 Claude Design project, read via `DesignSync` (not `WebFetch` â€” it 403s on design URLs). See
 `docs/agents/wireframes.md`.
+
+### Story planning
+
+Two-pass planning for a `P#-##` backlog ticket: resolve the issue, gather docs/wireframe/code, write a
+first-pass plan, then grill it into a second pass. Triggered by "lets plan for P2-3" or similar. See
+`.agents/skills/plan-story/SKILL.md`.
