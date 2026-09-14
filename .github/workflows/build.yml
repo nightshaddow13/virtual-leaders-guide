@@ -139,6 +139,17 @@ jobs:
         # traffic (ADR-0013 / the issue's ordering requirement) — this step
         # blocks the workflow until the Job execution finishes, and fails the
         # run (skipping the app deploy below) if it didn't succeed.
+        #
+        # Polls until an explicit terminal status (Succeeded/Failed), not
+        # merely "no longer Running" — Container Apps Jobs can report a
+        # transient status (observed: "Unknown") between Running and a real
+        # terminal state. The original loop only kept polling on a literal
+        # "Running" read, so that one transient value looked identical to a
+        # real terminal failure and aborted the deploy before the Job's own
+        # Succeeded landed ~40s later (2026-09-14, run 34887653474) — the
+        # migration had actually succeeded the whole time. Bounded by
+        # MAX_ATTEMPTS so a genuinely stuck Job still fails the run instead
+        # of running out the workflow's default 6h job timeout.
         run: |
           set -euo pipefail
           EXECUTION_NAME=$(az containerapp job start \
@@ -147,13 +158,22 @@ jobs:
             --query name -o tsv)
           echo "Started migration job execution: $EXECUTION_NAME"
 
-          STATUS="Running"
-          while [ "$STATUS" = "Running" ]; do
+          MAX_ATTEMPTS=60 # 60 * 10s = 10 minutes
+          STATUS=""
+          ATTEMPT=0
+          while [ "$STATUS" != "Succeeded" ] && [ "$STATUS" != "Failed" ]; do
+            if [ "$ATTEMPT" -ge "$MAX_ATTEMPTS" ]; then
+              echo "::error::Migration job execution '$EXECUTION_NAME' did not reach a terminal status within $((MAX_ATTEMPTS * 10))s (last observed: ${STATUS:-<empty>}) — aborting before app deploy."
+              exit 1
+            fi
+
             sleep 10
+            ATTEMPT=$((ATTEMPT + 1))
             STATUS=$(az containerapp job execution list \
               --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
               --name "${{ vars.MIGRATION_JOB_NAME }}" \
               --query "[?name=='$EXECUTION_NAME'].properties.status" -o tsv)
+            echo "Migration job execution status (attempt $ATTEMPT/$MAX_ATTEMPTS): ${STATUS:-<empty>}"
           done
 
           echo "Migration job execution finished with status: $STATUS"
