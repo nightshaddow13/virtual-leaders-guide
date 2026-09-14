@@ -1,13 +1,18 @@
-/* See Home.razor.cs's own /// remarks for why this bespoke split-pane layout is custom CSS, not Radzen's Row/Column grid. */
+/* See Home.razor.cs's own /// remarks for why this bespoke split-pane layout is custom CSS, not Radzen's
+   Row/Column grid. Wrapped in RadzenCard (Home.razor) rather than a plain div, for border-radius/padding/
+   background-color - but .rz-card's own base rule (material-base.css) never actually reads app.css's
+   --rz-card-border/--rz-card-shadow aliases, only --rz-card-padding/-border-radius/-background-color, so
+   border and box-shadow are restored explicitly here, and padding is zeroed since the two child panels
+   supply their own. */
 
 .vlg-split {
     display: grid;
     grid-template-columns: 1fr 1fr;
     min-height: 30rem;
-    border: 1px solid var(--vlg-line);
-    border-radius: var(--vlg-radius-lg);
+    padding: 0;
+    border: var(--rz-card-border);
+    box-shadow: var(--rz-card-shadow);
     overflow: hidden;
-    box-shadow: var(--vlg-shadow);
 }
 
 /* Form is first in the DOM (see Home.razor) so a keyboard/screen-reader visitor reaches it immediately,

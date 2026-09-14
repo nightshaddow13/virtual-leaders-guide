@@ -18,13 +18,15 @@
     opacity: 0.85;
 }
 
+/* Wrapped in RadzenCard (EventGuide.razor), which supplies border-radius/background-color - see
+   Home.razor.css's identical note for why border/box-shadow still need to be explicit (the base theme's
+   .rz-card never reads app.css's --rz-card-border/--rz-card-shadow aliases). */
+
 .vlg-guide-lock {
     max-width: 28rem;
     padding: 2rem;
-    border: 1px solid var(--vlg-line);
-    border-radius: var(--vlg-radius-lg);
-    background-color: var(--vlg-surface);
-    box-shadow: var(--vlg-shadow);
+    border: var(--rz-card-border);
+    box-shadow: var(--rz-card-shadow);
 }
 
     .vlg-guide-lock h2 {

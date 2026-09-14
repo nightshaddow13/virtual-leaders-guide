@@ -41,7 +41,7 @@
             }
         </div>
 
-        <div class="vlg-guide-lock">
+        <RadzenCard class="vlg-guide-lock">
             <h2>Unlock this guide</h2>
 
             @if (passcodeErrorMessage is not null)
@@ -73,7 +73,7 @@
                 <span class="vlg-guide-chip">Info pages</span>
                 <span class="vlg-guide-chip-note">Locked</span>
             </div>
-        </div>
+        </RadzenCard>
         break;
 
     case PageState.Unlocked:
