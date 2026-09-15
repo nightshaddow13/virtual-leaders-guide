@@ -9,6 +9,8 @@ the repo root.
 
 **Consequence:** the Aspire version canonically lives in two files, not one. Bumping Aspire means updating
 `$(AspireVersion)` in `Directory.Packages.props` *and* the `Aspire.AppHost.Sdk` entry in `global.json`'s
-`msbuild-sdks`. Forgetting the second doesn't fail the build — the AppHost SDK just silently drifts out of
-lockstep with the `Aspire.Hosting.*` packages, surfacing later as inconsistent dashboard/CLI behavior
-rather than a clear error. Keep the two numbers in sync by hand on every Aspire bump.
+`msbuild-sdks`. Forgetting the second used to drift silently — the AppHost SDK would fall out of lockstep
+with the `Aspire.Hosting.*` packages with no error, surfacing later as inconsistent dashboard/CLI behavior.
+As of the "Verify hand-synced version pairs" step in `.github/workflows/build.yml`, this pair (and the
+EF Core / `dotnet-ef` pair — see ADR-0060) is CI-enforced: a divergence fails the build immediately instead
+of drifting. Keep the two numbers in sync by hand on every Aspire bump; CI now catches it if you don't.
