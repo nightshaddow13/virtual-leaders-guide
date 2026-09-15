@@ -25,6 +25,35 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Verify hand-synced version pairs
+        # Two version numbers each canonically live in two files with nothing forcing them to
+        # agree, and neither drift fails the build on its own - it surfaces later as confusing
+        # runtime behavior instead. This turns both into a loud, immediate CI failure.
+        #   - Aspire: Directory.Packages.props's $(AspireVersion) vs global.json's
+        #     Aspire.AppHost.Sdk (ADR-0056 - MSBuild resolves a project's SDK before properties
+        #     are evaluated, so $(AspireVersion) can't be reused for the SDK attribute itself).
+        #   - EF Core: Directory.Packages.props's Microsoft.EntityFrameworkCore.Design vs
+        #     .config/dotnet-tools.json's dotnet-ef (build-push-images runs `dotnet ef migrations
+        #     bundle` with that pinned tool version against the EF Core version restored here).
+        run: |
+          set -euo pipefail
+
+          aspire_props=$(grep -oP '(?<=<AspireVersion>)[^<]+' Directory.Packages.props)
+          aspire_global=$(jq -r '."msbuild-sdks"."Aspire.AppHost.Sdk"' global.json)
+          if [ "$aspire_props" != "$aspire_global" ]; then
+            echo "::error::Aspire version mismatch: Directory.Packages.props \$(AspireVersion)=$aspire_props vs global.json Aspire.AppHost.Sdk=$aspire_global (see ADR-0056)"
+            exit 1
+          fi
+
+          ef_props=$(grep -oP '(?<=<PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version=")[^"]+' Directory.Packages.props)
+          ef_tool=$(jq -r '.tools."dotnet-ef".version' .config/dotnet-tools.json)
+          if [ "$ef_props" != "$ef_tool" ]; then
+            echo "::error::EF Core version mismatch: Directory.Packages.props Microsoft.EntityFrameworkCore.Design=$ef_props vs .config/dotnet-tools.json dotnet-ef=$ef_tool"
+            exit 1
+          fi
+
+          echo "Version pairs in sync: Aspire=$aspire_props, EF Core=$ef_props"
+
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
