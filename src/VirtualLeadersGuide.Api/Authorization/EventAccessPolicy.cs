@@ -55,7 +55,9 @@ public sealed class EventAccessPolicy
 
     /// <summary>
     /// Whether this caller may update the Event identified by <paramref name="eventId"/> - Admin-only
-    /// (ADR-0031); a Director's assignment grants read, never write, access to Event details.
+    /// (ADR-0031); a Director's assignment grants read, never write, access to Event details. Contrast
+    /// <see cref="InfoPageAccessPolicy.CanWrite"/>, which answers the same "may a Director write?" question
+    /// for InfoPages the other way (ADR-0059) - each Event-scoped resource makes its own call, per ADR-0031.
     /// </summary>
     /// <remarks>
     /// <paramref name="eventId"/> is unused - kept for signature symmetry with <see cref="CanRead"/> and in

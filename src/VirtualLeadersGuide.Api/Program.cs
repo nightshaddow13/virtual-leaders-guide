@@ -27,16 +27,19 @@ builder.AddPasscodeDataProtection();
 builder.AddInternalAuthentication();
 builder.Services.AddInternalAuthorization();
 
-builder.Services.AddJsonApi<VirtualLeadersGuideDbContext>(options =>
-{
-    options.Namespace = "api";
-    options.IncludeTotalResourceCount = true;
-});
+builder.Services.AddJsonApi<VirtualLeadersGuideDbContext>(
+    options =>
+    {
+        options.Namespace = "api";
+        options.IncludeTotalResourceCount = true;
+    },
+    resources: resourceGraph => resourceGraph.Remove<Page>());
 builder.Services.AddHttpContextAccessor();
 builder.Services.TryAddSingleton(TimeProvider.System);
 builder.Services.AddResourceDefinition<EventResourceDefinition>();
 builder.Services.AddResourceDefinition<UserRoleResourceDefinition>();
 builder.Services.AddResourceDefinition<ApplicationUserResourceDefinition>();
+builder.Services.AddResourceDefinition<InfoPageResourceDefinition>();
 
 var app = builder.Build();
 

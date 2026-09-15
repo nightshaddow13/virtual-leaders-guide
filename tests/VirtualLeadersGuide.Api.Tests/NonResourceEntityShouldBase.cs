@@ -29,6 +29,12 @@ public abstract class NonResourceEntityShouldBase : IAsyncLifetime
         return _factory.DisposeAsync().AsTask();
     }
 
+    /// <summary>
+    /// The host's services, for a subclass that needs to inspect the resource graph directly
+    /// (<see cref="PageEntitiesAreNotJsonApiResourcesShould"/>) rather than only probing over HTTP.
+    /// </summary>
+    protected IServiceProvider Services => _factory.Services;
+
     /// <summary>Asserts that requesting <paramref name="requestUri"/> as a JSON:API resource returns 404.</summary>
     protected async Task AssertNotFoundAsync(string requestUri)
     {

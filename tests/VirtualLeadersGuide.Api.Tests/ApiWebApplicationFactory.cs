@@ -214,6 +214,26 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>
+    /// Creates and persists a new <see cref="InfoPage"/> via <see cref="InfoPage.Create"/> - for tests
+    /// (P5-16, #21) that need a real row to read, patch, or delete over <c>/api/infoPages</c>.
+    /// </summary>
+    /// <param name="eventId">The Event to scope the InfoPage to - see <see cref="CreateEventAsync"/> for a real row satisfying the foreign key.</param>
+    /// <param name="title">The InfoPage's Title. Omit to get a fresh Guid-suffixed default.</param>
+    /// <param name="markdownContent">The InfoPage's markdown content. Omit for a fixed non-empty default.</param>
+    /// <returns>The newly persisted <see cref="InfoPage"/>.</returns>
+    public async Task<InfoPage> CreateInfoPageAsync(
+        Guid eventId, string? title = null, string markdownContent = "# Content")
+    {
+        using IServiceScope scope = Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        InfoPage infoPage = InfoPage.Create(eventId, title ?? $"InfoPage {Guid.NewGuid()}", markdownContent);
+
+        dbContext.InfoPages.Add(infoPage);
+        await dbContext.SaveChangesAsync();
+        return infoPage;
+    }
+
+    /// <summary>
     /// A pre-formatted platform-wide <c>Admin</c> role claim (see <see cref="RoleClaimValue.Format"/>), ready
     /// to pass to <see cref="CreateUserClient"/> - for tests (P2-7, #16) exercising Admin-only access to
     /// <c>/api/events</c> without hand-building a <see cref="RoleGrantDto"/>.
