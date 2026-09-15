@@ -1,9 +1,13 @@
+using VirtualLeadersGuide.Web.JsonApi;
+
 namespace VirtualLeadersGuide.Web.InfoPages;
 
 /// <summary>
-/// One of the minimal JSON:API envelope shapes <see cref="ApiInfoPageClient"/> sends to and reads from
+/// Resource-specific JSON:API envelope shapes <see cref="ApiInfoPageClient"/> sends to and reads from
 /// <c>/api/infoPages</c> - <see langword="internal"/> wire-format detail, not exposed past this client;
-/// callers see <see cref="InfoPageDto"/> and the outcome enums instead.
+/// callers see <see cref="InfoPageDto"/> and the outcome enums instead. The resource-shaped-nothing
+/// envelope plumbing lives in <see cref="VirtualLeadersGuide.Web.JsonApi"/> instead, shared with
+/// <c>Events</c>.
 /// </summary>
 internal sealed class InfoPageResourceObject
 {
@@ -41,38 +45,4 @@ internal sealed class InfoPageCollectionDocument
     public required List<InfoPageResourceObject> Data { get; init; }
 
     public DocumentMeta? Meta { get; init; }
-}
-
-/// <summary>Top-level document metadata.</summary>
-/// <remarks>Populated only when Api's <c>IncludeTotalResourceCount</c> option is on (it is, as of P2-9).</remarks>
-internal sealed class DocumentMeta
-{
-    public int? Total { get; init; }
-}
-
-/// <summary>The response body for a non-2xx JSON:API error response.</summary>
-internal sealed class ErrorDocument
-{
-    public required List<ErrorObject> Errors { get; init; }
-}
-
-/// <summary>One JSON:API error - see <see cref="ErrorSource.Pointer"/> for the part <see cref="ApiInfoPageClient"/> uses.</summary>
-internal sealed class ErrorObject
-{
-    public string? Title { get; init; }
-
-    public string? Detail { get; init; }
-
-    public ErrorSource? Source { get; init; }
-}
-
-/// <summary>Where in the request body an <see cref="ErrorObject"/> originates.</summary>
-/// <remarks>
-/// <see cref="Pointer"/> is a JSON Pointer into the request body (e.g. <c>/data/attributes/eventId</c>) -
-/// <see cref="ApiInfoPageClient"/> surfaces these directly, matching <c>EventResourceDefinition</c>'s own
-/// error-pointer convention.
-/// </remarks>
-internal sealed class ErrorSource
-{
-    public string? Pointer { get; init; }
 }

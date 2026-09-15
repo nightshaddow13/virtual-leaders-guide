@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using VirtualLeadersGuide.Web.Authorization;
 using VirtualLeadersGuide.Web.Identity;
+using VirtualLeadersGuide.Web.JsonApi;
 
 namespace VirtualLeadersGuide.Web.InfoPages;
 
