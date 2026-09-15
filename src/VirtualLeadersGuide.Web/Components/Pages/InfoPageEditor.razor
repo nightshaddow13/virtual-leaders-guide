@@ -79,8 +79,8 @@
 
                     <div class="ip-panes" data-active-pane="@activePane">
                         <div class="ip-pane ip-pane-write">
-                            <InputTextArea id="MarkdownContent" @bind-Value="model!.MarkdownContent"
-                                           class="rz-textbox ip-editor-textarea" rows="14" />
+                            <textarea id="MarkdownContent" @bind-value="model!.MarkdownContent" @bind-value:event="oninput"
+                                      class="rz-textbox ip-editor-textarea" rows="14"></textarea>
                         </div>
                         <div class="ip-pane ip-pane-preview">
                             <div class="ip-preview-surface">

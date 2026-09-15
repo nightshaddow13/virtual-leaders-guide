@@ -251,7 +251,22 @@ public partial class InfoPageEditor
         [StringLength(200, ErrorMessage = "Title can't be longer than 200 characters.")]
         public string? Title { get; set; }
 
-        /// <remarks>No <see cref="RequiredAttribute"/> - empty content is legal at the Api layer (CONTEXT.md's InfoPage entry: "written but not yet placed" is a normal state, not a draft one).</remarks>
+        /// <remarks>
+        /// No <see cref="RequiredAttribute"/> - empty content is legal at the Api layer (CONTEXT.md's InfoPage
+        /// entry: "written but not yet placed" is a normal state, not a draft one). Bound in
+        /// <c>InfoPageEditor.razor</c> to a plain native <c>&lt;textarea @bind-value:event="oninput"&gt;</c>,
+        /// deliberately not the <c>InputTextArea</c> component - <c>InputTextArea</c> hard-codes its own
+        /// <c>onchange</c> binding in its own <c>BuildRenderTree</c> and has no parameter a caller's
+        /// <c>@bind-Value:event</c> can override (verified directly against ASP.NET Core's source before
+        /// relying on it - a first attempt using <c>InputTextArea</c> with <c>@bind-Value:event="oninput"</c>
+        /// silently compiled but did nothing, since Razor's <c>:event</c> customization only overrides which
+        /// DOM event a *native element* binds to, not a component's own internal wiring; the unmatched
+        /// "oninput" ended up captured into <c>InputBase&lt;T&gt;.AdditionalAttributes</c> and splatted onto
+        /// the textarea as a second, unrelated handler). The whole point of a live Preview pane is that it
+        /// reflects what's being typed, not only what was typed the last time the textarea lost focus (caught
+        /// by <c>InfoPageManagementScenarios</c>'s E2E coverage, which fills the field and checks the Preview
+        /// pane without ever blurring it, the same way a real admin glancing at Preview mid-sentence would).
+        /// </remarks>
         public string? MarkdownContent { get; set; }
     }
 }

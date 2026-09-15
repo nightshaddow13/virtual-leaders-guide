@@ -34,7 +34,12 @@ public class InfoPageManagementScenarios(AspireE2EFixture fixture) : E2ETestBase
             await Page.Locator("#MarkdownContent").FillAsync("Bring a **jacket** and <script>alert(1)</script>.");
 
             await Expect(Page.Locator(".ip-pane-preview strong")).ToHaveTextAsync("jacket");
-            await Expect(Page.Locator(".ip-pane-preview")).Not.ToContainTextAsync("<script>");
+
+            // DisableHtml() escapes raw HTML to inert visible text rather than dropping it (confirmed by
+            // MarkdownRendererShould) - the correct check is "no live <script> element exists in the DOM",
+            // not "the rendered text doesn't contain the substring '<script>'", which the escaped text itself
+            // legitimately does.
+            await Expect(Page.Locator(".ip-pane-preview script")).ToHaveCountAsync(0);
 
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create page" }).ClickAsync();
             await Expect(Page).ToHaveURLAsync(
