@@ -35,7 +35,10 @@ through the dashboard — not checked-in `.md` files, so updates don't require a
 markdown mechanism Activity's Description shares. The only Page subtype that exists today — the Page/InfoPage
 split exists specifically to leave room for future subtypes (e.g. a map page, a schedule page) without
 renaming the base concept later. Placed via a Placement under a Tab (optionally a Sub Tab) — never a Section
-or Sub Section, since an InfoPage is a whole page, not a heading-level item within one; see Placement.
+or Sub Section, since an InfoPage is a whole page, not a heading-level item within one; see Placement. May
+exist with no Placement at all — "written but not yet placed" is a normal state, not a draft one. No title is
+unique, even within one Event — an InfoPage is reached by picking its Placement's Tab, not by its title, so
+two InfoPages on the same Event may share a title (e.g. a per-Tab "Schedule").
 _Avoid_: ContentPage
 
 **Tier**:

@@ -1,3 +1,7 @@
+---
+status: corrected and superseded in part by ADR-0059 - see below
+---
+
 # Page/InfoPage is Table-Per-Type, with a deliberately redundant PageTypeId tag column
 
 `Page` (CONTEXT.md) is modeled EF Core Table-Per-Type: shared columns (`Id`, `EventId`, `Title`, `PageTypeId`)
@@ -21,11 +25,18 @@ from lapsing besides code review and `PageSchemaShould`'s round-trip coverage.
 
 `Page`/`InfoPage`/`PageType` are plain POCOs in this ticket, not `Identifiable<Guid>` - `AddJsonApi<TDbContext>`
 walks every entity type in the EF model (`DbContext.Model.GetEntityTypes()`) and auto-registers any
-`IIdentifiable` type it finds as a JSON:API resource, regardless of whether it carries `[Resource]` (that
-attribute only customizes naming, it doesn't gate exposure). Inheriting `Identifiable<Guid>` now would have
-exposed an unauthenticated-scoping `/api/pages`/`/api/infoPages` the moment this migration shipped, weeks
-before P5-16 (#21) builds any authorization - the same reasoning that already keeps `Role` a plain POCO
-(ADR-0017's Consequences). P5-16 is the ticket that deliberately changes this.
+`IIdentifiable` type it finds into the resource graph, regardless of whether it carries `[Resource]`.
+Inheriting `Identifiable<Guid>` before this ticket has any authorization to protect it is a needless surface
+regardless - the same reasoning that already keeps `Role` a plain POCO (ADR-0017's Consequences) - so staying
+plain POCOs here is still the right call. P5-16 is the ticket that deliberately changes this.
+
+**Correction (ADR-0059):** the sentence above originally claimed "`[Resource]` only customizes naming, it
+doesn't gate exposure," and concluded from it that inheriting `Identifiable<Guid>` here would have exposed an
+unauthenticated `/api/pages`/`/api/infoPages`. That's backwards. A JsonApiDotNetCore controller is generated
+by its source generator specifically off `[Resource]`; graph membership by itself creates no route. P5-16
+verified this directly against the JsonApiDotNetCore 5.11.0 assemblies before relying on it - see ADR-0059 for
+the citation. The outcome recorded here (plain POCOs until P5-16) remains the right call for the independent
+reason above; only the stated mechanism was wrong.
 
 ## Considered options
 
@@ -49,6 +60,7 @@ before P5-16 (#21) builds any authorization - the same reasoning that already ke
   This supersedes #20's own "no ADR directly" note, once PageTypeId's redundancy-by-design and the drift risk
   it carries became clear during planning.
 - `Page`/`InfoPage` staying non-`Identifiable` until P5-16 means P5-16 must additionally account for `Page`
-  itself: turning `InfoPage` into a resource by making its base `Page` inherit `Identifiable<Guid>` would
-  auto-expose `Page` too (same `AddJsonApi<TDbContext>` mechanism), which isn't obviously desired since `Page`
-  is never meant to be its own endpoint - worth resolving explicitly when P5-16 is planned, not assumed away.
+  itself: turning `InfoPage` into a resource means making its base `Page` inherit `Identifiable<Guid>`, which
+  puts `Page` in the resource graph too - worth resolving explicitly when P5-16 is planned, not assumed away.
+  **Resolved by ADR-0059**: `Page` is `Identifiable<Guid>` but is explicitly removed from the resource graph,
+  so it carries no route regardless of the (corrected) `[Resource]`/graph-membership mechanism above.

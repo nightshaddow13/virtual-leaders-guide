@@ -47,7 +47,7 @@ public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, G
     /// <param name="httpContextAccessor">
     /// Resolves the current request's <see cref="System.Security.Claims.ClaimsPrincipal"/> (for
     /// <see cref="EventAccessPolicy"/>) and <see cref="IJsonApiRequest"/> - see <see cref="CurrentPolicy"/> and
-    /// <see cref="GetRequest"/>.
+    /// <see cref="JsonApiResourceDefinitionHelpers.GetRequest"/>.
     /// </param>
     /// <param name="dbContext">Backs <see cref="CheckForConflictsAsync"/>'s Name/Slug uniqueness pre-check and <see cref="ValidateStatusTransitionAsync"/>'s pre-PATCH lookup.</param>
     /// <param name="targetedFields">Tells <see cref="ValidateStatusTransitionAsync"/> whether a PATCH actually named <see cref="Event.Status"/>, so an ordinary Save changes skips the lookup entirely.</param>
@@ -84,7 +84,7 @@ public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, G
     public override FilterExpression? OnApplyFilter(FilterExpression? existingFilter)
     {
         var policy = CurrentPolicy();
-        IJsonApiRequest request = GetRequest();
+        IJsonApiRequest request = JsonApiResourceDefinitionHelpers.GetRequest(_httpContextAccessor, nameof(EventResourceDefinition));
 
         if (request.PrimaryId is not null)
         {
@@ -105,19 +105,16 @@ public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, G
 
         if (request.IsReadOnly && !rewriter.ClientNamedStatus)
         {
-            filter = And(filter, EventStatusFilterRewriter.DefaultVisibleStatuses(filterContext));
+            filter = JsonApiResourceDefinitionHelpers.And(filter, EventStatusFilterRewriter.DefaultVisibleStatuses(filterContext));
         }
 
         if (!policy.IsAdmin)
         {
-            filter = And(filter, BuildAssignedEventsFilter(policy));
+            filter = JsonApiResourceDefinitionHelpers.And(filter, BuildAssignedEventsFilter(policy));
         }
 
         return filter;
     }
-
-    private static FilterExpression? And(FilterExpression? left, FilterExpression right) =>
-        left is null ? right : new LogicalExpression(LogicalOperator.And, left, right);
 
     private ResourceFieldChainExpression StatusChain() =>
         new(ResourceType.GetAttributeByPropertyName(nameof(Event.Status)));
@@ -443,13 +440,6 @@ public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, G
         new(_httpContextAccessor.HttpContext?.User ?? throw new InvalidOperationException(
             "EventResourceDefinition requires an active HttpContext."));
 
-    private IJsonApiRequest GetRequest() =>
-        _httpContextAccessor.HttpContext?.RequestServices.GetRequiredService<IJsonApiRequest>()
-            ?? throw new InvalidOperationException("EventResourceDefinition requires an active HttpContext.");
-
     private static JsonApiException ForbiddenException() =>
-        new(new ErrorObject(HttpStatusCode.Forbidden)
-        {
-            Title = "You do not have permission to access this Event."
-        });
+        JsonApiResourceDefinitionHelpers.ForbiddenException("You do not have permission to access this Event.");
 }

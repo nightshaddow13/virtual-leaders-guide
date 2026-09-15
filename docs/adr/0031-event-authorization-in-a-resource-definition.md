@@ -1,5 +1,5 @@
 ---
-status: collection/single asymmetry generalized by ADR-0033 (a caller whose visible set is always empty, not just sometimes-narrowed, gets 403 on every shape instead of a silently-filtered collection)
+status: collection/single asymmetry generalized by ADR-0033 (a caller whose visible set is always empty, not just sometimes-narrowed, gets 403 on every shape instead of a silently-filtered collection); the per-resource write question this ADR defers to future Event-scoped resources is answered for InfoPage by ADR-0059 (a Director may fully CRUD an InfoPage on an assigned Event)
 ---
 
 # Event authorization is enforced in a JsonApiDotNetCore resource definition, not a controller
