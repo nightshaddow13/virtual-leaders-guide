@@ -37,6 +37,9 @@
             <h1>@model!.Name</h1>
             <RadzenBadge Text="VIEW ONLY" BadgeStyle="BadgeStyle.Light" Variant="Variant.Outlined" />
         </div>
+        <RadzenButton Text="Info pages" Icon="description" ButtonStyle="ButtonStyle.Light"
+                      Click="@(() => NavigationManager.NavigateTo($"dashboard/events/{Id}/info-pages"))"
+                      Style="margin-block-end: 1rem;" />
         <div class="vlg-readonly-field">
             <RadzenText TextStyle="TextStyle.Overline">Status</RadzenText>
             <RadzenBadge Text="@EventStatusDisplay.Text(loadedDto!.Status)" BadgeStyle="@EventStatusDisplay.Style(loadedDto.Status)"
@@ -63,6 +66,12 @@
             <RadzenBreadCrumbItem Text="EVENTS" Path="dashboard" />
             <RadzenBreadCrumbItem Text="@(Id is null ? "NEW" : model!.Name?.ToUpperInvariant())" />
         </RadzenBreadCrumb>
+        @if (Id is not null)
+        {
+            <RadzenButton Text="Info pages" Icon="description" ButtonStyle="ButtonStyle.Light"
+                          Click="@(() => NavigationManager.NavigateTo($"dashboard/events/{Id}/info-pages"))"
+                          Style="margin-block-end: 0.75rem;" />
+        }
         <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween"
                      AlignItems="AlignItems.End" Gap="1rem" Style="margin-block-end: 1rem;">
             <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.75rem">

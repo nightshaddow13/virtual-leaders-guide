@@ -1,0 +1,72 @@
+@page "/dashboard/events/{EventId:guid}/info-pages"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+@using VirtualLeadersGuide.Web.InfoPages
+
+<PageTitle>Info pages</PageTitle>
+
+<RadzenComponents @rendermode="InteractiveServer" />
+
+@switch (state)
+{
+    case PageState.Denied:
+        <StatusPanel Title="You don't have access to this Event"
+                     Message="Ask an Admin to grant you access, or check you're signed in as the right person.">
+            <RadzenButton Text="Back to dashboard" Click="NavigateToDashboard" />
+        </StatusPanel>
+        break;
+
+    case PageState.Unavailable:
+        <StatusPanel Title="Something went wrong loading this Event" Message="The Event store didn't respond. Try again.">
+            <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
+                <RadzenButton Text="Try again" Click="@(() => NavigationManager.Refresh(forceReload: true))" />
+                <RadzenButton Text="Back to dashboard" ButtonStyle="ButtonStyle.Light" Click="NavigateToDashboard" />
+            </RadzenStack>
+        </StatusPanel>
+        break;
+
+    case PageState.Ready:
+        <RadzenBreadCrumb>
+            <RadzenBreadCrumbItem Text="@(isAdmin ? "EVENTS" : "MY EVENTS")" Path="dashboard" />
+            <RadzenBreadCrumbItem Text="@eventName?.ToUpperInvariant()" Path="@($"dashboard/events/{EventId}")" />
+            <RadzenBreadCrumbItem Text="INFO PAGES" />
+        </RadzenBreadCrumb>
+
+        <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween"
+                     AlignItems="AlignItems.End" Gap="1rem" Style="margin-block-end: 1rem;">
+            <div>
+                <h1>Info pages</h1>
+                <RadzenText TextStyle="TextStyle.Caption">@totalCount info pages</RadzenText>
+            </div>
+            <RadzenButton Text="+ New page" Click="@(() => NavigationManager.NavigateTo($"dashboard/events/{EventId}/info-pages/new"))" />
+        </RadzenStack>
+
+        <RadzenDataGrid @ref="grid" TItem="InfoPageDto" Data="@infoPages" Count="@totalCount" LoadData="@LoadDataAsync"
+                         AllowPaging="true" PageSize="10" IsLoading="@isLoading" EmptyText="No Info pages yet.">
+            <Columns>
+                <RadzenDataGridColumn TItem="InfoPageDto" Property="@nameof(InfoPageDto.Title)" Title="Title" Filterable="false" Sortable="false" />
+                <RadzenDataGridColumn TItem="InfoPageDto" Sortable="false" Filterable="false" Width="@ActionColumnWidth" TextAlign="TextAlign.Center">
+                    <Template Context="item">
+                        <RadzenStack Orientation="Orientation.Horizontal" Gap="0.25rem" JustifyContent="JustifyContent.Center">
+                            <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" aria-label="Edit"
+                                          Click="@(() => NavigationManager.NavigateTo($"dashboard/events/{EventId}/info-pages/{item.Id}"))" />
+                            <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" aria-label="Delete"
+                                          Click="@(() => DeleteAsync(item))" />
+                        </RadzenStack>
+                    </Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+
+        @if (loadErrorMessage is not null)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" AllowClose="false" Style="margin-block-start: 1rem;" Text="@loadErrorMessage" />
+        }
+
+        @if (deleteErrorMessage is not null)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" AllowClose="false" Style="margin-block-start: 1rem;" Text="@deleteErrorMessage" />
+        }
+        break;
+}

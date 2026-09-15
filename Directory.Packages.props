@@ -49,6 +49,10 @@
   </ItemGroup>
 
   <ItemGroup Label="Misc app dependencies">
+    <!-- Renders InfoPage/Activity markdown to HTML; sanitized by HtmlSanitizer before display (ADR-0048,
+         P5-17, #22) - see Web/Markdown/MarkdownRenderer.cs. -->
+    <PackageVersion Include="Markdig" Version="1.3.2" />
+    <PackageVersion Include="HtmlSanitizer" Version="9.2.1039" />
     <PackageVersion Include="PasswordGenerator" Version="3.0.0" />
     <PackageVersion Include="Radzen.Blazor" Version="11.4.0" />
   </ItemGroup>

@@ -17,6 +17,8 @@
     <PackageReference Include="Aspire.Azure.Storage.Blobs" />
     <PackageReference Include="Azure.Communication.Email" />
     <PackageReference Include="Azure.Extensions.AspNetCore.DataProtection.Blobs" />
+    <PackageReference Include="HtmlSanitizer" />
+    <PackageReference Include="Markdig" />
     <!-- Mints the internal JWT (P2-5, #14) with the same token-handling stack
          Microsoft.AspNetCore.Authentication.JwtBearer uses on the Api side to validate it. -->
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />

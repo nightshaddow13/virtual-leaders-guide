@@ -1,0 +1,105 @@
+@page "/dashboard/events/{EventId:guid}/info-pages/new"
+@page "/dashboard/events/{EventId:guid}/info-pages/{InfoPageId:guid}"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+@using VirtualLeadersGuide.Web.InfoPages
+
+<PageTitle>@(InfoPageId is null ? "New info page" : "Info page")</PageTitle>
+
+<RadzenComponents @rendermode="InteractiveServer" />
+
+@switch (state)
+{
+    case PageState.Denied:
+        <StatusPanel Title="You don't have access to this Info page"
+                     Message="Ask an Admin to grant you access, or check you're signed in as the right person.">
+            <RadzenButton Text="Back to dashboard" Click="@(() => NavigationManager.NavigateTo("dashboard", forceLoad: true))" />
+        </StatusPanel>
+        break;
+
+    case PageState.Unavailable:
+        <StatusPanel Title="Something went wrong loading this page" Message="The store didn't respond. Try again.">
+            <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
+                <RadzenButton Text="Try again" Click="@(() => NavigationManager.Refresh(forceReload: true))" />
+                <RadzenButton Text="Back to dashboard" ButtonStyle="ButtonStyle.Light" Click="@(() => NavigationManager.NavigateTo("dashboard", forceLoad: true))" />
+            </RadzenStack>
+        </StatusPanel>
+        break;
+
+    case PageState.Ready:
+        <RadzenBreadCrumb>
+            <RadzenBreadCrumbItem Text="@(isAdmin ? "EVENTS" : "MY EVENTS")" Path="dashboard" />
+            <RadzenBreadCrumbItem Text="@eventName?.ToUpperInvariant()" Path="@($"dashboard/events/{EventId}")" />
+            <RadzenBreadCrumbItem Text="INFO PAGES" Path="@($"dashboard/events/{EventId}/info-pages")" />
+            <RadzenBreadCrumbItem Text="@(InfoPageId is null ? "NEW" : model!.Title?.ToUpperInvariant())" />
+        </RadzenBreadCrumb>
+
+        <EditForm Model="model" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+
+            <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween"
+                         AlignItems="AlignItems.End" Gap="1rem" Style="margin-block-end: 1rem;">
+                <h1>@(InfoPageId is null ? "New info page" : "Edit info page")</h1>
+                <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
+                    <RadzenButton Text="Cancel" ButtonStyle="ButtonStyle.Light" ButtonType="ButtonType.Button"
+                                  Disabled="@isSaving" Click="NavigateToList" />
+                    <RadzenButton Text="@(InfoPageId is null ? "Create page" : "Save changes")"
+                                  ButtonType="ButtonType.Submit" Disabled="@(isSaving || permissionLostMessage is not null)" />
+                </RadzenStack>
+            </RadzenStack>
+
+            @if (permissionLostMessage is not null)
+            {
+                <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" AllowClose="false" Text="@permissionLostMessage" />
+            }
+            @if (saveErrorMessage is not null)
+            {
+                <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" AllowClose="false" Text="@saveErrorMessage" />
+            }
+
+            <fieldset disabled="@(permissionLostMessage is not null)">
+                <div class="vlg-field">
+                    <label for="Title">Title</label>
+                    <InputText id="Title" @bind-Value="model!.Title" class="rz-textbox rz-input-md" />
+                    <ValidationMessage For="() => model!.Title" class="rz-messages-error" />
+                </div>
+
+                <div class="vlg-field">
+                    <label>Content</label>
+
+                    <div class="ip-tabstrip">
+                        <RadzenSelectBar @bind-Value="activePane" TValue="PaneView">
+                            <Items>
+                                <RadzenSelectBarItem Text="Write" Value="PaneView.Write" />
+                                <RadzenSelectBarItem Text="Preview" Value="PaneView.Preview" />
+                            </Items>
+                        </RadzenSelectBar>
+                    </div>
+
+                    <div class="ip-panes" data-active-pane="@activePane">
+                        <div class="ip-pane ip-pane-write">
+                            <InputTextArea id="MarkdownContent" @bind-Value="model!.MarkdownContent"
+                                           class="rz-textbox ip-editor-textarea" rows="14" />
+                        </div>
+                        <div class="ip-pane ip-pane-preview">
+                            <div class="ip-preview-surface">
+                                @MarkdownRenderer.RenderToHtml(model?.MarkdownContent ?? "")
+                            </div>
+                        </div>
+                    </div>
+                    <RadzenText TextStyle="TextStyle.Caption" TagName="TagName.Div" Style="margin-block-start: 0.25rem;">Markdown supported.</RadzenText>
+                </div>
+            </fieldset>
+        </EditForm>
+
+        @if (InfoPageId is not null)
+        {
+            <RadzenStack Orientation="Orientation.Vertical" Gap="0.5rem" Style="margin-block-start: 2rem;">
+                <h2>Danger zone</h2>
+                <RadzenButton Text="Delete info page" ButtonStyle="ButtonStyle.Danger" Disabled="@isDeleting"
+                              Click="DeleteAsync" Style="align-self: flex-start;" />
+            </RadzenStack>
+        }
+        break;
+}

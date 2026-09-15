@@ -5,6 +5,7 @@ using VirtualLeadersGuide.Web.Authorization;
 using VirtualLeadersGuide.Web.Directors;
 using VirtualLeadersGuide.Web.Events;
 using VirtualLeadersGuide.Web.Identity;
+using VirtualLeadersGuide.Web.InfoPages;
 
 namespace VirtualLeadersGuide.Web.Tests;
 
@@ -23,6 +24,9 @@ internal static class ApiClientTestFactory
         new(CreateInternalApiClient(apiHandler));
 
     public static ApiDirectorClient CreateDirectorClient(HttpMessageHandler apiHandler) =>
+        new(CreateInternalApiClient(apiHandler));
+
+    public static ApiInfoPageClient CreateInfoPageClient(HttpMessageHandler apiHandler) =>
         new(CreateInternalApiClient(apiHandler));
 
     private static InternalApiClient CreateInternalApiClient(HttpMessageHandler apiHandler)

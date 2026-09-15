@@ -10,6 +10,8 @@ using VirtualLeadersGuide.Web.Components.Account;
 using VirtualLeadersGuide.Web.Directors;
 using VirtualLeadersGuide.Web.Events;
 using VirtualLeadersGuide.Web.Identity;
+using VirtualLeadersGuide.Web.InfoPages;
+using VirtualLeadersGuide.Web.Markdown;
 using VirtualLeadersGuide.Web.PublicGuide;
 using VirtualLeadersGuide.Web.Time;
 
@@ -55,6 +57,8 @@ builder.Services.AddScoped<ApiEventClient>();
 builder.Services.AddScoped<BrowserTimeZoneAccessor>();
 builder.Services.AddScoped<ApiDirectorClient>();
 builder.Services.AddScoped<DirectorInviteService>();
+builder.Services.AddScoped<ApiInfoPageClient>();
+builder.Services.AddSingleton<MarkdownRenderer>();
 
 builder.Services.AddScoped<PublicEventClient>();
 builder.Services.AddScoped<PasscodeUnlockCookie>();
