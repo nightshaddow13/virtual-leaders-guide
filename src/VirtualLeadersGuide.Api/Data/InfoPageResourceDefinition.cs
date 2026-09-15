@@ -76,7 +76,7 @@ public sealed class InfoPageResourceDefinition : JsonApiResourceDefinition<InfoP
             return existingFilter;
         }
 
-        IJsonApiRequest request = GetRequest();
+        IJsonApiRequest request = JsonApiResourceDefinitionHelpers.GetRequest(_httpContextAccessor, nameof(InfoPageResourceDefinition));
         if (request.PrimaryId is not null)
         {
             if (!policy.CanRead(StoredEventId(Guid.Parse(request.PrimaryId))))
@@ -87,11 +87,8 @@ public sealed class InfoPageResourceDefinition : JsonApiResourceDefinition<InfoP
             return existingFilter;
         }
 
-        return And(existingFilter, BuildAssignedEventsFilter(policy));
+        return JsonApiResourceDefinitionHelpers.And(existingFilter, BuildAssignedEventsFilter(policy));
     }
-
-    private static FilterExpression? And(FilterExpression? left, FilterExpression right) =>
-        left is null ? right : new LogicalExpression(LogicalOperator.And, left, right);
 
     private FilterExpression BuildAssignedEventsFilter(InfoPageAccessPolicy policy)
     {
@@ -203,13 +200,6 @@ public sealed class InfoPageResourceDefinition : JsonApiResourceDefinition<InfoP
         new(_httpContextAccessor.HttpContext?.User ?? throw new InvalidOperationException(
             "InfoPageResourceDefinition requires an active HttpContext."));
 
-    private IJsonApiRequest GetRequest() =>
-        _httpContextAccessor.HttpContext?.RequestServices.GetRequiredService<IJsonApiRequest>()
-            ?? throw new InvalidOperationException("InfoPageResourceDefinition requires an active HttpContext.");
-
     private static JsonApiException ForbiddenException() =>
-        new(new ErrorObject(HttpStatusCode.Forbidden)
-        {
-            Title = "You do not have permission to access this InfoPage."
-        });
+        JsonApiResourceDefinitionHelpers.ForbiddenException("You do not have permission to access this InfoPage.");
 }

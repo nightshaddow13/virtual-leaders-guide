@@ -20,7 +20,16 @@ namespace VirtualLeadersGuide.Api.Tests;
 /// <remarks>
 /// A Director's full CRUD access on an assigned Event (ADR-0059) is the deliberate divergence from
 /// <see cref="EventsResourceShould"/>, where a Director's PATCH/DELETE always 403s regardless of assignment -
-/// call that out explicitly wherever a test's name might otherwise read as a copy-paste of the Event version.
+/// see <see cref="SucceedWithNoContent_WhenAnAssignedDirectorUpdatesAnInfoPageOnTheirEvent_ForPatch"/> and
+/// <see cref="SucceedWithNoContent_WhenAnAssignedDirectorDeletesAnInfoPageOnTheirEvent_ForDelete"/>.
+/// </remarks>
+/// <remarks>
+/// <see cref="SetThePageTypeId_WhenAdminCreatesAnInfoPageOverHttp_ForPost"/> pins ADR-0055's "kept truthful by
+/// construction" invariant through the one path <c>InfoPage.Create</c> never sees - a POST over HTTP, which
+/// JsonApiDotNetCore routes through its own resource factory instead (see <c>InfoPage.Create</c>'s remarks and
+/// <c>InfoPageResourceDefinition.FillServerGeneratedDefaults</c>). It asserts against the DbContext, not the
+/// response body, since <see cref="Page.PageTypeId"/> carries no <c>[Attr]</c> and is never in the JSON:API
+/// response to begin with.
 /// </remarks>
 public class InfoPagesResourceShould : IAsyncLifetime
 {
@@ -145,10 +154,6 @@ public class InfoPagesResourceShould : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
-    /// <remarks>
-    /// The ADR-0059 divergence from <see cref="EventsResourceShould.RejectWithForbidden_WhenAnAssignedDirectorUpdatesTheirEvent_ForPatch"/> -
-    /// a Director may edit their own Event's InfoPages even though they may never edit the Event itself.
-    /// </remarks>
     [Fact]
     public async Task SucceedWithNoContent_WhenAnAssignedDirectorUpdatesAnInfoPageOnTheirEvent_ForPatch()
     {
@@ -165,10 +170,6 @@ public class InfoPagesResourceShould : IAsyncLifetime
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
 
-    /// <remarks>
-    /// The ADR-0059 divergence from <see cref="EventsResourceShould.RejectWithForbidden_WhenAnAssignedDirectorAttemptsToDeleteTheirEvent_ForDelete"/> -
-    /// a Director's write authority on InfoPages includes delete, unlike Event details.
-    /// </remarks>
     [Fact]
     public async Task SucceedWithNoContent_WhenAnAssignedDirectorDeletesAnInfoPageOnTheirEvent_ForDelete()
     {
@@ -300,13 +301,6 @@ public class InfoPagesResourceShould : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
-    /// <remarks>
-    /// Pins ADR-0055's "kept truthful by construction" invariant through the one path <c>InfoPage.Create</c>
-    /// never sees - a POST over HTTP, which JsonApiDotNetCore routes through its own resource factory instead
-    /// (see <c>InfoPage.Create</c>'s remarks and <c>InfoPageResourceDefinition.FillServerGeneratedDefaults</c>).
-    /// Asserted against the DbContext, not the response body - <see cref="Page.PageTypeId"/> carries no
-    /// <c>[Attr]</c>, so it's never in the JSON:API response to begin with.
-    /// </remarks>
     [Fact]
     public async Task SetThePageTypeId_WhenAdminCreatesAnInfoPageOverHttp_ForPost()
     {

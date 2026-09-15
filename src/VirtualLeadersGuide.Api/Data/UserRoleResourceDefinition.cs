@@ -170,5 +170,5 @@ public sealed class UserRoleResourceDefinition : JsonApiResourceDefinition<UserR
             "UserRoleResourceDefinition requires an active HttpContext."));
 
     private static JsonApiException ForbiddenException(string title) =>
-        new(new ErrorObject(HttpStatusCode.Forbidden) { Title = title });
+        JsonApiResourceDefinitionHelpers.ForbiddenException(title);
 }
