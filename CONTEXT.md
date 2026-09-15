@@ -22,7 +22,8 @@ A single thing happening at an Event (e.g. "Opening Ceremony", "Aquatics Rotatio
 Description (rich text — see InfoPage's markdown mechanism, which Description shares) and belongs to exactly
 one Event. A scheduled time and a Location are additions a later phase makes to this same concept — an
 Activity is real and listable before it has either.
-_Avoid_: ScheduleItem (describes storage shape, not the domain concept), Session (reads as a conference term)
+_Avoid_: ScheduleItem (describes storage shape, not the domain concept), Session (now taken — see Session —
+and was already a poor fit here, reading as a conference term)
 
 **Page**:
 A general concept for a piece of content attached to an Event's Leaders Guide. Has subtypes for different kinds
@@ -74,6 +75,45 @@ _Avoid_: Sub Category (an earlier three-tier draft of this model used Sub Catego
 An optional sub-heading nested one level under a Section — the deepest tier; nothing nests under it. Scoped
 to its Section, so it inherits Section's InfoPage restriction: **never set on an InfoPage's Placement**.
 _Avoid_: Sub Category (an earlier three-tier draft of this model had no fourth level)
+
+**Round Robin**:
+A timed rotation plan owned by exactly one Tab or Sub Tab, cycling an Event's Groups through that page's
+participating Sections (see Station) across a series of Sessions. Renders as a block atop that Tab/Sub Tab's
+existing Activities screen — not a distinct screen of its own (see Section's Placement-scoping and Tier). At
+most one Round Robin per Tab/Sub Tab path; an Event has as many Round Robins as it has such pages (e.g. one
+for morning, another for afternoon).
+_Avoid_: Rotation (informal shorthand for the grid's contents, not the plan itself), Schedule (reserved for
+the Event-wide concept a later phase owns — see the roadmap gap issue, #45)
+
+**Group**:
+A named unit that rotates as one through a Round Robin (e.g. "Den 1"). Scoped to an Event and shared by every
+Round Robin on that Event, so the same Group rotating in a morning Round Robin and an afternoon one is a
+single row, not two. Today a bare name (a stub); a later phase backs a Group with an account or an account
+grouping, at which point a Group may contain other Groups.
+_Avoid_: Den, Patrol (program-specific — this app stays theme-neutral, see Event), Team, Crew
+
+**Session**:
+One timed slot in a Round Robin, identified by its ordinal ("Session 1", "Session 2"). Not separately
+authored and not a stored row: a Round Robin holds a start time, a session duration, and a changeover gap, and
+every Session's clock time is computed from them — re-timing a day that ran late is one edit, not one edit per
+remaining Session.
+_Avoid_: Slot, Round, Period
+
+**Station**:
+The role a Section plays inside a Round Robin: one place a Group is sent for one Session. A Section is a
+Station only in whichever Round Robins choose to include it; being a Section does not make it one anywhere
+else, and a Round Robin never keeps a Section alive on its own (see Section's lazy-create/auto-delete
+lifecycle, which a Round Robin's participation does not override).
+
+**Stop**:
+One Group's assignment for one Session of a Round Robin — a single cell of the grid. Names either a Station or
+Free Time, never more than one Group.
+_Avoid_: Assignment (already taken by Placement and Grant, each a different shape of "attaches one thing to
+another"), Slot, Cell
+
+**Free Time**:
+A Stop with no Station, produced when a Round Robin has more Groups than Stations. Not an Activity, not a
+Section, and never separately authored — purely the absence of a Station on a Stop.
 
 **Placement**:
 An Activity's or InfoPage's appearance under a specific Tab and, optionally, a Sub Tab. An Activity's
@@ -136,7 +176,7 @@ the Role by itself grants nothing (see Director's _unscoped_ state) — actual a
 comes from a separate Grant, layered on top. One User holds at most one Role-row per Role. Stored as a
 `UserRole` row — the same table Grants use (see ADR-0035 for why the table/endpoint name predates this
 split).
-_Avoid_: Permission, Group. "Staff" is UI copy only (e.g. the public site's "Staff sign in" affordance,
+_Avoid_: Permission, Group (now the rotation unit — see Group). "Staff" is UI copy only (e.g. the public site's "Staff sign in" affordance,
 meaning "anyone holding the Admin or Director Role") — it is not a Role and must not appear as one in code,
 an API shape, or a claim.
 
