@@ -1,0 +1,74 @@
+/* ===========================================================================
+   InfoPage editor's responsive Write/Preview panes (P5-17, #22; grilled decision).
+   Side-by-side above 64rem (matches Activity's Direction C tree-drops-below breakpoint);
+   RadzenSelectBar-driven tabs below it. Built with no JS interop - both panes always render
+   in the DOM, and a plain enum field (`activePane`, rendered here as `data-active-pane`)
+   is all the state CSS needs. `data-` attribute values render as their literal ToString()
+   ("Write"/"Preview" for this enum), not the bool-omission special case, so a plain
+   attribute-value selector is enough.
+   =========================================================================== */
+
+.ip-tabstrip {
+    display: none;
+    margin-block-end: 0.75rem;
+}
+
+.ip-panes {
+    display: block;
+}
+
+.ip-pane {
+    display: none;
+}
+
+.ip-editor-textarea {
+    width: 100%;
+    min-height: 280px;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    resize: vertical;
+}
+
+.ip-preview-surface {
+    min-height: 280px;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--vlg-line);
+    border-radius: var(--vlg-radius);
+    background: var(--vlg-surface);
+    overflow-y: auto;
+}
+
+    .ip-preview-surface :first-child {
+        margin-block-start: 0;
+    }
+
+    .ip-preview-surface :last-child {
+        margin-block-end: 0;
+    }
+
+@media (min-width: 64rem) {
+    .ip-panes {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+    }
+
+    .ip-pane {
+        display: block;
+    }
+}
+
+@media (max-width: 63.99rem) {
+    .ip-tabstrip {
+        display: block;
+    }
+
+    .ip-panes[data-active-pane="Write"] .ip-pane-write {
+        display: block;
+    }
+
+    .ip-panes[data-active-pane="Preview"] .ip-pane-preview {
+        display: block;
+    }
+}

@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using VirtualLeadersGuide.Web.JsonApi;
 
 namespace VirtualLeadersGuide.Web.Events;
 
@@ -97,38 +98,4 @@ internal sealed class EventCollectionDocument
     public required List<EventResourceObject> Data { get; init; }
 
     public DocumentMeta? Meta { get; init; }
-}
-
-/// <summary>Top-level document metadata.</summary>
-/// <remarks>Populated only when Api's <c>IncludeTotalResourceCount</c> option is on (it is, as of P2-9).</remarks>
-internal sealed class DocumentMeta
-{
-    public int? Total { get; init; }
-}
-
-/// <summary>The response body for a non-2xx JSON:API error response.</summary>
-internal sealed class ErrorDocument
-{
-    public required List<ErrorObject> Errors { get; init; }
-}
-
-/// <summary>One JSON:API error - see <see cref="ErrorSource.Pointer"/> for the part <see cref="ApiEventClient"/> uses.</summary>
-internal sealed class ErrorObject
-{
-    public string? Title { get; init; }
-
-    public string? Detail { get; init; }
-
-    public ErrorSource? Source { get; init; }
-}
-
-/// <summary>Where in the request body an <see cref="ErrorObject"/> originates.</summary>
-/// <remarks>
-/// <see cref="Pointer"/> is a JSON Pointer into the request body (e.g. <c>/data/attributes/name</c>) -
-/// <see cref="ApiEventClient"/> surfaces these directly so a caller can route a 409 to the offending form
-/// field, matching <c>EventResourceDefinition.ConflictError</c> on the Api side.
-/// </remarks>
-internal sealed class ErrorSource
-{
-    public string? Pointer { get; init; }
 }

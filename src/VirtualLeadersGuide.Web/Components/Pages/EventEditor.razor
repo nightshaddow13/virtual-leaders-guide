@@ -10,6 +10,21 @@
 
 <RadzenComponents @rendermode="InteractiveServer" />
 
+@{
+    /// <remarks>
+    /// Shared by both <see cref="PageState.Director"/> and <see cref="PageState.Admin"/> below - a Director
+    /// gets full InfoPage CRUD even though this page's own Event fields are read-only for them (ADR-0059), so
+    /// both branches link to the same place. A local templating method rather than duplicating the markup
+    /// (P5-17, #22 code review).
+    /// </remarks>
+    void RenderInfoPagesLink()
+    {
+        <RadzenButton Text="Info pages" Icon="description" ButtonStyle="ButtonStyle.Light"
+                      Click="@(() => NavigationManager.NavigateTo($"dashboard/events/{Id}/info-pages"))"
+                      Style="margin-block-end: 1rem;" />
+    }
+}
+
 @switch (state)
 {
     case PageState.Denied:
@@ -37,6 +52,7 @@
             <h1>@model!.Name</h1>
             <RadzenBadge Text="VIEW ONLY" BadgeStyle="BadgeStyle.Light" Variant="Variant.Outlined" />
         </div>
+        RenderInfoPagesLink();
         <div class="vlg-readonly-field">
             <RadzenText TextStyle="TextStyle.Overline">Status</RadzenText>
             <RadzenBadge Text="@EventStatusDisplay.Text(loadedDto!.Status)" BadgeStyle="@EventStatusDisplay.Style(loadedDto.Status)"
@@ -63,6 +79,10 @@
             <RadzenBreadCrumbItem Text="EVENTS" Path="dashboard" />
             <RadzenBreadCrumbItem Text="@(Id is null ? "NEW" : model!.Name?.ToUpperInvariant())" />
         </RadzenBreadCrumb>
+        @if (Id is not null)
+        {
+            RenderInfoPagesLink();
+        }
         <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween"
                      AlignItems="AlignItems.End" Gap="1rem" Style="margin-block-end: 1rem;">
             <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.75rem">
