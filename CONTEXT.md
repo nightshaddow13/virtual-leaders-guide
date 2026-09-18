@@ -126,6 +126,61 @@ Activity may be placed under more than one Tab (e.g. offered morning and afterno
 The same exact path can never be set twice for the same Activity or InfoPage.
 _Avoid_: Assignment, Slot (Slot reads time-based)
 
+**Facility**:
+A physical property where Events happen — a camp, retreat center, or any other venue — created and managed
+independently of any Event, and persisting across as many Events (and years) as reuse it. Has a Name and a
+Facility Type. An Event may be assigned any number of Facilities, and a Facility any number of Events; neither
+owns the other. Distinct from Event: a Facility is the place, an Event is the gathering held there.
+_Avoid_: Camp (a Facility Type *value*, not this concept — a Facility might be a hotel or community center
+instead), Venue, Site (already avoided for Leaders Guide)
+
+**Facility Type**:
+A freeform label for what kind of property a Facility is (e.g. `Camp`, or something custom for a one-off
+event held somewhere that isn't camp property at all). Same lazy-create lifecycle as Tier — typed once while
+creating or editing a Facility, offered by autofill afterward — but scoped globally across every Facility, not
+to one Event, since Facility itself isn't Event-scoped.
+_Avoid_: Category
+
+**Location**:
+The general concept for a physical place within a Facility that an Activity can happen at — a Building, Room,
+Program Area, or Campsite (see each). This is the concept Activity's own definition forward-references: an
+Activity's Location is optional and set independently of its Name/Description. A Campsite Area is never a
+Location — it only organizes Campsites and is not itself a place an Activity can happen. Checklists and
+tracking against a Location are a later phase's addition to this same concept — a Location is real and usable
+as an Activity's attachment point before it has either.
+_Avoid_: Venue, Spot
+
+**Building**:
+A Location belonging to one Facility, either directly or nested under one of that Facility's Program Areas
+(e.g. a boathouse within a "Waterfront" Program Area) — never both. Holds zero or more Rooms. May be
+multipurpose — the app imposes no fixed-purpose category on a Building — and, unlike Room, a Building may
+itself be an Activity's Location directly (e.g. an Activity held generally "at the Dining Hall" rather than
+in one specific Room of it).
+_Avoid_: Structure
+
+**Room**:
+A Location belonging to one Building — the finer-grained place within it an Activity can attach to instead of
+the whole Building.
+_Avoid_: Space
+
+**Program Area**:
+A Location belonging directly to a Facility, never nested inside a Building — a dedicated activity space
+(e.g. "Archery Range", "Aquatics"). May itself contain Buildings (e.g. a boathouse within "Waterfront") — see
+Building. Sub-dividing a Program Area into sub-units, and categorizing Program Areas, are later phases'
+additions to this same concept — a Program Area is real and usable as a Location before it has either.
+_Avoid_: Area (too generic — collides with Campsite Area)
+
+**Campsite**:
+A Location belonging directly to a Facility, optionally grouped under a Campsite Area. Sub-dividing a
+Campsite into individual sites/plots within it is a later phase's addition to this same concept — a Campsite
+is real and usable as a Location before it has any.
+_Avoid_: Site (already avoided for Leaders Guide), Camp (that's a Facility Type value, not this concept)
+
+**Campsite Area**:
+An optional grouping of a Facility's Campsites (e.g. "Eagle Loop") for organization and navigation only —
+never itself a Location an Activity can attach to.
+_Avoid_: Section (already a distinct Activity page-structure Tier), Zone
+
 **Passcode**:
 A single shared secret for an Event (one value at a time, editable by an Admin — no rotation history), visible
 in full to an assigned Director, entered by a visitor to unlock read access to that event's Leaders Guide. Not
