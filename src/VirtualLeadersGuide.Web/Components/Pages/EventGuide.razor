@@ -1,6 +1,7 @@
 @page "/e/{Slug}"
 @attribute [ExcludeFromInteractiveRouting]
 
+@using VirtualLeadersGuide.Identity.Contracts
 @using VirtualLeadersGuide.Web.Components.Account.Shared
 
 @* See EventGuide.razor.cs's own /// remarks for why this is static SSR and never uses RadzenButton. *@
@@ -87,6 +88,27 @@
         </div>
 
         <RadzenAlert AlertStyle="AlertStyle.Success" Variant="Variant.Flat" AllowClose="false"
-                     Text="This guide is unlocked. Its schedule, map and info pages aren't published yet." />
+                     Text="This guide is unlocked. Its schedule and map aren't published yet." />
+
+        @if (contentErrorMessage is not null)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" AllowClose="false" Text="@contentErrorMessage" />
+        }
+        else if (infoPages.Count == 0)
+        {
+            <p class="vlg-guide-helper">This guide's info pages haven't been added yet. Check back soon.</p>
+        }
+        else
+        {
+            <div class="vlg-guide-pages">
+                @foreach (PublicInfoPageDto infoPage in infoPages)
+                {
+                    <section class="vlg-guide-page">
+                        <h2>@infoPage.Title</h2>
+                        <div class="vlg-guide-page-content">@MarkdownRenderer.RenderToHtml(infoPage.MarkdownContent)</div>
+                    </section>
+                }
+            </div>
+        }
         break;
 }

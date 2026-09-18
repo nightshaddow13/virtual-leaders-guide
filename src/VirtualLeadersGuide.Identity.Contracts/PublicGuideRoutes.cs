@@ -20,9 +20,14 @@ public static class PublicGuideRoutes
 
     public const string PasscodeCheck = "/events/{slug}/passcode";
 
+    public const string InfoPagesByEvent = "/events/{slug}/infoPages";
+
     public static string ForEventBySlug(string slug) =>
         $"{GroupPrefix}/events/{Uri.EscapeDataString(slug)}";
 
     public static string ForPasscodeCheck(string slug) =>
         $"{GroupPrefix}/events/{Uri.EscapeDataString(slug)}/passcode";
+
+    public static string ForInfoPagesByEvent(string slug) =>
+        $"{GroupPrefix}/events/{Uri.EscapeDataString(slug)}/infoPages";
 }

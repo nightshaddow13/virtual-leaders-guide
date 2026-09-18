@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 
 namespace VirtualLeadersGuide.E2E.Tests;
@@ -5,7 +6,8 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// <summary>
 /// Covers P4-2 (#72): the public entry path at <c>/</c> and <c>/e/{slug}</c> - event lookup, passcode entry,
 /// and the landing states around it (wrong passcode, unknown address, Cancelled/Draft, the signed-in staff
-/// bypass, and a Passcode rotation revoking an existing Unlock).
+/// bypass, and a Passcode rotation revoking an existing Unlock). Also covers P4-1 (#23): once unlocked, the
+/// guide renders the Event's InfoPages.
 /// </summary>
 /// <remarks>
 /// Every Event here goes through the real UI (<see cref="E2ETestBase.CreateEventAsync"/>), same discipline as
@@ -119,6 +121,53 @@ public class PublicGuideScenarios(AspireE2EFixture fixture) : E2ETestBase(fixtur
 
             await Expect(Page.GetByText("Unlock this guide")).ToBeVisibleAsync();
         });
+
+    [Fact(DisplayName = "Given an Event with an InfoPage, when a visitor unlocks its guide, then the InfoPage's title and rendered content appear on /e/{slug}")]
+    public async Task GivenAnEventWithAnInfoPage_WhenAVisitorUnlocksItsGuide_ThenTheInfoPagesTitleAndRenderedContentAppearOnE() =>
+        await RunAsync(async () =>
+        {
+            (Guid eventId, string slug, string passcode) = await CreateAndPublishEventReturningIdAsync("Info Page Guide");
+            string title = await CreateInfoPageWithContentAsync(eventId, "About", "Welcome to **camp**!");
+            await SignOutAsync();
+
+            await SubmitOnHomeAsync(slug, passcode);
+
+            await Expect(Page).ToHaveURLAsync(new Uri(Fixture.WebBaseUrl, $"e/{slug}").ToString());
+            await Expect(Page.GetByText(title)).ToBeVisibleAsync();
+            await Expect(Page.Locator("strong", new PageLocatorOptions { HasText = "camp" })).ToBeVisibleAsync();
+        });
+
+    [Fact(DisplayName = "Given an Event with no InfoPages, when a visitor unlocks its guide, then they see the empty-guide message")]
+    public async Task GivenAnEventWithNoInfoPages_WhenAVisitorUnlocksItsGuide_ThenTheySeeTheEmptyGuideMessage() =>
+        await RunAsync(async () =>
+        {
+            (string slug, string passcode) = await CreateAndPublishEventAsync("Empty Guide Host");
+            await SignOutAsync();
+
+            await SubmitOnHomeAsync(slug, passcode);
+
+            await Expect(Page.GetByText("haven't been added yet")).ToBeVisibleAsync();
+        });
+
+    /// <remarks>
+    /// Kept local, not shared - mirrors <c>InfoPageManagementScenarios.CreateInfoPageAsync</c>'s own precedent
+    /// for the same reason (that class's header remarks). Fills MarkdownContent too, unlike that helper, since
+    /// this suite needs real rendered content to assert against on the public side. Assumes the caller is
+    /// already signed in as Admin (matching <see cref="CreateAndPublishEventReturningIdAsync"/>'s own
+    /// contract of leaving the session signed in).
+    /// </remarks>
+    private async Task<string> CreateInfoPageWithContentAsync(Guid eventId, string label, string markdownContent)
+    {
+        string title = $"e2e-{label} {Guid.NewGuid():n}";
+
+        await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, $"dashboard/events/{eventId}/info-pages/new").ToString());
+        await Page.Locator("#Title").FillAsync(title);
+        await Page.Locator("#MarkdownContent").FillAsync(markdownContent);
+        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create page" }).ClickAsync();
+        await Expect(Page).ToHaveURLAsync(new Regex(@"info-pages/[0-9a-f-]{36}$"));
+
+        return title;
+    }
 
     /// <remarks>
     /// Signs in, creates the Event, goes live, reads its real Slug/Passcode off the editor form, and leaves

@@ -111,6 +111,30 @@ public class PublicEventClientShould
         Assert.Null(version);
     }
 
+    [Fact]
+    public async Task ReturnTheInfoPages_WhenApiRespondsWithOk_ForGetInfoPagesAsync()
+    {
+        var handler = StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new List<PublicInfoPageDto>
+        {
+            new() { Id = Guid.NewGuid(), Title = "About", MarkdownContent = "Welcome!" }
+        });
+        PublicEventClient client = CreateClient(handler);
+
+        IReadOnlyList<PublicInfoPageDto> infoPages = await client.GetInfoPagesAsync("summer-camporee", CancellationToken.None);
+
+        Assert.Equal("About", Assert.Single(infoPages).Title);
+    }
+
+    [Fact]
+    public async Task ThrowPublicGuideUnavailable_WhenTheTransportFails_ForGetInfoPagesAsync()
+    {
+        var handler = StubHttpMessageHandler.ThrowingOn(() => new HttpRequestException("boom"));
+        PublicEventClient client = CreateClient(handler);
+
+        await Assert.ThrowsAsync<PublicGuideUnavailableException>(
+            () => client.GetInfoPagesAsync("summer-camporee", CancellationToken.None));
+    }
+
     private static PublicEventClient CreateClient(HttpMessageHandler handler) =>
         new(new StubHttpClientFactory(handler));
 
