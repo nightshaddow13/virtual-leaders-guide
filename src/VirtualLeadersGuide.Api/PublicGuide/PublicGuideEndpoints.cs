@@ -5,8 +5,8 @@ using VirtualLeadersGuide.Identity.Contracts;
 namespace VirtualLeadersGuide.Api.PublicGuide;
 
 /// <summary>
-/// The anonymous-reachable surface behind the public Leaders Guide gate (P4-2, #72) - an Event lookup by
-/// Slug, and a Passcode check, for a visitor with no signed-in identity at all.
+/// The anonymous-reachable surface behind the public Leaders Guide gate - an Event lookup by Slug, a Passcode
+/// check, and an Event's InfoPages (P4-1, #23), for a visitor with no signed-in identity at all.
 /// </summary>
 /// <remarks>
 /// Gated by the same <c>X-Internal-Key</c> fallback policy as every other Api endpoint (ADR-0015), never
@@ -19,7 +19,10 @@ namespace VirtualLeadersGuide.Api.PublicGuide;
 /// </remarks>
 public static class PublicGuideEndpoints
 {
-    /// <summary>Maps this type's two endpoints - Event lookup by Slug, and a Passcode check - onto <paramref name="app"/>.</summary>
+    /// <summary>
+    /// Maps this type's three endpoints - Event lookup by Slug, a Passcode check, and an Event's InfoPages -
+    /// onto <paramref name="app"/>.
+    /// </summary>
     /// <param name="app">The route builder to map onto - typically the top-level <c>WebApplication</c> in <c>Program.cs</c>.</param>
     /// <returns><paramref name="app"/>, for chaining alongside this project's other <c>Map*Endpoints</c> calls.</returns>
     public static IEndpointRouteBuilder MapPublicGuideEndpoints(this IEndpointRouteBuilder app)
@@ -28,6 +31,7 @@ public static class PublicGuideEndpoints
 
         group.MapGet(PublicGuideRoutes.EventBySlug, GetEventBySlugAsync);
         group.MapPost(PublicGuideRoutes.PasscodeCheck, CheckPasscodeAsync);
+        group.MapGet(PublicGuideRoutes.InfoPagesByEvent, GetInfoPagesAsync);
 
         return app;
     }
@@ -84,6 +88,37 @@ public static class PublicGuideEndpoints
             EventId = matched ? @event.Id : null,
             PasscodeVersion = matched ? @event.PasscodeVersion : null
         });
+    }
+
+    /// <remarks>
+    /// <c>404</c> for an unknown Slug or a <c>Draft</c> Event, same guard as <see cref="GetEventBySlugAsync"/>
+    /// (ADR-0068) - a caller that reaches this endpoint at all is expected to already know the Event is real
+    /// and published, but the guard costs nothing to repeat and keeps this endpoint's own behavior legible on
+    /// its own. A <c>Cancelled</c> Event still succeeds here, matching <see cref="GetEventBySlugAsync"/>'s own
+    /// posture - going dark for Cancelled is a Web-side rendering decision (<c>EventGuide.razor.cs</c> never
+    /// even calls this endpoint once it resolves to Cancelled), not something this lookup enforces. Ordered by
+    /// <see cref="Page.Title"/> ascending - <see cref="Page"/> has no ordering column (P5-15, #20), matching
+    /// <c>ApiInfoPageClient.GetInfoPagesForEventAsync</c>'s own convention for the same reason. Not paged - an
+    /// Event's InfoPage count is small, and a visitor reads them as one continuous page, not a grid.
+    /// </remarks>
+    private static async Task<IResult> GetInfoPagesAsync(
+        string slug, VirtualLeadersGuideDbContext db, CancellationToken cancellationToken)
+    {
+        Event? @event = await db.Events.AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Slug == slug.ToLowerInvariant(), cancellationToken);
+
+        if (@event is null || @event.Status == EventStatus.Draft)
+        {
+            return Results.NotFound();
+        }
+
+        List<PublicInfoPageDto> infoPages = await db.InfoPages.AsNoTracking()
+            .Where(page => page.EventId == @event.Id)
+            .OrderBy(page => page.Title)
+            .Select(page => new PublicInfoPageDto { Id = page.Id, Title = page.Title, MarkdownContent = page.MarkdownContent })
+            .ToListAsync(cancellationToken);
+
+        return Results.Ok(infoPages);
     }
 
     /// <remarks>

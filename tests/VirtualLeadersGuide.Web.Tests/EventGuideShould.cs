@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using VirtualLeadersGuide.Identity.Contracts;
 using VirtualLeadersGuide.Web.Components.Pages;
+using VirtualLeadersGuide.Web.Markdown;
 using VirtualLeadersGuide.Web.PublicGuide;
 
 namespace VirtualLeadersGuide.Web.Tests;
@@ -19,6 +20,11 @@ namespace VirtualLeadersGuide.Web.Tests;
 /// <remarks>
 /// Cancelled is unconditional, checked before the staff bypass - confirmed with the user as deliberate
 /// (<c>EventGuide.razor.cs</c>'s own remarks): an Admin sees the same dark state a visitor does.
+/// </remarks>
+/// <remarks>
+/// P4-1 (#23): the Unlocked state's InfoPages content. Sanitization itself is not re-tested here -
+/// <c>MarkdownRendererShould</c> owns it; these tests only confirm the rendered output actually reaches the
+/// page.
 /// </remarks>
 public class EventGuideShould : BunitContext
 {
@@ -179,10 +185,112 @@ public class EventGuideShould : BunitContext
         Assert.True(httpContext.Response.Headers.ContainsKey("Set-Cookie"));
     }
 
-    private void RegisterServices(Func<HttpRequestMessage, HttpResponseMessage> responder)
+    [Fact]
+    public void ShowEachInfoPagesTitleAndRenderedContent_WhenUnlocked_ForLoadAsync()
     {
-        Services.AddSingleton(new PublicEventClient(new StubHttpClientFactory(new StubHttpMessageHandler(responder))));
+        RegisterServices(_ => JsonResponse(EventDto()), infoPages:
+        [
+            new PublicInfoPageDto { Id = Guid.NewGuid(), Title = "About", MarkdownContent = "Welcome to **camp**!" }
+        ]);
+
+        IRenderedComponent<EventGuide> cut = RenderAlreadyUnlocked();
+
+        Assert.Contains("About", cut.Markup, StringComparison.Ordinal);
+        Assert.Contains("<strong>camp</strong>", cut.Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShowAnInfoPagesTitle_WhenItsContentIsEmpty_ForLoadAsync()
+    {
+        RegisterServices(_ => JsonResponse(EventDto()), infoPages:
+        [
+            new PublicInfoPageDto { Id = Guid.NewGuid(), Title = "Coming Soon", MarkdownContent = "" }
+        ]);
+
+        IRenderedComponent<EventGuide> cut = RenderAlreadyUnlocked();
+
+        Assert.Contains("Coming Soon", cut.Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShowTheEmptyGuideMessage_WhenTheEventHasNoInfoPages_ForLoadAsync()
+    {
+        RegisterServices(_ => JsonResponse(EventDto()));
+
+        IRenderedComponent<EventGuide> cut = RenderAlreadyUnlocked();
+
+        Assert.Contains("haven't been added yet", cut.Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShowTheSameInfoPages_WhenASignedInAdminReachesUnlockedViaTheStaffBypass_ForLoadAsync()
+    {
+        RegisterServices(_ => JsonResponse(EventDto()), infoPages:
+        [
+            new PublicInfoPageDto { Id = Guid.NewGuid(), Title = "About", MarkdownContent = "Hi" }
+        ]);
+        BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("admin-1");
+        auth.SetRoles("Admin");
+
+        IRenderedComponent<EventGuide> cut = Render<EventGuide>(Parameters());
+
+        Assert.Contains("About", cut.Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShowAnInlineErrorButStayUnlocked_WhenTheInfoPagesFetchFails_ForLoadAsync()
+    {
+        RegisterServicesThrowingOnInfoPages();
+
+        IRenderedComponent<EventGuide> cut = RenderAlreadyUnlocked();
+
+        Assert.Contains("This guide is unlocked", cut.Markup, StringComparison.Ordinal);
+        Assert.Contains("didn't load", cut.Markup, StringComparison.Ordinal);
+    }
+
+    /// <remarks>
+    /// Intercepts the InfoPages call before it ever reaches <paramref name="responder"/> - every existing
+    /// call site here only ever wrote a responder for the event-lookup/passcode paths, so this keeps them
+    /// working unchanged (defaulting to an empty InfoPages list) rather than requiring every test to also
+    /// handle a third path it isn't testing. <see cref="RegisterServicesThrowingOnInfoPages"/> is the one
+    /// exception, for the test that specifically needs the InfoPages call itself to fail.
+    /// </remarks>
+    private void RegisterServices(
+        Func<HttpRequestMessage, HttpResponseMessage> responder, IReadOnlyList<PublicInfoPageDto>? infoPages = null)
+    {
+        IReadOnlyList<PublicInfoPageDto> infoPagesResponse = infoPages ?? [];
+        Services.AddSingleton(new PublicEventClient(new StubHttpClientFactory(new StubHttpMessageHandler(request =>
+            request.RequestUri!.AbsolutePath.EndsWith("/infoPages", StringComparison.Ordinal)
+                ? JsonResponse(infoPagesResponse)
+                : responder(request)))));
         Services.AddSingleton(new PasscodeUnlockCookie(DataProtectionProvider.Create("VirtualLeadersGuide.Web.Tests")));
+        Services.AddSingleton(new MarkdownRenderer());
+    }
+
+    private void RegisterServicesThrowingOnInfoPages()
+    {
+        Services.AddSingleton(new PublicEventClient(new StubHttpClientFactory(new StubHttpMessageHandler(request =>
+            request.RequestUri!.AbsolutePath.EndsWith("/infoPages", StringComparison.Ordinal)
+                ? throw new HttpRequestException("simulated Api outage")
+                : JsonResponse(EventDto())))));
+        Services.AddSingleton(new PasscodeUnlockCookie(DataProtectionProvider.Create("VirtualLeadersGuide.Web.Tests")));
+        Services.AddSingleton(new MarkdownRenderer());
+    }
+
+    /// <remarks>
+    /// Same cookie setup as <see cref="ShowUnlocked_WhenTheVisitorAlreadyHasAValidCookie_ForLoadAsync"/> -
+    /// call after <see cref="RegisterServices"/> (or <see cref="RegisterServicesThrowingOnInfoPages"/>) so
+    /// <see cref="PasscodeUnlockCookie"/> is already registered.
+    /// </remarks>
+    private IRenderedComponent<EventGuide> RenderAlreadyUnlocked()
+    {
+        var writeContext = new DefaultHttpContext();
+        Services.GetRequiredService<PasscodeUnlockCookie>()
+            .Unlock(writeContext, EventId, passcodeVersion: 1, endsAt: null, startsAt: null);
+        HttpContext readContext = ReadingContextAfter(writeContext);
+
+        return Render<EventGuide>(Parameters(readContext));
     }
 
     private static Action<ComponentParameterCollectionBuilder<EventGuide>> Parameters(HttpContext? httpContext = null) =>

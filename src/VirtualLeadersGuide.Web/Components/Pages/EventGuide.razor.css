@@ -64,3 +64,28 @@
     font-size: 0.75rem;
     color: var(--vlg-locked);
 }
+
+.vlg-guide-pages {
+    max-width: 42rem;
+    margin-block-start: 1.5rem;
+}
+
+.vlg-guide-page + .vlg-guide-page {
+    margin-block-start: 1.5rem;
+    padding-block-start: 1.5rem;
+    border-block-start: 1px dashed var(--vlg-line);
+}
+
+.vlg-guide-page h2 {
+    margin-block-end: 0.5rem;
+}
+
+/* First/last-child margin collapsing on rendered markdown, same rule InfoPageEditor.razor.css's
+   .ip-preview-surface already applies to the same MarkdownRenderer output. */
+.vlg-guide-page-content :first-child {
+    margin-block-start: 0;
+}
+
+.vlg-guide-page-content :last-child {
+    margin-block-end: 0;
+}

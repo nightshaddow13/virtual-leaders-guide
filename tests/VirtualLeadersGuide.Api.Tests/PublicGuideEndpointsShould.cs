@@ -6,8 +6,9 @@ using VirtualLeadersGuide.Identity.Contracts;
 namespace VirtualLeadersGuide.Api.Tests;
 
 /// <remarks>
-/// Coverage for <c>/internal/public/*</c> (P4-2, #72): the anonymous-reachable lookup and passcode-check
-/// surface behind the public Leaders Guide gate. Every test in this class deliberately uses
+/// Coverage for <c>/internal/public/*</c> (P4-2, #72; P4-1, #23): the anonymous-reachable lookup,
+/// passcode-check, and InfoPages surface behind the public Leaders Guide gate. Every test in this class
+/// deliberately uses
 /// <see cref="ApiWebApplicationFactory.CreateAuthenticatedClient"/> (X-Internal-Key only, no internal JWT) -
 /// unlike <c>EventsResourceShould</c>, which only ever uses <see cref="ApiWebApplicationFactory.CreateUserClient"/>
 /// - proving this surface doesn't need a signed-in user's token the way <c>/api/*</c> does.
@@ -162,5 +163,95 @@ public class PublicGuideEndpointsShould : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<PasscodeCheckResult>())!;
+    }
+
+    [Fact]
+    public async Task ReturnInfoPagesTitleSorted_ForGetInfoPages()
+    {
+        Event @event = await _factory.CreateEventAsync(status: EventStatus.Live);
+        await _factory.CreateInfoPageAsync(@event.Id, "Packing List");
+        await _factory.CreateInfoPageAsync(@event.Id, "About");
+        await _factory.CreateInfoPageAsync(@event.Id, "FAQ");
+
+        List<PublicInfoPageDto> infoPages = await GetInfoPagesAsync(@event.Slug!);
+
+        Assert.Equal(["About", "FAQ", "Packing List"], infoPages.Select(p => p.Title));
+    }
+
+    [Fact]
+    public async Task ReturnOnlyThatEventsInfoPages_ForGetInfoPages()
+    {
+        Event @event = await _factory.CreateEventAsync(status: EventStatus.Live);
+        Event other = await _factory.CreateEventAsync(status: EventStatus.Live);
+        InfoPage onEvent = await _factory.CreateInfoPageAsync(@event.Id, "On this event");
+        await _factory.CreateInfoPageAsync(other.Id, "On the other event");
+
+        List<PublicInfoPageDto> infoPages = await GetInfoPagesAsync(@event.Slug!);
+
+        PublicInfoPageDto only = Assert.Single(infoPages);
+        Assert.Equal(onEvent.Id, only.Id);
+    }
+
+    [Fact]
+    public async Task ReturnAnEmptyList_WhenTheEventHasNoInfoPages_ForGetInfoPages()
+    {
+        Event @event = await _factory.CreateEventAsync(status: EventStatus.Live);
+
+        List<PublicInfoPageDto> infoPages = await GetInfoPagesAsync(@event.Slug!);
+
+        Assert.Empty(infoPages);
+    }
+
+    [Fact]
+    public async Task IncludeTheMarkdownContent_ForGetInfoPages()
+    {
+        Event @event = await _factory.CreateEventAsync(status: EventStatus.Live);
+        await _factory.CreateInfoPageAsync(@event.Id, "About", "Welcome to **camp**!");
+
+        List<PublicInfoPageDto> infoPages = await GetInfoPagesAsync(@event.Slug!);
+
+        Assert.Equal("Welcome to **camp**!", Assert.Single(infoPages).MarkdownContent);
+    }
+
+    [Fact]
+    public async Task Succeed_WhenTheEventIsCancelled_ForGetInfoPages()
+    {
+        Event @event = await _factory.CreateEventAsync(status: EventStatus.Cancelled);
+        await _factory.CreateInfoPageAsync(@event.Id);
+        using HttpClient client = _factory.CreateAuthenticatedClient();
+
+        HttpResponseMessage response = await client.GetAsync($"/internal/public/events/{@event.Slug}/infoPages");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RejectWithNotFound_WhenTheEventIsDraft_ForGetInfoPages()
+    {
+        Event @event = await _factory.CreateEventAsync(status: EventStatus.Draft);
+        using HttpClient client = _factory.CreateAuthenticatedClient();
+
+        HttpResponseMessage response = await client.GetAsync($"/internal/public/events/{@event.Slug}/infoPages");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RejectWithNotFound_WhenNoEventHasThatSlug_ForGetInfoPages()
+    {
+        using HttpClient client = _factory.CreateAuthenticatedClient();
+
+        HttpResponseMessage response = await client.GetAsync("/internal/public/events/no-such-event/infoPages");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    private async Task<List<PublicInfoPageDto>> GetInfoPagesAsync(string slug)
+    {
+        using HttpClient client = _factory.CreateAuthenticatedClient();
+        HttpResponseMessage response = await client.GetAsync($"/internal/public/events/{slug}/infoPages");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return (await response.Content.ReadFromJsonAsync<List<PublicInfoPageDto>>())!;
     }
 }

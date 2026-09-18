@@ -6,12 +6,15 @@ using Microsoft.AspNetCore.Components.Forms;
 using VirtualLeadersGuide.Identity.Contracts;
 using VirtualLeadersGuide.Web.Authorization;
 using VirtualLeadersGuide.Web.Events;
+using VirtualLeadersGuide.Web.Markdown;
 using VirtualLeadersGuide.Web.PublicGuide;
 
 namespace VirtualLeadersGuide.Web.Components.Pages;
 
 /// <summary>
-/// An Event's public gated guide (P4-2, #72) - wireframes 1c (locked splash) and 1g (wrong-passcode error).
+/// An Event's public gated guide - wireframes 1c (locked splash, P4-2 #72) and 1g (wrong-passcode error, P4-2
+/// #72), and, once unlocked, its InfoPages (P4-1, #23) as a flat, Title-sorted list with no Tab navigation -
+/// P5-14 (#88) replaces this wholesale once InfoPage Placement and Activities exist.
 /// </summary>
 /// <remarks>
 /// Static SSR, same reasoning as <c>Home.razor</c> - the passcode form POSTs back here, and a
@@ -28,6 +31,9 @@ public partial class EventGuide
 
     [Inject]
     private PasscodeUnlockCookie UnlockCookie { get; set; } = default!;
+
+    [Inject]
+    private MarkdownRenderer MarkdownRenderer { get; set; } = default!;
 
     [Inject]
     private NavigationManager NavigationManager { get; set; } = default!;
@@ -54,6 +60,8 @@ public partial class EventGuide
     private PageState state = PageState.Loading;
     private PublicEventDto? loadedEvent;
     private string? passcodeErrorMessage;
+    private IReadOnlyList<PublicInfoPageDto> infoPages = [];
+    private string? contentErrorMessage;
 
     /// <remarks>
     /// No browser timezone is available to convert into (<see cref="Time.BrowserTimeZoneAccessor"/> needs a
@@ -76,14 +84,17 @@ public partial class EventGuide
     /// indistinguishable by design) short-circuits first; <see cref="EventStatus.Cancelled"/> next, and
     /// *unconditionally* - staff included, never bypassed - since the AC's "goes dark" is a fact about the
     /// Event, not about who's asking (confirmed with the user; contrast with the staff bypass below, which
-    /// exists purely for convenience). Only past both of those does a signed-in Admin/Director's own access
-    /// (<see cref="IsStaffForThisEventAsync"/>) short-circuit straight to <see cref="PageState.Unlocked"/>
-    /// with no cookie involved; anyone else falls through to <see cref="PasscodeUnlockCookie.IsUnlocked"/>.
+    /// exists purely for convenience). Past both of those, a signed-in Admin/Director's own access
+    /// (<see cref="IsStaffForThisEventAsync"/>) reaches <see cref="PageState.Unlocked"/> with no cookie
+    /// involved - checked first, short-circuiting <see cref="PasscodeUnlockCookie.IsUnlocked"/> for staff, so
+    /// staff and an already-unlocked visitor land on the exact same state and see the exact same InfoPages
+    /// (<see cref="LoadInfoPagesAsync"/>, P4-1 #23).
     /// <para>
     /// Deliberate gap, confirmed with the user: this lookup is the same anonymous endpoint for every caller,
     /// staff included, so a <see cref="EventStatus.Draft"/> Event reads as <see cref="PageState.NotFound"/>
     /// even for the Admin who owns it - the staff bypass is only ever reachable once an Event is
-    /// Live/Past/Cancelled. See the plan for why that's accepted rather than closed in this story.
+    /// Live/Past/Cancelled, so there is still no way to preview a Draft Event's InfoPages before publishing
+    /// (tracked as a follow-up, #196, not closed by this story).
     /// </para>
     /// </remarks>
     private async Task LoadAsync()
@@ -107,19 +118,40 @@ public partial class EventGuide
                 return;
             }
 
-            if (await IsStaffForThisEventAsync(@event.Id))
+            bool unlocked = await IsStaffForThisEventAsync(@event.Id)
+                || UnlockCookie.IsUnlocked(HttpContext, @event.Id, @event.PasscodeVersion);
+
+            if (!unlocked)
             {
-                state = PageState.Unlocked;
+                state = PageState.Locked;
                 return;
             }
 
-            state = UnlockCookie.IsUnlocked(HttpContext, @event.Id, @event.PasscodeVersion)
-                ? PageState.Unlocked
-                : PageState.Locked;
+            state = PageState.Unlocked;
+            await LoadInfoPagesAsync();
         }
         catch (PublicGuideUnavailableException)
         {
             state = PageState.Unavailable;
+        }
+    }
+
+    /// <remarks>
+    /// A separate <c>try</c>/<c>catch</c> from <see cref="LoadAsync"/>'s own, deliberately (ADR-0068's plan,
+    /// grilled decision): a visitor who already unlocked the guide keeps that state on a failed InfoPages
+    /// fetch, seeing an inline error where the content would be, rather than being dropped onto the full-page
+    /// <see cref="PageState.Unavailable"/> dead-end - that state is reserved for the Event lookup itself never
+    /// responding, a different failure than content not loading after the gate already succeeded.
+    /// </remarks>
+    private async Task LoadInfoPagesAsync()
+    {
+        try
+        {
+            infoPages = await EventClient.GetInfoPagesAsync(Slug, CancellationToken.None);
+        }
+        catch (PublicGuideUnavailableException)
+        {
+            contentErrorMessage = "This guide's info pages didn't load. Try refreshing the page.";
         }
     }
 

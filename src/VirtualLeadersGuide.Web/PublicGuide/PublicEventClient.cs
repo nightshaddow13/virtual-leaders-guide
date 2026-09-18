@@ -4,7 +4,7 @@ using VirtualLeadersGuide.Identity.Contracts;
 
 namespace VirtualLeadersGuide.Web.PublicGuide;
 
-/// <summary>Thin HTTP client over Api's anonymous-reachable <c>/internal/public/*</c> surface (P4-2, #72).</summary>
+/// <summary>Thin HTTP client over Api's anonymous-reachable <c>/internal/public/*</c> surface (P4-2, #72; P4-1, #23).</summary>
 /// <remarks>
 /// Uses the bare <c>"Api"</c> named <see cref="HttpClient"/> directly, never
 /// <see cref="Identity.InternalApiClient"/> - the established path for a call with no signed-in user (see
@@ -71,6 +71,19 @@ public sealed class PublicEventClient(IHttpClientFactory httpClientFactory)
         return result.Matched
             ? (PasscodeCheckOutcome.Matched, result.EventId, result.PasscodeVersion)
             : (PasscodeCheckOutcome.NotMatched, null, null);
+    }
+
+    /// <summary>Lists an Event's InfoPages, Title-sorted, for an already-unlocked visitor.</summary>
+    /// <param name="slug">The Event's Slug.</param>
+    /// <param name="cancellationToken">Propagated to the underlying HTTP call.</param>
+    /// <returns>The Event's InfoPages, in Title-ascending order (ADR-0068).</returns>
+    public async Task<IReadOnlyList<PublicInfoPageDto>> GetInfoPagesAsync(string slug, CancellationToken cancellationToken)
+    {
+        using HttpResponseMessage response = await SendAsync(
+            HttpMethod.Get, PublicGuideRoutes.ForInfoPagesByEvent(slug), null, cancellationToken);
+
+        EnsureExpectedStatus(response, HttpStatusCode.OK);
+        return (await response.Content.ReadFromJsonAsync<List<PublicInfoPageDto>>(cancellationToken))!;
     }
 
     /// <remarks>
