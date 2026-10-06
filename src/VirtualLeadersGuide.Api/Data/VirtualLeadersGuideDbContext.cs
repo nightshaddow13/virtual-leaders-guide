@@ -59,6 +59,12 @@ public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDb
     /// <summary>Every <see cref="Activity"/> row (P5-6, #87).</summary>
     public DbSet<Activity> Activities => Set<Activity>();
 
+    /// <summary>Every <see cref="Data.FacilityType"/> row (P8-2, #166).</summary>
+    public DbSet<FacilityType> FacilityTypes => Set<FacilityType>();
+
+    /// <summary>Every <see cref="Facility"/> row (P8-2, #166).</summary>
+    public DbSet<Facility> Facilities => Set<Facility>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -70,6 +76,8 @@ public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDb
         builder.Entity<Page>(ConfigurePages);
         builder.Entity<InfoPage>(ConfigureInfoPages);
         builder.Entity<Activity>(ConfigureActivities);
+        builder.Entity<FacilityType>(ConfigureFacilityTypes);
+        builder.Entity<Facility>(ConfigureFacilities);
     }
 
     private static void ConfigureRoles(EntityTypeBuilder<Role> entity)
@@ -289,6 +297,60 @@ public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDb
     /// </remarks>
     private static void ConfigureActivityCheckConstraints(TableBuilder<Activity> table) =>
         table.HasCheckConstraint("CK_Activities_Name_NotEmpty", "TRIM(Name) <> ''");
+
+    /// <remarks>
+    /// Unique on <see cref="Data.FacilityType.Name"/> (case-insensitively, matching SQL Server's default
+    /// collation) - see <see cref="Data.FacilityType"/>'s remarks for why. Deliberately no foreign key
+    /// targeting anything, and no cascade to configure - a <see cref="Data.FacilityType"/> is a standalone
+    /// lookup row (ADR-0071), unlike every Event-scoped entity this context otherwise configures.
+    /// </remarks>
+    private static void ConfigureFacilityTypes(EntityTypeBuilder<FacilityType> entity)
+    {
+        entity.ToTable("FacilityTypes", ConfigureFacilityTypeCheckConstraints);
+
+        entity.Property(ft => ft.Name).HasMaxLength(200);
+
+        entity.HasIndex(ft => ft.Name).IsUnique();
+    }
+
+    /// <remarks>
+    /// <see cref="Data.FacilityType.Name"/>'s setter already trims (<c>FacilityType.cs</c>); this is the
+    /// backstop for anything that writes the column outside that setter, matching
+    /// <see cref="BuildNameNotEmptyCheckSql"/>'s portable <c>TRIM</c> form (ADR-0014: no
+    /// <c>LEN()</c>/<c>LENGTH()</c> comparison is portable).
+    /// </remarks>
+    private static void ConfigureFacilityTypeCheckConstraints(TableBuilder<FacilityType> table) =>
+        table.HasCheckConstraint("CK_FacilityTypes_Name_NotEmpty", "TRIM(Name) <> ''");
+
+    /// <remarks>
+    /// Unlike every Event-scoped entity this context configures, <see cref="Facility"/> carries no Event
+    /// foreign key at all (ADR-0066) - nothing to cascade from. The <see cref="Facility"/>→<see cref="FacilityType"/>
+    /// foreign key restricts rather than cascades, mirroring <see cref="ConfigurePages"/>'s
+    /// <see cref="Page"/>→<see cref="PageType"/> foreign key: a lookup row can't be deleted out from under
+    /// live rows that reference it (ADR-0071's "no reaping" decision - deleting a <see cref="FacilityType"/>
+    /// isn't a capability this story ships at all, so this is purely a backstop).
+    /// </remarks>
+    private static void ConfigureFacilities(EntityTypeBuilder<Facility> entity)
+    {
+        entity.ToTable("Facilities", ConfigureFacilityCheckConstraints);
+
+        entity.Property(f => f.Name).HasMaxLength(200);
+
+        entity.HasOne(f => f.FacilityType)
+            .WithMany()
+            .HasForeignKey(f => f.FacilityTypeId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        entity.HasIndex(f => f.FacilityTypeId);
+    }
+
+    /// <remarks>
+    /// <see cref="Facility.Name"/>'s setter already trims (<c>Facility.cs</c>); this is the backstop for
+    /// anything that writes the column outside that setter, matching <see cref="BuildNameNotEmptyCheckSql"/>'s
+    /// portable <c>TRIM</c> form (ADR-0014: no <c>LEN()</c>/<c>LENGTH()</c> comparison is portable).
+    /// </remarks>
+    private static void ConfigureFacilityCheckConstraints(TableBuilder<Facility> table) =>
+        table.HasCheckConstraint("CK_Facilities_Name_NotEmpty", "TRIM(Name) <> ''");
 
     /// <remarks>
     /// <see cref="Event.Passcode"/>'s <see cref="IDataProtector"/> can't be constructor-injected:

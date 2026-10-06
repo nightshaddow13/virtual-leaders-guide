@@ -5,6 +5,7 @@ using VirtualLeadersGuide.Web.Activities;
 using VirtualLeadersGuide.Web.Authorization;
 using VirtualLeadersGuide.Web.Directors;
 using VirtualLeadersGuide.Web.Events;
+using VirtualLeadersGuide.Web.Facilities;
 using VirtualLeadersGuide.Web.Identity;
 using VirtualLeadersGuide.Web.InfoPages;
 
@@ -31,6 +32,12 @@ internal static class ApiClientTestFactory
         new(CreateInternalApiClient(apiHandler));
 
     public static ApiActivityClient CreateActivityClient(HttpMessageHandler apiHandler) =>
+        new(CreateInternalApiClient(apiHandler));
+
+    public static ApiFacilityClient CreateFacilityClient(HttpMessageHandler apiHandler) =>
+        new(CreateInternalApiClient(apiHandler));
+
+    public static ApiFacilityTypeClient CreateFacilityTypeClient(HttpMessageHandler apiHandler) =>
         new(CreateInternalApiClient(apiHandler));
 
     private static InternalApiClient CreateInternalApiClient(HttpMessageHandler apiHandler)

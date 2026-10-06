@@ -136,9 +136,11 @@ instead), Venue, Site (already avoided for Leaders Guide)
 
 **Facility Type**:
 A freeform label for what kind of property a Facility is (e.g. `Camp`, or something custom for a one-off
-event held somewhere that isn't camp property at all). Same lazy-create lifecycle as Tier — typed once while
-creating or editing a Facility, offered by autofill afterward — but scoped globally across every Facility, not
-to one Event, since Facility itself isn't Event-scoped.
+event held somewhere that isn't camp property at all). Created inline the first time it's typed while
+creating or editing a Facility, offered by autofill afterward, and scoped globally across every Facility
+(Facility itself isn't Event-scoped). Unlike Tier, never auto-deleted or otherwise reaped once nothing
+references it (ADR-0071) — Tier's lazy-create/auto-delete lifecycle exists for reasons (a stable id for an
+attached photo, a parent-scoping rule) that don't apply to a Facility Type.
 _Avoid_: Category
 
 **Location**:

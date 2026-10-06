@@ -1,0 +1,73 @@
+@page "/dashboard/facilities/new"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+@using VirtualLeadersGuide.Web.Facilities
+
+<PageTitle>New facility</PageTitle>
+
+<RadzenComponents @rendermode="InteractiveServer" />
+
+@switch (state)
+{
+    case PageState.Denied:
+        <StatusPanel Title="You don't have access to this page" Message="Only Admins can manage Facilities.">
+            <RadzenButton Text="Back to dashboard" Click="@(() => NavigationManager.NavigateTo("dashboard", forceLoad: true))" />
+        </StatusPanel>
+        break;
+
+    case PageState.Unavailable:
+        <StatusPanel Title="Something went wrong loading this page" Message="The store didn't respond. Try again.">
+            <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
+                <RadzenButton Text="Try again" Click="@(() => NavigationManager.Refresh(forceReload: true))" />
+                <RadzenButton Text="Back to dashboard" ButtonStyle="ButtonStyle.Light" Click="@(() => NavigationManager.NavigateTo("dashboard", forceLoad: true))" />
+            </RadzenStack>
+        </StatusPanel>
+        break;
+
+    case PageState.Ready:
+        <RadzenBreadCrumb>
+            <RadzenBreadCrumbItem Text="FACILITIES" />
+            <RadzenBreadCrumbItem Text="NEW" />
+        </RadzenBreadCrumb>
+
+        <EditForm Model="model" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+
+            <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween"
+                         AlignItems="AlignItems.End" Gap="1rem" Style="margin-block-end: 1rem;">
+                <h1>New facility</h1>
+                <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
+                    <RadzenButton Text="Cancel" ButtonStyle="ButtonStyle.Light" ButtonType="ButtonType.Button"
+                                  Disabled="@isSaving" Click="@(() => NavigationManager.NavigateTo("dashboard", forceLoad: true))" />
+                    <RadzenButton Text="Create facility" ButtonType="ButtonType.Submit" Disabled="@isSaving" />
+                </RadzenStack>
+            </RadzenStack>
+
+            @if (saveErrorMessage is not null)
+            {
+                <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" AllowClose="false" Text="@saveErrorMessage" />
+            }
+
+            <div class="vlg-field">
+                <label for="Name">Name</label>
+                <InputText id="Name" @bind-Value="model!.Name" class="rz-textbox rz-input-md" />
+                <ValidationMessage For="() => model!.Name" class="rz-messages-error" />
+            </div>
+
+            <div class="vlg-field">
+                <label for="TypeName">Type</label>
+                <RadzenAutoComplete @bind-Value="model!.TypeName" Data="@existingTypeNames" Name="TypeName"
+                                     class="rz-textbox rz-input-md" Style="width: 100%;" />
+                <ValidationMessage For="() => model!.TypeName" class="rz-messages-error" />
+                <RadzenText TextStyle="TextStyle.Caption" TagName="TagName.Div" Style="margin-block-start: 0.25rem;">
+                    Freeform &mdash; pick an existing type or type your own.
+                </RadzenText>
+            </div>
+        </EditForm>
+
+        <RadzenText TextStyle="TextStyle.Caption" TagName="TagName.Div" Style="margin-block-start: 1rem;">
+            Areas, buildings and campsites come next, on the detail page.
+        </RadzenText>
+        break;
+}

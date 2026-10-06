@@ -1,5 +1,5 @@
 ---
-status: collection/single asymmetry generalized by ADR-0033 (a caller whose visible set is always empty, not just sometimes-narrowed, gets 403 on every shape instead of a silently-filtered collection); the per-resource write question this ADR defers to future Event-scoped resources is answered for InfoPage by ADR-0059 and for Activity by ADR-0069 (a Director may fully CRUD each on an assigned Event)
+status: collection/single asymmetry generalized by ADR-0033 (a caller whose visible set is always empty, not just sometimes-narrowed, gets 403 on every shape instead of a silently-filtered collection); the per-resource write question this ADR defers to future Event-scoped resources is answered for InfoPage by ADR-0059 and for Activity by ADR-0069 (a Director may fully CRUD each on an assigned Event); Facility sits outside this list's premise entirely - ADR-0066 found it isn't Event-scoped at all, so ADR-0070 answers its Read/Write split on its own terms (Read open to any signed-in caller, Write Admin-only) rather than via a Director-assignment check
 ---
 
 # Event authorization is enforced in a JsonApiDotNetCore resource definition, not a controller

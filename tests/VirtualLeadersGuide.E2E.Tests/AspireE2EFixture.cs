@@ -67,6 +67,7 @@ public sealed class AspireE2EFixture : IAsyncLifetime
     private HttpClient _identityApiHttpClient = null!;
     private HttpClient _eventsApiHttpClient = null!;
     private HttpClient _usersApiHttpClient = null!;
+    private HttpClient _facilitiesApiHttpClient = null!;
 
     /// <summary>
     /// Whether <c>VLG_E2E_KEEP_DATA=1</c> is set - disables per-test cleanup (<see cref="E2ETestBase"/>) and
@@ -130,6 +131,14 @@ public sealed class AspireE2EFixture : IAsyncLifetime
 
     /// <summary>Lists Users by email directly against <c>api</c>'s <c>/api/users</c> resource - backs this fixture's own run-end sweep (ADR-0039).</summary>
     public UsersApiClient Users { get; private set; } = null!;
+
+    /// <summary>
+    /// Lists and deletes Facilities/Facility Types directly against <c>api</c>'s <c>/api/facilities</c>/
+    /// <c>/api/facilityTypes</c> resources - backs <see cref="E2ETestBase"/>'s tracked cleanup and this
+    /// fixture's own run-end sweep (ADR-0039). Unlike <see cref="Events"/>, no fixture row is retained -
+    /// P8-2 (#166) ADR-0039 table entry.
+    /// </summary>
+    public FacilitiesApiClient Facilities { get; private set; } = null!;
 
     /// <summary>
     /// The fixture Admin's fixed email (<see cref="AdminEmail"/>), passed to the AppHost's
@@ -208,6 +217,10 @@ public sealed class AspireE2EFixture : IAsyncLifetime
             _usersApiHttpClient.DefaultRequestHeaders.Add(InternalApiKeyHeaderName, InternalApiKey);
             Users = new UsersApiClient(_usersApiHttpClient, InternalJwtKey);
 
+            _facilitiesApiHttpClient = new HttpClient { BaseAddress = _app.GetEndpoint("api", "http") };
+            _facilitiesApiHttpClient.DefaultRequestHeaders.Add(InternalApiKeyHeaderName, InternalApiKey);
+            Facilities = new FacilitiesApiClient(_facilitiesApiHttpClient, InternalJwtKey);
+
             await SeedFixtureDataAsync(cancellationToken);
         }
         catch (TimeoutException ex)
@@ -249,6 +262,7 @@ public sealed class AspireE2EFixture : IAsyncLifetime
         _identityApiHttpClient?.Dispose();
         _eventsApiHttpClient?.Dispose();
         _usersApiHttpClient?.Dispose();
+        _facilitiesApiHttpClient?.Dispose();
         EmailSink.Dispose();
 
         if (_app is not null)
@@ -295,6 +309,22 @@ public sealed class AspireE2EFixture : IAsyncLifetime
                 "ADR-0039 violation: expected exactly 3 Role grants across the fixture Director (unscoped + " +
                 $"event-scoped) and the fixture Invite (unscoped), found {totalGrantCount} " +
                 $"({directorGrantCount} + {invitedGrantCount}).");
+        }
+
+        IReadOnlyList<(Guid Id, string Name)> facilities = await Facilities.ListE2EFacilitiesAsync(cancellationToken);
+        if (facilities.Count != 0)
+        {
+            throw new InvalidOperationException(
+                $"ADR-0039 violation: expected exactly 0 e2e- Facilities (P8-2, #166), found " +
+                $"{facilities.Count}: [{string.Join(", ", facilities.Select(f => f.Name))}].");
+        }
+
+        IReadOnlyList<(Guid Id, string Name)> facilityTypes = await Facilities.ListE2EFacilityTypesAsync(cancellationToken);
+        if (facilityTypes.Count != 0)
+        {
+            throw new InvalidOperationException(
+                $"ADR-0039 violation: expected exactly 0 e2e- Facility Types (P8-2, #166), found " +
+                $"{facilityTypes.Count}: [{string.Join(", ", facilityTypes.Select(ft => ft.Name))}].");
         }
     }
 
@@ -374,9 +404,12 @@ public sealed class AspireE2EFixture : IAsyncLifetime
     /// <remarks>
     /// Best-effort and logged only - see <see cref="DisposeAsync"/>'s own remarks for why, and for
     /// <see cref="VerifyRetentionAsync"/>, which runs after this and is what actually enforces the result.
-    /// Deletes every <c>@example.test</c> User outside the four fixture emails, and every <c>e2e-</c> Event
-    /// that isn't <see cref="RetainedEventName"/>. A properly-behaved run leaves nothing for this to find -
-    /// it exists for the run that didn't (a crash, a kill, a test whose own tracked cleanup itself failed).
+    /// Deletes every <c>@example.test</c> User outside the four fixture emails, every <c>e2e-</c> Event
+    /// that isn't <see cref="RetainedEventName"/>, and every <c>e2e-</c> Facility/Facility Type (P8-2, #166 -
+    /// zero of either are retained). Facilities delete before Facility Types - a Facility Type's FK is
+    /// <c>DeleteBehavior.Restrict</c> (ADR-0071), so an un-swept Facility would still block its Facility
+    /// Type's delete. A properly-behaved run leaves nothing for this to find - it exists for the run that
+    /// didn't (a crash, a kill, a test whose own tracked cleanup itself failed).
     /// </remarks>
     private async Task SweepOrphanedDataAsync()
     {
@@ -403,6 +436,16 @@ public sealed class AspireE2EFixture : IAsyncLifetime
                         await IdentityApi.DeleteUserAsync(user.Id, cancellationToken);
                     }
                 }
+            }
+
+            foreach ((Guid id, _) in await Facilities.ListE2EFacilitiesAsync(cancellationToken))
+            {
+                await Facilities.DeleteFacilityAsync(id, cancellationToken);
+            }
+
+            foreach ((Guid id, _) in await Facilities.ListE2EFacilityTypesAsync(cancellationToken))
+            {
+                await Facilities.DeleteFacilityTypeAsync(id, cancellationToken);
             }
         }
         catch (Exception ex)

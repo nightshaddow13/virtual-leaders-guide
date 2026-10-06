@@ -254,6 +254,41 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>
+    /// Creates and persists a new <see cref="FacilityType"/> via <see cref="FacilityType.Create"/> - for
+    /// tests (P8-2, #166) exercising <c>/api/facilityTypes</c> or <c>/api/facilities</c> against a real row.
+    /// </summary>
+    /// <param name="name">The Facility Type's Name. Omit to get a fresh Guid-suffixed default.</param>
+    /// <returns>The newly persisted <see cref="FacilityType"/>.</returns>
+    public async Task<FacilityType> CreateFacilityTypeAsync(string? name = null)
+    {
+        using IServiceScope scope = Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        FacilityType facilityType = FacilityType.Create(name ?? $"Facility Type {Guid.NewGuid()}");
+
+        dbContext.FacilityTypes.Add(facilityType);
+        await dbContext.SaveChangesAsync();
+        return facilityType;
+    }
+
+    /// <summary>
+    /// Creates and persists a new <see cref="Facility"/> via <see cref="Facility.Create"/> - for tests
+    /// (P8-2, #166) exercising <c>/api/facilities</c> against a real row.
+    /// </summary>
+    /// <param name="facilityTypeId">The Facility Type to tag the Facility with - see <see cref="CreateFacilityTypeAsync"/> for a real row satisfying the foreign key.</param>
+    /// <param name="name">The Facility's Name. Omit to get a fresh Guid-suffixed default.</param>
+    /// <returns>The newly persisted <see cref="Facility"/>.</returns>
+    public async Task<Facility> CreateFacilityAsync(Guid facilityTypeId, string? name = null)
+    {
+        using IServiceScope scope = Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        Facility facility = Facility.Create(name ?? $"Facility {Guid.NewGuid()}", facilityTypeId);
+
+        dbContext.Facilities.Add(facility);
+        await dbContext.SaveChangesAsync();
+        return facility;
+    }
+
+    /// <summary>
     /// A pre-formatted platform-wide <c>Admin</c> role claim (see <see cref="RoleClaimValue.Format"/>), ready
     /// to pass to <see cref="CreateUserClient"/> - for tests (P2-7, #16) exercising Admin-only access to
     /// <c>/api/events</c> without hand-building a <see cref="RoleGrantDto"/>.
