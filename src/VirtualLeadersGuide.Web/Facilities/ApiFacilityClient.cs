@@ -1,9 +1,4 @@
 using System.Net;
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
-using System.Text.Json;
-using System.Text.Json.Serialization;
-using VirtualLeadersGuide.Web.Authorization;
 using VirtualLeadersGuide.Web.Identity;
 using VirtualLeadersGuide.Web.JsonApi;
 
@@ -17,18 +12,13 @@ namespace VirtualLeadersGuide.Web.Facilities;
 /// because <c>/api/*</c> requires the internal JWT that only <see cref="InternalApiClient"/> attaches.
 /// Create-only for now - P8-3/P8-4/P8-5 (#167/#168/#169) add the read/update/delete methods
 /// <c>FacilityResourceDefinition</c> already authorizes on the Api side, once their own UI needs to call
-/// them.
+/// them. Request plumbing shared with <see cref="ApiFacilityTypeClient"/> lives in
+/// <see cref="FacilityApiClientBase"/>.
 /// </remarks>
-public sealed class ApiFacilityClient(InternalApiClient apiClient)
+public sealed class ApiFacilityClient(InternalApiClient apiClient) : FacilityApiClientBase(apiClient, "Facility")
 {
-    private const string JsonApiMediaType = "application/vnd.api+json";
     private const string FacilitiesPath = "/api/facilities";
     private const string ResourceType = "facilities";
-
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
-    {
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-    };
 
     /// <summary>Creates a new Facility tagged with the given Facility Type.</summary>
     /// <param name="name">The Facility's display Name.</param>
@@ -68,47 +58,6 @@ public sealed class ApiFacilityClient(InternalApiClient apiClient)
         FacilityDocument created = await ReadAsync<FacilityDocument>(response, cancellationToken);
         return (FacilityWriteOutcome.Success, ToDto(created.Data), []);
     }
-
-    private static HttpRequestMessage NewRequest<TBody>(HttpMethod method, string uri, TBody body)
-    {
-        var request = new HttpRequestMessage(method, uri);
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(JsonApiMediaType));
-        request.Content = JsonContent.Create(body, options: JsonOptions);
-        request.Content.Headers.ContentType = new MediaTypeHeaderValue(JsonApiMediaType);
-        return request;
-    }
-
-    /// <remarks>
-    /// <see cref="InternalApiClient.SendAsync"/> doesn't itself wrap a transport failure (only
-    /// <see cref="InternalJwtProvider"/>'s own grants lookup does, via <c>AuthorizationDataUnavailableException</c>)
-    /// - that exception is let through unchanged since it already means "Api is unreachable"; anything else
-    /// at the transport level becomes <see cref="FacilityDataUnavailableException"/> here, matching
-    /// <c>ApiActivityClient</c>'s discipline.
-    /// </remarks>
-    private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await apiClient.SendAsync(request, cancellationToken);
-        }
-        catch (Exception ex) when (ex is not AuthorizationDataUnavailableException && !cancellationToken.IsCancellationRequested)
-        {
-            throw new FacilityDataUnavailableException("The Facility store (Api) is unreachable.", ex);
-        }
-    }
-
-    private static void EnsureExpectedStatus(HttpResponseMessage response, params ReadOnlySpan<HttpStatusCode> expected)
-    {
-        if (!expected.Contains(response.StatusCode))
-        {
-            throw new FacilityDataUnavailableException(
-                $"The Facility store (Api) returned an unexpected {(int)response.StatusCode} response.",
-                new HttpRequestException(response.ReasonPhrase));
-        }
-    }
-
-    private static async Task<T> ReadAsync<T>(HttpResponseMessage response, CancellationToken cancellationToken) =>
-        (await response.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken))!;
 
     private static async Task<IReadOnlyList<string>> ReadErrorPointersAsync(
         HttpResponseMessage response, CancellationToken cancellationToken)
