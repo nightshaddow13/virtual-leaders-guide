@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Radzen;
 using VirtualLeadersGuide.Web;
+using VirtualLeadersGuide.Web.Activities;
 using VirtualLeadersGuide.Web.Authorization;
 using VirtualLeadersGuide.Web.Components;
 using VirtualLeadersGuide.Web.Components.Account;
@@ -58,6 +59,7 @@ builder.Services.AddScoped<BrowserTimeZoneAccessor>();
 builder.Services.AddScoped<ApiDirectorClient>();
 builder.Services.AddScoped<DirectorInviteService>();
 builder.Services.AddScoped<ApiInfoPageClient>();
+builder.Services.AddScoped<ApiActivityClient>();
 builder.Services.AddSingleton<MarkdownRenderer>();
 
 builder.Services.AddScoped<PublicEventClient>();

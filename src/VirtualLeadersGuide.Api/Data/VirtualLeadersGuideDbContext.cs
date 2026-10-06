@@ -56,6 +56,9 @@ public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDb
 
     public DbSet<InfoPage> InfoPages => Set<InfoPage>();
 
+    /// <summary>Every <see cref="Activity"/> row (P5-6, #87).</summary>
+    public DbSet<Activity> Activities => Set<Activity>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -66,6 +69,7 @@ public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDb
         builder.Entity<PageType>(ConfigurePageTypes);
         builder.Entity<Page>(ConfigurePages);
         builder.Entity<InfoPage>(ConfigureInfoPages);
+        builder.Entity<Activity>(ConfigureActivities);
     }
 
     private static void ConfigureRoles(EntityTypeBuilder<Role> entity)
@@ -256,6 +260,35 @@ public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDb
     /// (CONTEXT.md's InfoPage entry), same posture as <see cref="Event.Passcode"/> carrying no length cap.
     /// </remarks>
     private static void ConfigureInfoPages(EntityTypeBuilder<InfoPage> entity) => entity.ToTable("InfoPages");
+
+    /// <remarks>
+    /// The <see cref="Activity"/>→<see cref="Event"/> foreign key cascades, the same considered choice
+    /// <see cref="ConfigurePages"/> already makes for <see cref="Page"/>→<see cref="Event"/>: an Activity is
+    /// meaningless once its Event is gone.
+    /// </remarks>
+    private static void ConfigureActivities(EntityTypeBuilder<Activity> entity)
+    {
+        entity.ToTable("Activities", ConfigureActivityCheckConstraints);
+
+        entity.Property(a => a.Name).HasMaxLength(200);
+
+        entity.HasOne(a => a.Event)
+            .WithMany()
+            .HasForeignKey(a => a.EventId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        entity.HasIndex(a => a.EventId);
+    }
+
+    /// <remarks>
+    /// <see cref="Activity.Name"/>'s setter already trims (<c>Activity.cs</c>); this is the backstop for
+    /// anything that writes the column outside that setter, matching <see cref="BuildNameNotEmptyCheckSql"/>'s
+    /// portable <c>TRIM</c> form (ADR-0014: no <c>LEN()</c>/<c>LENGTH()</c> comparison is portable).
+    /// <see cref="Activity.Description"/> gets no max length - free-form authored content, same posture as
+    /// <see cref="InfoPage.MarkdownContent"/>.
+    /// </remarks>
+    private static void ConfigureActivityCheckConstraints(TableBuilder<Activity> table) =>
+        table.HasCheckConstraint("CK_Activities_Name_NotEmpty", "TRIM(Name) <> ''");
 
     /// <remarks>
     /// <see cref="Event.Passcode"/>'s <see cref="IDataProtector"/> can't be constructor-injected:

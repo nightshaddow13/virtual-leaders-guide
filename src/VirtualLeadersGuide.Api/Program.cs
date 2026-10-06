@@ -40,6 +40,7 @@ builder.Services.AddResourceDefinition<EventResourceDefinition>();
 builder.Services.AddResourceDefinition<UserRoleResourceDefinition>();
 builder.Services.AddResourceDefinition<ApplicationUserResourceDefinition>();
 builder.Services.AddResourceDefinition<InfoPageResourceDefinition>();
+builder.Services.AddResourceDefinition<ActivityResourceDefinition>();
 
 var app = builder.Build();
 
