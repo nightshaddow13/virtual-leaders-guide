@@ -6,14 +6,118 @@ using VirtualLeadersGuide.Web.Facilities;
 namespace VirtualLeadersGuide.Web.Tests;
 
 /// <remarks>
-/// Mirrors <see cref="ApiActivityClientShould"/>'s shape, limited to <see cref="ApiFacilityClient.CreateAsync"/>
-/// - the only method <see cref="ApiFacilityClient"/> exposes yet (P8-2, #166). Response bodies are anonymous
-/// objects with already-lowercase property names, reproducing Api's actual wire shape without touching
-/// <see cref="ApiFacilityClient"/>'s <see langword="internal"/> envelope types.
+/// Mirrors <see cref="ApiActivityClientShould"/>'s shape. <see cref="ApiFacilityClient.ListAsync"/> was added
+/// by P8-3 (#167). Response bodies are anonymous objects with already-lowercase property names, reproducing
+/// Api's actual wire shape without touching <see cref="ApiFacilityClient"/>'s <see langword="internal"/>
+/// envelope types.
 /// </remarks>
 public class ApiFacilityClientShould
 {
     private const string JsonApiMediaType = "application/vnd.api+json";
+
+    [Fact]
+    public async Task ReturnTheMappedFacilitiesAndTotal_WhenApiRespondsWithOk_ForListAsync()
+    {
+        var firstId = Guid.NewGuid();
+        var secondId = Guid.NewGuid();
+        var handler = new StubHttpMessageHandler(_ => JsonApiResponse(HttpStatusCode.OK, new
+        {
+            data = new[] { FacilityResource(firstId), FacilityResource(secondId) },
+            meta = new { total = 5 }
+        }));
+        ApiFacilityClient client = CreateClient(handler);
+
+        (FacilityReadOutcome outcome, IReadOnlyList<FacilityDto> facilities, int total) =
+            await client.ListAsync(1, 10, null, CancellationToken.None);
+
+        Assert.Equal(FacilityReadOutcome.Success, outcome);
+        Assert.Equal([firstId, secondId], facilities.Select(f => f.Id));
+        Assert.Equal(5, total);
+    }
+
+    [Fact]
+    public async Task FallBackToTheReturnedCount_WhenApiOmitsMetaTotal_ForListAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => JsonApiResponse(HttpStatusCode.OK, new
+        {
+            data = new[] { FacilityResource() }
+        }));
+        ApiFacilityClient client = CreateClient(handler);
+
+        (_, IReadOnlyList<FacilityDto> facilities, int total) =
+            await client.ListAsync(1, 10, null, CancellationToken.None);
+
+        Assert.Equal(facilities.Count, total);
+    }
+
+    [Fact]
+    public async Task IncludeSortAndPageQueryParametersButNoFilter_WhenListing_ForListAsync()
+    {
+        HttpRequestMessage? capturedRequest = null;
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            capturedRequest = request;
+            return JsonApiResponse(HttpStatusCode.OK, new { data = Array.Empty<object>() });
+        });
+        ApiFacilityClient client = CreateClient(handler);
+
+        await client.ListAsync(2, 25, null, CancellationToken.None);
+
+        Assert.NotNull(capturedRequest);
+        string query = capturedRequest!.RequestUri!.Query;
+        Assert.Contains("sort=name", query, StringComparison.Ordinal);
+        Assert.Contains("page[number]=2", Uri.UnescapeDataString(query), StringComparison.Ordinal);
+        Assert.Contains("page[size]=25", Uri.UnescapeDataString(query), StringComparison.Ordinal);
+        Assert.DoesNotContain("filter=", query, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task UseTheCallersSort_WhenOneIsSupplied_ForListAsync()
+    {
+        HttpRequestMessage? capturedRequest = null;
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            capturedRequest = request;
+            return JsonApiResponse(HttpStatusCode.OK, new { data = Array.Empty<object>() });
+        });
+        ApiFacilityClient client = CreateClient(handler);
+
+        await client.ListAsync(1, 10, "-name", CancellationToken.None);
+
+        Assert.Contains("sort=-name", capturedRequest!.RequestUri!.Query, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ReturnForbiddenWithAnEmptyList_WhenApiRespondsWithForbidden_ForListAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.Forbidden));
+        ApiFacilityClient client = CreateClient(handler);
+
+        (FacilityReadOutcome outcome, IReadOnlyList<FacilityDto> facilities, int total) =
+            await client.ListAsync(1, 10, null, CancellationToken.None);
+
+        Assert.Equal(FacilityReadOutcome.Forbidden, outcome);
+        Assert.Empty(facilities);
+        Assert.Equal(0, total);
+    }
+
+    [Fact]
+    public async Task ThrowFacilityDataUnavailableException_WhenTheHttpCallFails_ForListAsync()
+    {
+        var handler = StubHttpMessageHandler.ThrowingOn(() => new HttpRequestException("simulated Api outage"));
+        ApiFacilityClient client = CreateClient(handler);
+
+        await Assert.ThrowsAsync<FacilityDataUnavailableException>(() => client.ListAsync(1, 10, null, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ThrowFacilityDataUnavailableException_WhenApiRespondsWithAnUnexpectedStatus_ForListAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        ApiFacilityClient client = CreateClient(handler);
+
+        await Assert.ThrowsAsync<FacilityDataUnavailableException>(() => client.ListAsync(1, 10, null, CancellationToken.None));
+    }
 
     [Fact]
     public async Task SendJsonApiAcceptHeaderAndTheBearerToken_WhenSendingARequest_ForCreateAsync()

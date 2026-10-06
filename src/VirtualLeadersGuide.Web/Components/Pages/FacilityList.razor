@@ -1,0 +1,65 @@
+@page "/dashboard/facilities"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+@using VirtualLeadersGuide.Web.Facilities
+
+<PageTitle>Facilities</PageTitle>
+
+<RadzenComponents @rendermode="InteractiveServer" />
+
+@switch (state)
+{
+    case PageState.Denied:
+        <StatusPanel Title="You don't have access to this page" Message="Only Admins can manage Facilities.">
+            <RadzenButton Text="Back to dashboard" Click="@(() => NavigationManager.NavigateTo("dashboard", forceLoad: true))" />
+        </StatusPanel>
+        break;
+
+    case PageState.Unavailable:
+        <StatusPanel Title="Something went wrong loading this page" Message="The store didn't respond. Try again.">
+            <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
+                <RadzenButton Text="Try again" Click="@(() => NavigationManager.Refresh(forceReload: true))" />
+                <RadzenButton Text="Back to dashboard" ButtonStyle="ButtonStyle.Light" Click="@(() => NavigationManager.NavigateTo("dashboard", forceLoad: true))" />
+            </RadzenStack>
+        </StatusPanel>
+        break;
+
+    case PageState.Ready:
+        <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween"
+                     AlignItems="AlignItems.End" Gap="1rem" Style="margin-block-end: 1rem;">
+            <div>
+                <h1>Facilities</h1>
+                <RadzenText TextStyle="TextStyle.Caption">@totalCount facilities &middot; Admin only</RadzenText>
+            </div>
+            <RadzenButton Text="+ New facility" Click="@(() => NavigationManager.NavigateTo("dashboard/facilities/new"))" />
+        </RadzenStack>
+
+        <RadzenDataGrid @ref="grid" TItem="FacilityDto" Data="@facilities" Count="@totalCount" LoadData="@LoadDataAsync"
+                         AllowPaging="true" PageSize="10" AllowSorting="true" IsLoading="@isLoading">
+            <Columns>
+                <RadzenDataGridColumn TItem="FacilityDto" Property="@nameof(FacilityDto.Name)" Title="Name" Sortable="true" Filterable="false" />
+                <RadzenDataGridColumn TItem="FacilityDto" Title="Type" Sortable="false" Filterable="false">
+                    <Template Context="item">@TypeName(item)</Template>
+                </RadzenDataGridColumn>
+            </Columns>
+            <EmptyTemplate>
+                <RadzenCard Variant="Variant.Outlined" Style="margin-block-start: 1rem;">
+                    <RadzenStack Orientation="Orientation.Vertical" Gap="0.75rem" Style="align-items: flex-start;">
+                        <RadzenText TextStyle="TextStyle.H6" TagName="TagName.H2">No facilities yet</RadzenText>
+                        <RadzenText TextStyle="TextStyle.Body2">
+                            A facility is a camp or center you&rsquo;ll reuse across events. Add one, then build out
+                            its areas, buildings and campsites.
+                        </RadzenText>
+                        <RadzenButton Text="Add your first facility" Click="@(() => NavigationManager.NavigateTo("dashboard/facilities/new"))" />
+                    </RadzenStack>
+                </RadzenCard>
+            </EmptyTemplate>
+        </RadzenDataGrid>
+
+        @if (loadErrorMessage is not null)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" AllowClose="false" Style="margin-block-start: 1rem;" Text="@loadErrorMessage" />
+        }
+        break;
+}

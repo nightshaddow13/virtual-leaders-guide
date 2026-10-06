@@ -4,16 +4,18 @@ using VirtualLeadersGuide.Identity.Contracts;
 namespace VirtualLeadersGuide.E2E.Tests;
 
 /// <remarks>
-/// Covers P8-2 (#166): dashboard creation of a Facility, including the Facility Type autofill's
-/// resolve-or-create flow. Create-only - there is no Facility list or edit page yet (P8-3/#167, P8-4/#168),
-/// so a successful create lands on the main dashboard rather than a per-Facility URL (see
-/// <c>FacilityEditor.razor.cs</c>'s remarks). Unlike <see cref="ActivityManagementScenarios"/>, a Facility
-/// has no owning Event to cascade-clean it (ADR-0066), so every Facility/Facility Type this class creates is
-/// tracked explicitly via <see cref="E2ETestBase.TrackFacility"/>/<see cref="E2ETestBase.TrackFacilityType"/>
+/// Covers P8-2 (#166) dashboard creation of a Facility, including the Facility Type autofill's
+/// resolve-or-create flow, and P8-3 (#167)'s list page. A successful create lands on
+/// <c>/dashboard/facilities</c>, not the main dashboard (see <c>FacilityEditor.razor.cs</c>'s remarks) - P8-3
+/// gave the Facility area somewhere of its own to land on. Unlike <see cref="ActivityManagementScenarios"/>,
+/// a Facility has no owning Event to cascade-clean it (ADR-0066), so every Facility/Facility Type this class
+/// creates is tracked explicitly via <see cref="E2ETestBase.TrackFacility"/>/<see cref="E2ETestBase.TrackFacilityType"/>
 /// (ADR-0039's new P8-2 table rows) rather than relying on an Event's own teardown. Assertions go through
 /// <see cref="AspireE2EFixture.Facilities"/> directly, not just the UI's own success notification - the AC's
-/// "clear success confirmation" criterion extends to the row actually existing, not just the dashboard
-/// saying so.
+/// "clear success confirmation" criterion extends to the row actually existing, not just the page saying so.
+/// The empty-state scenario relies on this being the only class in <see cref="AspireE2ECollection"/> that
+/// touches Facility, and every test in this class (xUnit runs one collection's tests sequentially) cleaning
+/// up its own tracked rows in <see cref="E2ETestBase.DisposeAsync"/> before the next test starts.
 /// </remarks>
 [Collection(nameof(AspireE2ECollection))]
 public class FacilityManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
@@ -35,7 +37,7 @@ public class FacilityManagementScenarios(AspireE2EFixture fixture) : E2ETestBase
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create facility" }).ClickAsync();
 
             await Expect(Page).ToHaveURLAsync(
-                DashboardUrl(), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                FacilityListUrl(), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
 
             (Guid facilityId, Guid facilityTypeId) = await AssertFacilityAndTypeExistAsync(name, typeName);
             TrackFacility(facilityId);
@@ -56,7 +58,7 @@ public class FacilityManagementScenarios(AspireE2EFixture fixture) : E2ETestBase
             await Page.Locator("#TypeName").FillAsync(typeName);
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create facility" }).ClickAsync();
             await Expect(Page).ToHaveURLAsync(
-                DashboardUrl(), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                FacilityListUrl(), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
 
             (Guid firstFacilityId, Guid facilityTypeId) = await AssertFacilityAndTypeExistAsync(firstName, typeName);
             TrackFacility(firstFacilityId);
@@ -67,7 +69,7 @@ public class FacilityManagementScenarios(AspireE2EFixture fixture) : E2ETestBase
             await Page.Locator("#TypeName").FillAsync(typeName);
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create facility" }).ClickAsync();
             await Expect(Page).ToHaveURLAsync(
-                DashboardUrl(), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                FacilityListUrl(), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
 
             (Guid secondFacilityId, Guid reusedFacilityTypeId) = await AssertFacilityAndTypeExistAsync(secondName, typeName);
             TrackFacility(secondFacilityId);
@@ -93,7 +95,80 @@ public class FacilityManagementScenarios(AspireE2EFixture fixture) : E2ETestBase
                 new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
         });
 
+    [Fact(DisplayName = "Given a Director, when navigating directly to the Facility list, then they are denied")]
+    public async Task GivenADirector_WhenNavigatingDirectlyToTheFacilityList_ThenTheyAreDenied() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, _) = await CreateEventAsync("Facility List Denial Host");
+            await SignOutAsync();
+
+            await CreateAndSignInDirectorAsync(eventId);
+
+            await Page.GotoAsync(FacilityListUrl());
+
+            await Expect(Page.GetByText("Only Admins can manage Facilities.")).ToBeVisibleAsync(
+                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+        });
+
+    /// <remarks>
+    /// The header link is the only coverage <c>SiteHeader.razor</c>'s new "Facilities" <c>NavLink</c> gets -
+    /// there is no <c>SiteHeaderShould</c> bUnit file. Reaches the list by clicking that link rather than
+    /// navigating directly, so a regression removing or mis-routing the link fails this test, not just a
+    /// direct-navigation one.
+    /// </remarks>
+    [Fact(DisplayName = "Given an Admin who created a Facility, when they open the Facility list from the header link, then they see its Name and Type")]
+    public async Task GivenAnAdminWhoCreatedAFacility_WhenTheyOpenTheFacilityListFromTheHeaderLink_ThenTheySeeItsNameAndType() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            string name = $"e2e-Camp Blackhawk {Guid.NewGuid():n}";
+            string typeName = $"e2e-Camp {Guid.NewGuid():n}";
+
+            await Page.GotoAsync(NewFacilityUrl());
+            await Page.Locator("#Name").FillAsync(name);
+            await Page.Locator("#TypeName").FillAsync(typeName);
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create facility" }).ClickAsync();
+            await Expect(Page).ToHaveURLAsync(
+                FacilityListUrl(), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+
+            (Guid facilityId, Guid facilityTypeId) = await AssertFacilityAndTypeExistAsync(name, typeName);
+            TrackFacility(facilityId);
+            TrackFacilityType(facilityTypeId);
+
+            await Page.GotoAsync(DashboardUrl());
+            await Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = "Facilities" }).ClickAsync();
+            await Expect(Page).ToHaveURLAsync(
+                FacilityListUrl(), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+
+            await Expect(Page.GetByText(name)).ToBeVisibleAsync(
+                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(Page.GetByText(typeName)).ToBeVisibleAsync();
+        });
+
+    /// <remarks>
+    /// Relies on this class's own teardown discipline, not a fresh environment - see the class remarks. Must
+    /// run with no other tracked Facility live in <see cref="AspireE2ECollection"/> at the same time.
+    /// </remarks>
+    [Fact(DisplayName = "Given an Admin with no Facilities, when they open the Facility list, then they see the empty state and can reach the form from it")]
+    public async Task GivenAnAdminWithNoFacilities_WhenTheyOpenTheFacilityList_ThenTheySeeTheEmptyStateAndCanReachTheFormFromIt() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+
+            await Page.GotoAsync(FacilityListUrl());
+
+            await Expect(Page.GetByText("No facilities yet")).ToBeVisibleAsync(
+                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Add your first facility" }).ClickAsync();
+
+            await Expect(Page).ToHaveURLAsync(
+                NewFacilityUrl(), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+        });
+
     private string DashboardUrl() => new Uri(Fixture.WebBaseUrl, "dashboard").ToString();
+
+    private string FacilityListUrl() => new Uri(Fixture.WebBaseUrl, "dashboard/facilities").ToString();
 
     private string NewFacilityUrl() => new Uri(Fixture.WebBaseUrl, "dashboard/facilities/new").ToString();
 

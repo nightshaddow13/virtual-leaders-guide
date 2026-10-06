@@ -43,6 +43,16 @@ internal sealed class FacilityDocument
     public required FacilityResourceObject Data { get; init; }
 }
 
+/// <summary>The response body for <c>GET /api/facilities</c>.</summary>
+internal sealed class FacilityCollectionDocument
+{
+    /// <summary>Every returned Facility resource object.</summary>
+    public required List<FacilityResourceObject> Data { get; init; }
+
+    /// <summary>The total count across all pages, when Api's <c>IncludeTotalResourceCount</c> option supplies one.</summary>
+    public DocumentMeta? Meta { get; init; }
+}
+
 /// <summary>Resource-specific envelope for <c>/api/facilityTypes</c> - see <see cref="FacilityResourceObject"/>'s remarks.</summary>
 internal sealed class FacilityTypeResourceObject
 {

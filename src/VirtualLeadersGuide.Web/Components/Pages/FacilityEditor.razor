@@ -27,7 +27,7 @@
 
     case PageState.Ready:
         <RadzenBreadCrumb>
-            <RadzenBreadCrumbItem Text="FACILITIES" />
+            <RadzenBreadCrumbItem Text="FACILITIES" Path="dashboard/facilities" />
             <RadzenBreadCrumbItem Text="NEW" />
         </RadzenBreadCrumb>
 
@@ -39,7 +39,7 @@
                 <h1>New facility</h1>
                 <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
                     <RadzenButton Text="Cancel" ButtonStyle="ButtonStyle.Light" ButtonType="ButtonType.Button"
-                                  Disabled="@isSaving" Click="@(() => NavigationManager.NavigateTo("dashboard", forceLoad: true))" />
+                                  Disabled="@isSaving" Click="@(() => NavigationManager.NavigateTo("dashboard/facilities", forceLoad: true))" />
                     <RadzenButton Text="Create facility" ButtonType="ButtonType.Submit" Disabled="@isSaving" />
                 </RadzenStack>
             </RadzenStack>
