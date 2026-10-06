@@ -1,0 +1,68 @@
+@page "/dashboard/events/{EventId:guid}/activities"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+@using VirtualLeadersGuide.Web.Activities
+
+<PageTitle>Activities</PageTitle>
+
+<RadzenComponents @rendermode="InteractiveServer" />
+
+@switch (state)
+{
+    case PageState.Denied:
+        <StatusPanel Title="You don't have access to this Event"
+                     Message="Ask an Admin to grant you access, or check you're signed in as the right person.">
+            <RadzenButton Text="Back to dashboard" Click="NavigateToDashboard" />
+        </StatusPanel>
+        break;
+
+    case PageState.Unavailable:
+        <StatusPanel Title="Something went wrong loading this Event" Message="The Event store didn't respond. Try again.">
+            <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
+                <RadzenButton Text="Try again" Click="@(() => NavigationManager.Refresh(forceReload: true))" />
+                <RadzenButton Text="Back to dashboard" ButtonStyle="ButtonStyle.Light" Click="NavigateToDashboard" />
+            </RadzenStack>
+        </StatusPanel>
+        break;
+
+    case PageState.Ready:
+        <RadzenBreadCrumb>
+            <RadzenBreadCrumbItem Text="@(isAdmin ? "EVENTS" : "MY EVENTS")" Path="dashboard" />
+            <RadzenBreadCrumbItem Text="@eventName?.ToUpperInvariant()" Path="@($"dashboard/events/{EventId}")" />
+            <RadzenBreadCrumbItem Text="ACTIVITIES" />
+        </RadzenBreadCrumb>
+
+        <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween"
+                     AlignItems="AlignItems.End" Gap="1rem" Style="margin-block-end: 1rem;">
+            <div>
+                <h1>Activities</h1>
+                <RadzenText TextStyle="TextStyle.Caption">@totalCount activities</RadzenText>
+            </div>
+            <RadzenButton Text="+ New activity" Click="@(() => NavigationManager.NavigateTo($"dashboard/events/{EventId}/activities/new"))" />
+        </RadzenStack>
+
+        <RadzenDataGrid @ref="grid" TItem="ActivityDto" Data="@activities" Count="@totalCount" LoadData="@LoadDataAsync"
+                         AllowPaging="true" PageSize="10" AllowSorting="true" IsLoading="@isLoading">
+            <Columns>
+                <RadzenDataGridColumn TItem="ActivityDto" Property="@nameof(ActivityDto.Name)" Title="Name" Sortable="true" Filterable="false" />
+            </Columns>
+            <EmptyTemplate>
+                <RadzenCard Variant="Variant.Outlined" Style="margin-block-start: 1rem;">
+                    <RadzenStack Orientation="Orientation.Vertical" Gap="0.75rem" Style="align-items: flex-start;">
+                        <RadzenText TextStyle="TextStyle.H6" TagName="TagName.H2">No activities yet</RadzenText>
+                        <RadzenText TextStyle="TextStyle.Body2">
+                            Add your first Activity to get started - give it a Name and a Description.
+                        </RadzenText>
+                        <RadzenButton Text="+ New activity" Click="@(() => NavigationManager.NavigateTo($"dashboard/events/{EventId}/activities/new"))" />
+                    </RadzenStack>
+                </RadzenCard>
+            </EmptyTemplate>
+        </RadzenDataGrid>
+
+        @if (loadErrorMessage is not null)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" AllowClose="false" Style="margin-block-start: 1rem;" Text="@loadErrorMessage" />
+        }
+        break;
+}

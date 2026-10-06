@@ -23,6 +23,17 @@
                       Click="@(() => NavigationManager.NavigateTo($"dashboard/events/{Id}/info-pages"))"
                       Style="margin-block-end: 1rem;" />
     }
+
+    /// <remarks>
+    /// Sibling to <see cref="RenderInfoPagesLink"/> (P5-7, #93) - same sharing reason: ADR-0069 gives an
+    /// assigned Director full Activity CRUD, identical to an Admin's, so both branches link to the same place.
+    /// </remarks>
+    void RenderActivitiesLink()
+    {
+        <RadzenButton Text="Activities" Icon="event" ButtonStyle="ButtonStyle.Light"
+                      Click="@(() => NavigationManager.NavigateTo($"dashboard/events/{Id}/activities"))"
+                      Style="margin-block-end: 1rem;" />
+    }
 }
 
 @switch (state)
@@ -53,6 +64,7 @@
             <RadzenBadge Text="VIEW ONLY" BadgeStyle="BadgeStyle.Light" Variant="Variant.Outlined" />
         </div>
         RenderInfoPagesLink();
+        RenderActivitiesLink();
         <div class="vlg-readonly-field">
             <RadzenText TextStyle="TextStyle.Overline">Status</RadzenText>
             <RadzenBadge Text="@EventStatusDisplay.Text(loadedDto!.Status)" BadgeStyle="@EventStatusDisplay.Style(loadedDto.Status)"
@@ -82,6 +94,7 @@
         @if (Id is not null)
         {
             RenderInfoPagesLink();
+            RenderActivitiesLink();
         }
         <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween"
                      AlignItems="AlignItems.End" Gap="1rem" Style="margin-block-end: 1rem;">

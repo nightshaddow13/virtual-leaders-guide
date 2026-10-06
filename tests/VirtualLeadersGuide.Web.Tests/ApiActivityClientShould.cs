@@ -6,14 +6,104 @@ using VirtualLeadersGuide.Web.Activities;
 namespace VirtualLeadersGuide.Web.Tests;
 
 /// <remarks>
-/// Mirrors <see cref="ApiInfoPageClientShould"/>'s shape, limited to <see cref="ApiActivityClient.CreateAsync"/>
-/// - the only method <see cref="ApiActivityClient"/> exposes yet (P5-6, #87). Response bodies are anonymous
-/// objects with already-lowercase property names, reproducing Api's actual wire shape without touching
-/// <see cref="ApiActivityClient"/>'s <see langword="internal"/> envelope types.
+/// Mirrors <see cref="ApiInfoPageClientShould"/>'s shape - <see cref="ApiActivityClient.CreateAsync"/> was the
+/// only method <see cref="ApiActivityClient"/> exposed through P5-6 (#87);
+/// <see cref="ApiActivityClient.GetActivitiesForEventAsync"/> was added by P5-7 (#93). Response bodies are
+/// anonymous objects with already-lowercase property names, reproducing Api's actual wire shape without
+/// touching <see cref="ApiActivityClient"/>'s <see langword="internal"/> envelope types.
 /// </remarks>
 public class ApiActivityClientShould
 {
     private const string JsonApiMediaType = "application/vnd.api+json";
+
+    [Fact]
+    public async Task ReturnTheMappedActivitiesAndTotal_WhenApiRespondsWithOk_ForGetActivitiesForEventAsync()
+    {
+        var eventId = Guid.NewGuid();
+        var activityId = Guid.NewGuid();
+        var handler = new StubHttpMessageHandler(_ => JsonApiResponse(HttpStatusCode.OK, new
+        {
+            data = new[] { ActivityResource(activityId, eventId, "Canoe Basics", "Paddle strokes and the buddy system.") },
+            meta = new { total = 5 }
+        }));
+        ApiActivityClient client = CreateClient(handler);
+
+        (IReadOnlyList<ActivityDto> activities, int total) =
+            await client.GetActivitiesForEventAsync(eventId, 1, 10, null, CancellationToken.None);
+
+        Assert.Single(activities);
+        Assert.Equal(activityId, activities[0].Id);
+        Assert.Equal(eventId, activities[0].EventId);
+        Assert.Equal("Canoe Basics", activities[0].Name);
+        Assert.Equal("Paddle strokes and the buddy system.", activities[0].Description);
+        Assert.Equal(5, total);
+    }
+
+    [Fact]
+    public async Task FallBackToTheReturnedCount_WhenApiOmitsMetaTotal_ForGetActivitiesForEventAsync()
+    {
+        var eventId = Guid.NewGuid();
+        var handler = new StubHttpMessageHandler(_ => JsonApiResponse(HttpStatusCode.OK, new
+        {
+            data = new[] { ActivityResource(eventId: eventId), ActivityResource(eventId: eventId) }
+        }));
+        ApiActivityClient client = CreateClient(handler);
+
+        (IReadOnlyList<ActivityDto> activities, int total) =
+            await client.GetActivitiesForEventAsync(eventId, 1, 10, null, CancellationToken.None);
+
+        Assert.Equal(2, activities.Count);
+        Assert.Equal(2, total);
+    }
+
+    [Fact]
+    public async Task IncludeTheEventIdFilterSortAndPageQueryParameters_WhenListing_ForGetActivitiesForEventAsync()
+    {
+        var eventId = Guid.NewGuid();
+        HttpRequestMessage? capturedRequest = null;
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            capturedRequest = request;
+            return JsonApiResponse(HttpStatusCode.OK, new { data = Array.Empty<object>() });
+        });
+        ApiActivityClient client = CreateClient(handler);
+
+        await client.GetActivitiesForEventAsync(eventId, 2, 25, null, CancellationToken.None);
+
+        Assert.NotNull(capturedRequest);
+        string decodedQuery = Uri.UnescapeDataString(capturedRequest!.RequestUri!.Query);
+        Assert.Contains($"filter=equals(eventId,'{eventId}')", decodedQuery, StringComparison.Ordinal);
+        Assert.Contains("sort=name", decodedQuery, StringComparison.Ordinal);
+        Assert.Contains("page[number]=2", decodedQuery, StringComparison.Ordinal);
+        Assert.Contains("page[size]=25", decodedQuery, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task UseTheCallersSort_WhenOneIsSupplied_ForGetActivitiesForEventAsync()
+    {
+        HttpRequestMessage? capturedRequest = null;
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            capturedRequest = request;
+            return JsonApiResponse(HttpStatusCode.OK, new { data = Array.Empty<object>() });
+        });
+        ApiActivityClient client = CreateClient(handler);
+
+        await client.GetActivitiesForEventAsync(Guid.NewGuid(), 1, 10, "-name", CancellationToken.None);
+
+        Assert.NotNull(capturedRequest);
+        Assert.Contains("sort=-name", capturedRequest!.RequestUri!.Query, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ThrowActivityDataUnavailableException_WhenApiRespondsWithAnUnexpectedStatus_ForGetActivitiesForEventAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        ApiActivityClient client = CreateClient(handler);
+
+        await Assert.ThrowsAsync<ActivityDataUnavailableException>(
+            () => client.GetActivitiesForEventAsync(Guid.NewGuid(), 1, 10, null, CancellationToken.None));
+    }
 
     [Fact]
     public async Task SendJsonApiAcceptHeaderAndTheBearerToken_WhenSendingARequest_ForCreateAsync()
