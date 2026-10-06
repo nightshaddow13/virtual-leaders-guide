@@ -1,6 +1,7 @@
 using System.Net;
 using Microsoft.Extensions.Configuration;
 using VirtualLeadersGuide.Identity.Contracts;
+using VirtualLeadersGuide.Web.Activities;
 using VirtualLeadersGuide.Web.Authorization;
 using VirtualLeadersGuide.Web.Directors;
 using VirtualLeadersGuide.Web.Events;
@@ -27,6 +28,9 @@ internal static class ApiClientTestFactory
         new(CreateInternalApiClient(apiHandler));
 
     public static ApiInfoPageClient CreateInfoPageClient(HttpMessageHandler apiHandler) =>
+        new(CreateInternalApiClient(apiHandler));
+
+    public static ApiActivityClient CreateActivityClient(HttpMessageHandler apiHandler) =>
         new(CreateInternalApiClient(apiHandler));
 
     private static InternalApiClient CreateInternalApiClient(HttpMessageHandler apiHandler)

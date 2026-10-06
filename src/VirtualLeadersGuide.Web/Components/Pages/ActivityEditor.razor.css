@@ -1,0 +1,74 @@
+/* ===========================================================================
+   Activity editor's responsive Write/Preview panes (P5-6, #87). Same shape as
+   InfoPageEditor.razor.css's ip-* rules - side-by-side above 64rem (matches
+   Activity's own Direction C tree-drops-below breakpoint, per that wireframe
+   direction), RadzenSelectBar-driven tabs below it. Component-scoped (ae- prefix,
+   not ip-) rather than shared, per ADR-0038/0040 - built with no JS interop, both
+   panes always render in the DOM, and a plain enum field (`activePane`, rendered
+   here as `data-active-pane`) is all the state CSS needs.
+   =========================================================================== */
+
+.ae-tabstrip {
+    display: none;
+    margin-block-end: 0.75rem;
+}
+
+.ae-panes {
+    display: block;
+}
+
+.ae-pane {
+    display: none;
+}
+
+.ae-editor-textarea {
+    width: 100%;
+    min-height: 280px;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    resize: vertical;
+}
+
+.ae-preview-surface {
+    min-height: 280px;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--vlg-line);
+    border-radius: var(--vlg-radius);
+    background: var(--vlg-surface);
+    overflow-y: auto;
+}
+
+    .ae-preview-surface :first-child {
+        margin-block-start: 0;
+    }
+
+    .ae-preview-surface :last-child {
+        margin-block-end: 0;
+    }
+
+@media (min-width: 64rem) {
+    .ae-panes {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+    }
+
+    .ae-pane {
+        display: block;
+    }
+}
+
+@media (max-width: 63.99rem) {
+    .ae-tabstrip {
+        display: block;
+    }
+
+    .ae-panes[data-active-pane="Write"] .ae-pane-write {
+        display: block;
+    }
+
+    .ae-panes[data-active-pane="Preview"] .ae-pane-preview {
+        display: block;
+    }
+}

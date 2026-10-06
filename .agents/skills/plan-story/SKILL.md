@@ -125,12 +125,19 @@ Completion: every section above is present, and every file path is real or expli
 
 ### 7. Second pass — grill it
 
-Run a `/grilling` session over the first-pass plan, using the `/domain-modeling` skill — this is what
-`/grill-with-docs` does, inlined here because that skill is user-invocable only and can't be reached
-from inside another skill. One question at a time, each carrying a recommended answer; look facts up
-rather than asking when they're discoverable; the decisions themselves are the user's to make. Grill
-the *plan*, not the ticket — the choices step 6 made silently, ADRs it may sit against, edges the
-wireframe leaves open, gaps in the verification.
+Actually invoke the `grilling` and `domain-modeling` skills (`Skill` tool, not a paraphrase of their
+instructions) over the first-pass plan — this is what `/grill-with-docs` does, inlined here because that
+skill is user-invocable only and can't be reached from inside another skill. Loading them changes how this
+step runs; don't substitute plan mode's own ad hoc `AskUserQuestion` clarification pass for it, and don't
+treat plan-mode clarifications asked earlier (Phase 3, before the first-pass plan existed) as having already
+satisfied this step — this step grills the *written plan*, which doesn't exist yet at that point.
+
+One question at a time — a single `AskUserQuestion` call per question, waiting for the answer before the
+next one, never several questions batched into one call — each carrying a recommended answer; look facts up
+rather than asking when they're discoverable (`grilling`'s own instruction); the decisions themselves are
+the user's to make. Grill the *plan*, not the ticket — the choices step 6 made silently, ADRs it may sit
+against (apply `domain-modeling`'s hard-to-reverse/surprising/real-trade-off test to each candidate), edges
+the wireframe leaves open, gaps in the verification, and how much test coverage a choice implies.
 
 Fold every settled answer back into the plan file:
 
