@@ -10,6 +10,7 @@ using VirtualLeadersGuide.Web.Components;
 using VirtualLeadersGuide.Web.Components.Account;
 using VirtualLeadersGuide.Web.Directors;
 using VirtualLeadersGuide.Web.Events;
+using VirtualLeadersGuide.Web.Facilities;
 using VirtualLeadersGuide.Web.Identity;
 using VirtualLeadersGuide.Web.InfoPages;
 using VirtualLeadersGuide.Web.Markdown;
@@ -60,6 +61,8 @@ builder.Services.AddScoped<ApiDirectorClient>();
 builder.Services.AddScoped<DirectorInviteService>();
 builder.Services.AddScoped<ApiInfoPageClient>();
 builder.Services.AddScoped<ApiActivityClient>();
+builder.Services.AddScoped<ApiFacilityClient>();
+builder.Services.AddScoped<ApiFacilityTypeClient>();
 builder.Services.AddSingleton<MarkdownRenderer>();
 
 builder.Services.AddScoped<PublicEventClient>();

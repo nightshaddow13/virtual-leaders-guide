@@ -68,6 +68,15 @@ public abstract class E2ETestBase(AspireE2EFixture fixture) : PageTest
     private readonly List<Guid> _trackedEventIds = [];
     private readonly List<string> _trackedUserIds = [];
 
+    /// <remarks>
+    /// Deleted in <see cref="DisposeAsync"/> (ADR-0039), same as <see cref="_trackedEventIds"/> - a Facility
+    /// carries no owning Event (ADR-0066), so nothing cascade-deletes it the way an Event's own Activities/
+    /// InfoPages are swept for free when that Event is deleted. Populated only by
+    /// <see cref="TrackFacility"/>/<see cref="TrackFacilityType"/> (P8-2, #166).
+    /// </remarks>
+    private readonly List<Guid> _trackedFacilityIds = [];
+    private readonly List<Guid> _trackedFacilityTypeIds = [];
+
     /// <inheritdoc/>
     /// <remarks>
     /// <c>Screenshots</c>/<c>Snapshots</c>/<c>Sources</c> must all be true for AC #4's time-travel view,
@@ -253,6 +262,12 @@ public abstract class E2ETestBase(AspireE2EFixture fixture) : PageTest
     /// <summary>Registers <paramref name="id"/> for deletion in <see cref="DisposeAsync"/> (ADR-0039).</summary>
     protected void TrackEvent(Guid id) => _trackedEventIds.Add(id);
 
+    /// <summary>Registers <paramref name="id"/> for deletion in <see cref="DisposeAsync"/> (ADR-0039; P8-2, #166).</summary>
+    protected void TrackFacility(Guid id) => _trackedFacilityIds.Add(id);
+
+    /// <summary>Registers <paramref name="id"/> for deletion in <see cref="DisposeAsync"/> (ADR-0039; P8-2, #166).</summary>
+    protected void TrackFacilityType(Guid id) => _trackedFacilityTypeIds.Add(id);
+
     /// <summary>
     /// Looks <paramref name="email"/> up and tracks its User for automatic cleanup (ADR-0039) - for a User
     /// created through the real invite UI (<c>DirectorInviteScenarios</c>) rather than seeded via
@@ -341,16 +356,29 @@ public abstract class E2ETestBase(AspireE2EFixture fixture) : PageTest
     }
 
     /// <remarks>
-    /// Deletes Events before Users, each in the reverse order tracked - no FK requires this specific order
-    /// (deleting either side cascades that Event/User's own <c>UserRole</c> rows independently), it's just a
-    /// consistent LIFO teardown. On a failed test, also records what was deleted to <c>cleanup.txt</c>
-    /// alongside this test's other artifacts, so the trace has a record of what cleanup removed. Wrapped by
-    /// <see cref="TryCaptureAsync"/> at the call site - a cleanup failure must never turn a passing test red
-    /// (ADR-0028).
+    /// Deletes Facilities, then Facility Types, then Events, then Users, each in the reverse order tracked -
+    /// Facilities before Facility Types is load-bearing (a Facility Type's FK is <c>DeleteBehavior.Restrict</c>,
+    /// ADR-0071), the rest is just a consistent LIFO teardown (no FK requires Events-before-Users; deleting
+    /// either side cascades that Event/User's own <c>UserRole</c> rows independently). On a failed test, also
+    /// records what was deleted to <c>cleanup.txt</c> alongside this test's other artifacts, so the trace has
+    /// a record of what cleanup removed. Wrapped by <see cref="TryCaptureAsync"/> at the call site - a
+    /// cleanup failure must never turn a passing test red (ADR-0028).
     /// </remarks>
     private async Task CleanupTrackedDataAsync(string testDir)
     {
         var deleted = new List<string>();
+
+        foreach (Guid facilityId in Enumerable.Reverse(_trackedFacilityIds))
+        {
+            await Fixture.Facilities.DeleteFacilityAsync(facilityId, CancellationToken.None);
+            deleted.Add($"facility {facilityId}");
+        }
+
+        foreach (Guid facilityTypeId in Enumerable.Reverse(_trackedFacilityTypeIds))
+        {
+            await Fixture.Facilities.DeleteFacilityTypeAsync(facilityTypeId, CancellationToken.None);
+            deleted.Add($"facilityType {facilityTypeId}");
+        }
 
         foreach (Guid eventId in Enumerable.Reverse(_trackedEventIds))
         {
