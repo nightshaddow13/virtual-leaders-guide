@@ -41,7 +41,7 @@
                 <h1>New activity</h1>
                 <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
                     <RadzenButton Text="Cancel" ButtonStyle="ButtonStyle.Light" ButtonType="ButtonType.Button"
-                                  Disabled="@isSaving" Click="@(() => NavigationManager.NavigateTo($"dashboard/events/{EventId}", forceLoad: true))" />
+                                  Disabled="@isSaving" Click="NavigateToList" />
                     <RadzenButton Text="Create activity" ButtonType="ButtonType.Submit" Disabled="@isSaving" />
                 </RadzenStack>
             </RadzenStack>

@@ -125,7 +125,7 @@ public partial class ActivityEditor
             }
 
             NotificationService.Notify(NotificationSeverity.Success, "Activity created");
-            NavigationManager.NavigateTo($"dashboard/events/{EventId}", forceLoad: true);
+            NavigateToList();
         }
         catch (ActivityDataUnavailableException)
         {
@@ -136,6 +136,9 @@ public partial class ActivityEditor
             isSaving = false;
         }
     }
+
+    /// <remarks><c>forceLoad: true</c> - same reasoning as <c>InfoPageEditor.razor.cs</c>'s <c>NavigateToList</c>: crossing from this <c>prerender: false</c> page to another needs a real browser navigation, not an in-circuit one.</remarks>
+    private void NavigateToList() => NavigationManager.NavigateTo($"dashboard/events/{EventId}/activities", forceLoad: true);
 
     private sealed class ActivityFormModel
     {

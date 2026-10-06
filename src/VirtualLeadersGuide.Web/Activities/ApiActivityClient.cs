@@ -14,9 +14,9 @@ namespace VirtualLeadersGuide.Web.Activities;
 /// Mirrors <c>InfoPages.ApiInfoPageClient</c>'s shape - typed outcomes for expected non-2xx responses rather
 /// than exceptions, <see cref="ActivityDataUnavailableException"/> for everything else. Requests go through
 /// <see cref="InternalApiClient"/>, not a bare <c>IHttpClientFactory.CreateClient("Api")</c>, because
-/// <c>/api/*</c> requires the internal JWT that only <see cref="InternalApiClient"/> attaches. Create-only
-/// for now - P5-7/P5-8/P5-9 (#93/#94/#95) add the read/update/delete methods <c>ActivityResourceDefinition</c>
-/// already authorizes on the Api side, once their own UI needs to call them.
+/// <c>/api/*</c> requires the internal JWT that only <see cref="InternalApiClient"/> attaches. The
+/// read/update/delete methods <c>ActivityResourceDefinition</c> already authorizes on the Api side arrive as
+/// their own UI needs them - P5-7 (#93) adds the list read; P5-8/P5-9 (#94/#95) still owe update/delete.
 /// </remarks>
 public sealed class ApiActivityClient(InternalApiClient apiClient)
 {
@@ -28,6 +28,33 @@ public sealed class ApiActivityClient(InternalApiClient apiClient)
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
+
+    /// <summary>Lists one Event's Activities, sorted by Name ascending unless <paramref name="sort"/> says otherwise.</summary>
+    /// <param name="eventId">The Event whose Activities to list.</param>
+    /// <param name="pageNumber">The 1-based page to fetch.</param>
+    /// <param name="pageSize">The number of Activities per page.</param>
+    /// <param name="sort">
+    /// A JSON:API <c>sort=</c> value (e.g. <c>name</c> or <c>-name</c>, see <c>JsonApi.JsonApiSort</c>), or
+    /// <see langword="null"/> to fall back to <c>name</c> ascending - the wireframe's default order.
+    /// </param>
+    /// <param name="cancellationToken">Propagated to the underlying HTTP call.</param>
+    /// <returns>
+    /// The page of Activities, and the total count across all pages. Never forbidden: an unassigned
+    /// Director's request is silently narrowed to nothing by Api rather than denied (ADR-0069) - callers
+    /// needing to distinguish "no Activities yet" from "not assigned to this Event" gate on
+    /// <see cref="ApiEventClient"/>'s own read first, not on this call.
+    /// </returns>
+    public async Task<(IReadOnlyList<ActivityDto> Activities, int Total)> GetActivitiesForEventAsync(
+        Guid eventId, int pageNumber, int pageSize, string? sort, CancellationToken cancellationToken)
+    {
+        using var request = NewRequest(HttpMethod.Get, BuildCollectionUri(eventId, pageNumber, pageSize, sort));
+        using HttpResponseMessage response = await SendAsync(request, cancellationToken);
+
+        EnsureExpectedStatus(response, HttpStatusCode.OK);
+        ActivityCollectionDocument document = await ReadAsync<ActivityCollectionDocument>(response, cancellationToken);
+        var activities = document.Data.Select(ToDto).ToList();
+        return (activities, document.Meta?.Total ?? activities.Count);
+    }
 
     /// <summary>Creates a new Activity on the given Event.</summary>
     /// <param name="eventId">The Event this Activity belongs to.</param>
@@ -69,12 +96,19 @@ public sealed class ApiActivityClient(InternalApiClient apiClient)
         return (ActivityWriteOutcome.Success, ToDto(created.Data), []);
     }
 
-    private static HttpRequestMessage NewRequest<TBody>(HttpMethod method, string uri, TBody body)
+    private static HttpRequestMessage NewRequest(HttpMethod method, string uri) => NewRequest<ActivityDocument>(method, uri, null);
+
+    private static HttpRequestMessage NewRequest<TBody>(HttpMethod method, string uri, TBody? body)
     {
         var request = new HttpRequestMessage(method, uri);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(JsonApiMediaType));
-        request.Content = JsonContent.Create(body, options: JsonOptions);
-        request.Content.Headers.ContentType = new MediaTypeHeaderValue(JsonApiMediaType);
+
+        if (body is not null)
+        {
+            request.Content = JsonContent.Create(body, options: JsonOptions);
+            request.Content.Headers.ContentType = new MediaTypeHeaderValue(JsonApiMediaType);
+        }
+
         return request;
     }
 
@@ -124,4 +158,16 @@ public sealed class ApiActivityClient(InternalApiClient apiClient)
         Name = resource.Attributes.Name!,
         Description = resource.Attributes.Description!
     };
+
+    /// <remarks>
+    /// Defaults to <c>name</c> ascending when <paramref name="sort"/> is <see langword="null"/> - the
+    /// wireframe's drawn order (turn 1a). Guid values are interpolated unescaped inside single quotes,
+    /// matching <c>ApiInfoPageClient.BuildCollectionUri</c>'s <c>equals(field,'guid')</c> filter-building
+    /// precedent - a Guid's string form contains no characters JSON:API's filter grammar would misparse.
+    /// </remarks>
+    private static string BuildCollectionUri(Guid eventId, int pageNumber, int pageSize, string? sort)
+    {
+        string filter = Uri.EscapeDataString($"equals(eventId,'{eventId}')");
+        return $"{ActivitiesPath}?filter={filter}&sort={sort ?? "name"}&page[number]={pageNumber}&page[size]={pageSize}";
+    }
 }

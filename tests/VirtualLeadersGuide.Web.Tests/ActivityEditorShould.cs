@@ -81,8 +81,9 @@ public class ActivityEditorShould : BunitContext
         Assert.False(activityRequestSent);
     }
 
+    /// <remarks>Repointed by P5-7 (#93) - the create form lands on the new Activities list rather than the Event page, now that one exists.</remarks>
     [Fact]
-    public void NavigateToTheEventPage_WhenSubmittingAValidNewActivity_ForCreateAsync()
+    public void NavigateToTheActivitiesList_WhenSubmittingAValidNewActivity_ForCreateAsync()
     {
         Guid eventId = Guid.NewGuid();
         RegisterClients(
@@ -100,7 +101,29 @@ public class ActivityEditorShould : BunitContext
         createButton.Click();
 
         var navigation = Services.GetRequiredService<NavigationManager>();
-        Assert.EndsWith($"dashboard/events/{eventId}", navigation.Uri, StringComparison.Ordinal);
+        Assert.EndsWith($"dashboard/events/{eventId}/activities", navigation.Uri, StringComparison.Ordinal);
+    }
+
+    /// <remarks>P5-7 (#93) - Cancel is repointed to the Activities list the same way a successful create is.</remarks>
+    [Fact]
+    public void NavigateToTheActivitiesList_WhenClickingCancel_ForCancel()
+    {
+        Guid eventId = Guid.NewGuid();
+        RegisterClients(
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = EventResource(eventId) }),
+            StubHttpMessageHandler.RespondingWith(HttpStatusCode.NotFound));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("admin-1");
+        auth.SetRoles("Admin");
+
+        IRenderedComponent<ActivityEditor> cut = Render<ActivityEditor>(parameters =>
+            parameters.Add(component => component.EventId, eventId));
+        IElement cancelButton = cut.FindAll("button")
+            .Single(button => button.TextContent.Contains("Cancel", StringComparison.Ordinal));
+        cancelButton.Click();
+
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        Assert.EndsWith($"dashboard/events/{eventId}/activities", navigation.Uri, StringComparison.Ordinal);
     }
 
     [Fact]

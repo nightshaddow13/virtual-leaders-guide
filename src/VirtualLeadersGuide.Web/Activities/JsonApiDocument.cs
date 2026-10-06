@@ -46,3 +46,13 @@ internal sealed class ActivityDocument
     /// <summary>The Activity resource object this document carries.</summary>
     public required ActivityResourceObject Data { get; init; }
 }
+
+/// <summary>The response body for <c>GET /api/activities</c>.</summary>
+internal sealed class ActivityCollectionDocument
+{
+    /// <summary>The page of Activity resource objects this document carries.</summary>
+    public required List<ActivityResourceObject> Data { get; init; }
+
+    /// <summary>The document's metadata - <see cref="JsonApi.DocumentMeta.Total"/> is the total count across every page.</summary>
+    public DocumentMeta? Meta { get; init; }
+}

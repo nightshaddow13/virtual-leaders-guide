@@ -7,6 +7,7 @@ using VirtualLeadersGuide.Web.Authorization;
 using VirtualLeadersGuide.Web.Components.Shared;
 using VirtualLeadersGuide.Web.Directors;
 using VirtualLeadersGuide.Web.Events;
+using VirtualLeadersGuide.Web.JsonApi;
 using VirtualLeadersGuide.Web.Time;
 
 namespace VirtualLeadersGuide.Web.Components.Pages;
@@ -152,7 +153,7 @@ public partial class Dashboard
 
         int pageSize = args.Top ?? 10;
         int pageNumber = (args.Skip ?? 0) / pageSize + 1;
-        string? sort = ToJsonApiSort(args.Sorts);
+        string? sort = JsonApiSort.ToJsonApiSort(args.Sorts);
 
         try
         {
@@ -246,24 +247,5 @@ public partial class Dashboard
         {
             deleteErrorMessage = "Something went wrong deleting this Event. Try again.";
         }
-    }
-
-    /// <remarks>
-    /// Maps Radzen's <see cref="SortDescriptor"/> onto JSON:API's <c>sort=</c>/<c>sort=-</c> syntax.
-    /// Lowercases only the first character, not the whole property name - JsonApiDotNetCore's default
-    /// naming exposes an attribute in camelCase (<c>startsAt</c>, not <c>startsat</c>); lowering the whole
-    /// string was harmless while every sortable column's name was one word (<c>name</c>, <c>slug</c>) but
-    /// would 400 a sort on <see cref="EventDto.StartsAt"/>.
-    /// </remarks>
-    private static string? ToJsonApiSort(IEnumerable<SortDescriptor>? sorts)
-    {
-        SortDescriptor? first = sorts?.FirstOrDefault();
-        if (first?.Property is not { Length: > 0 } property)
-        {
-            return null;
-        }
-
-        property = char.ToLowerInvariant(property[0]) + property[1..];
-        return first.SortOrder == SortOrder.Descending ? $"-{property}" : property;
     }
 }

@@ -4,15 +4,17 @@ using VirtualLeadersGuide.Identity.Contracts;
 namespace VirtualLeadersGuide.E2E.Tests;
 
 /// <remarks>
-/// Covers P5-6 (#87): dashboard creation of an Event's Activities. Create-only, mirroring
-/// <see cref="InfoPageManagementScenarios"/>'s create scenario shape - there is no Activities list or edit
-/// page yet (P5-7/#93, P5-8/#94), so a successful create lands back on the Event page rather than a
-/// per-Activity URL. Every Activity here is created through the real UI within the same scenario -
-/// Activities cascade-delete with their Event, so <see cref="E2ETestBase.TrackEvent"/> alone covers cleanup
-/// (ADR-0039). The sanitized-preview scenario below asserts on live <c>&lt;script&gt;</c> element count, not
-/// rendered text content, because the sanitizer escapes raw HTML to inert visible text rather than dropping
-/// it (confirmed by <c>MarkdownRendererShould</c>) - the escaped text legitimately still contains the
-/// substring <c>"&lt;script&gt;"</c>, so a text-content assertion would pass even if sanitizing broke.
+/// Covers P5-6 (#87, create) and P5-7 (#93, list). A successful create lands on the Activities list rather
+/// than the Event page - there is still no per-Activity detail URL to land on instead (P5-8, #94). Every
+/// Activity here is created through the real UI within the same scenario - Activities cascade-delete with
+/// their Event, so <see cref="E2ETestBase.TrackEvent"/> alone covers cleanup (ADR-0039). The
+/// sanitized-preview scenario below asserts on live <c>&lt;script&gt;</c> element count, not rendered text
+/// content, because the sanitizer escapes raw HTML to inert visible text rather than dropping it (confirmed
+/// by <c>MarkdownRendererShould</c>) - the escaped text legitimately still contains the substring
+/// <c>"&lt;script&gt;"</c>, so a text-content assertion would pass even if sanitizing broke. The
+/// list-after-create scenario below deliberately re-navigates to the Event page and clicks its own
+/// "Activities" button rather than trusting the create redirect already landed on the list - that's what
+/// actually proves the new <c>EventEditor</c> entry point works, not just that create-then-redirect does.
 /// </remarks>
 [Collection(nameof(AspireE2ECollection))]
 public class ActivityManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
@@ -37,7 +39,9 @@ public class ActivityManagementScenarios(AspireE2EFixture fixture) : E2ETestBase
 
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create activity" }).ClickAsync();
             await Expect(Page).ToHaveURLAsync(
-                EventUrl(eventId), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                ActivitiesListUrl(eventId), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(Page.GetByText(name)).ToBeVisibleAsync(
+                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
         });
 
     /// <remarks>Pins ADR-0069: an assigned Director gets the exact same full CRUD an Admin does - unlike Event's own details, which stay Admin-only.</remarks>
@@ -57,7 +61,46 @@ public class ActivityManagementScenarios(AspireE2EFixture fixture) : E2ETestBase
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create activity" }).ClickAsync();
 
             await Expect(Page).ToHaveURLAsync(
-                EventUrl(eventId), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                ActivitiesListUrl(eventId), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+        });
+
+    [Fact(DisplayName = "Given an Event with Activities, when an Admin opens its Activities list, then each Activity appears")]
+    public async Task GivenAnEventWithActivities_WhenAnAdminOpensItsActivitiesList_ThenEachActivityAppears() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, _) = await CreateEventAsync("Activities List Host");
+            string name = $"e2e-Archery Range {Guid.NewGuid():n}";
+
+            await Page.GotoAsync(NewActivityUrl(eventId));
+            await Page.Locator("#Name").FillAsync(name);
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create activity" }).ClickAsync();
+            await Expect(Page).ToHaveURLAsync(
+                ActivitiesListUrl(eventId), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+
+            await Page.GotoAsync(EventUrl(eventId));
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Activities" }).ClickAsync();
+            await Expect(Page).ToHaveURLAsync(
+                ActivitiesListUrl(eventId), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(Page.GetByText(name)).ToBeVisibleAsync(
+                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+        });
+
+    [Fact(DisplayName = "Given a Director not assigned to an Event, when navigating directly to its Activities list, then they are denied")]
+    public async Task GivenADirectorNotAssignedToAnEvent_WhenNavigatingDirectlyToItsActivities_ThenTheyAreDenied() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid assignedEventId, _) = await CreateEventAsync("Assigned For Activities List");
+            (Guid unassignedEventId, _) = await CreateEventAsync("Unassigned For Activities List");
+            await SignOutAsync();
+
+            await CreateAndSignInDirectorAsync(assignedEventId);
+
+            await Page.GotoAsync(ActivitiesListUrl(unassignedEventId));
+
+            await Expect(Page.GetByText("You don't have access to this Event")).ToBeVisibleAsync(
+                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
         });
 
     [Fact(DisplayName = "Given a Director not assigned to an Event, when navigating directly to its new-Activity form, then they are denied")]
@@ -78,6 +121,8 @@ public class ActivityManagementScenarios(AspireE2EFixture fixture) : E2ETestBase
         });
 
     private string EventUrl(Guid eventId) => new Uri(Fixture.WebBaseUrl, $"dashboard/events/{eventId}").ToString();
+
+    private string ActivitiesListUrl(Guid eventId) => new Uri(Fixture.WebBaseUrl, $"dashboard/events/{eventId}/activities").ToString();
 
     private string NewActivityUrl(Guid eventId) => new Uri(Fixture.WebBaseUrl, $"dashboard/events/{eventId}/activities/new").ToString();
 
