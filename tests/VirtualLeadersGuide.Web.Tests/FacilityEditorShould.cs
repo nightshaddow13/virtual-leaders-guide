@@ -126,7 +126,7 @@ public class FacilityEditorShould : BunitContext
 
         Assert.False(facilityTypeWriteSent);
         var navigation = Services.GetRequiredService<NavigationManager>();
-        Assert.EndsWith("dashboard", navigation.Uri, StringComparison.Ordinal);
+        Assert.EndsWith("dashboard/facilities", navigation.Uri, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -161,7 +161,7 @@ public class FacilityEditorShould : BunitContext
 
         Assert.Equal(["facilityTypes", "facilities"], requestsInOrder);
         var navigation = Services.GetRequiredService<NavigationManager>();
-        Assert.EndsWith("dashboard", navigation.Uri, StringComparison.Ordinal);
+        Assert.EndsWith("dashboard/facilities", navigation.Uri, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -184,7 +184,7 @@ public class FacilityEditorShould : BunitContext
     }
 
     [Fact]
-    public void NavigateToTheDashboard_WhenSubmittingAValidNewFacility_ForSaveAsync()
+    public void NavigateToTheFacilityList_WhenSubmittingAValidNewFacility_ForSaveAsync()
     {
         var facilityTypeId = Guid.NewGuid();
         RegisterClients(
@@ -200,7 +200,7 @@ public class FacilityEditorShould : BunitContext
         ClickCreate(cut);
 
         var navigation = Services.GetRequiredService<NavigationManager>();
-        Assert.EndsWith("dashboard", navigation.Uri, StringComparison.Ordinal);
+        Assert.EndsWith("dashboard/facilities", navigation.Uri, StringComparison.Ordinal);
     }
 
     private static void ClickCreate(IRenderedComponent<FacilityEditor> cut)

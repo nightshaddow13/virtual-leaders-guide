@@ -129,7 +129,7 @@ public partial class FacilityEditor
             }
 
             NotificationService.Notify(NotificationSeverity.Success, "Facility created");
-            NavigationManager.NavigateTo("dashboard", forceLoad: true);
+            NavigationManager.NavigateTo("dashboard/facilities", forceLoad: true);
         }
         catch (FacilityDataUnavailableException)
         {

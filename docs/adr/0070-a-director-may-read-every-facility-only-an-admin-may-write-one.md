@@ -1,5 +1,5 @@
 ---
-status: answers the Read/Write question ADR-0066 deferred for Facility, for P8-2 (#166)
+status: answers the Read/Write question ADR-0066 deferred for Facility, for P8-2 (#166); amended by P8-3 (#167)
 ---
 
 # A Director may read every Facility; only an Admin may write one
@@ -46,3 +46,20 @@ the way `ActivityAccessPolicy`/`InfoPageAccessPolicy` do, since there's no Event
   including Read, stays Admin-only (ADR-0071's own posture), since the only consumer of that resource is the
   Admin-gated Facility create/edit form. A Director never needs to browse Facility Types the way they'll
   need to browse Facilities/Locations.
+
+## Amendment (P8-3, #167)
+
+P8-3 ships the first - and so far only - UI over `/api/facilities`: a Facility list page. That page is
+Admin-only, gated the same flat way `FacilityEditor`/`Users` already are, despite this ADR's own Read being
+open to any signed-in Admin or Director. That is not a reversal of the decision above - the Api-side policy
+is unchanged, `CanRead` still returns `true` for a Director - it is a narrower UI sitting on top of a broader
+Api, and it is worth a word so a future reader comparing the two doesn't read one of them as a bug.
+
+The forcing reason is ADR-0071, not a change of heart on this ADR: `/api/facilityTypes` stays Admin-only on
+every verb, so a Director hitting the Facility list could read every row but never resolve a single Type
+name - the list's own AC ("I see each one's Name and Type") would be unsatisfiable for them. Rather than
+widen ADR-0071 for a screen the ticket explicitly denies Directors, the list page itself is Admin-gated.
+
+This ADR's own Read-opening stays exactly as reasoned above, reserved for the story it was written for: the
+Activity Location picker, which needs a Director to browse Facilities and Locations and never needs a Type
+name. Nothing here changes `FacilityAccessPolicy` or `FacilityResourceDefinition`.
