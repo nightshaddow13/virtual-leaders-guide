@@ -14,7 +14,7 @@ internal sealed class ActivityResourceObject
     /// <summary>The JSON:API resource type - always <c>"activities"</c>.</summary>
     public required string Type { get; init; }
 
-    /// <summary>This Activity's id - absent on a create request body, since the id is server-generated.</summary>
+    /// <summary>This Activity's id - absent on a create request body, since the id is server-generated; present on an update.</summary>
     public string? Id { get; init; }
 
     /// <summary>This Activity's attributes.</summary>
@@ -25,8 +25,8 @@ internal sealed class ActivityResourceObject
 /// <remarks>
 /// Every property is nullable so a request can omit an attribute rather than send it as JSON <c>null</c> -
 /// matching <c>InfoPages.InfoPageAttributesDto</c>'s discipline. <see cref="EventId"/> only ever appears on a
-/// create request - <c>Activity.EventId</c> carries no <c>AllowChange</c>, so this story never sends it on an
-/// update (there is no update yet - see <see cref="ApiActivityClient"/>'s remarks).
+/// create request - <c>Activity.EventId</c> carries no <c>AllowChange</c>, so an update leaves it unset and
+/// <see cref="ApiActivityClient"/>'s serializer options drop it from the body.
 /// </remarks>
 internal sealed class ActivityAttributesDto
 {
@@ -40,7 +40,7 @@ internal sealed class ActivityAttributesDto
     public string? Description { get; init; }
 }
 
-/// <summary>A single-resource JSON:API document - the request body for POST and the response body for POST.</summary>
+/// <summary>A single-resource JSON:API document - the request body for POST and PATCH and the response body for GET and POST.</summary>
 internal sealed class ActivityDocument
 {
     /// <summary>The Activity resource object this document carries.</summary>
