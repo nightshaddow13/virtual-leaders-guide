@@ -46,6 +46,12 @@
                          AllowPaging="true" PageSize="10" AllowSorting="true" IsLoading="@isLoading">
             <Columns>
                 <RadzenDataGridColumn TItem="ActivityDto" Property="@nameof(ActivityDto.Name)" Title="Name" Sortable="true" Filterable="false" />
+                <RadzenDataGridColumn TItem="ActivityDto" Sortable="false" Filterable="false" Width="@ActionColumnWidth" TextAlign="TextAlign.Center">
+                    <Template Context="item">
+                        <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" aria-label="Edit"
+                                      Click="@(() => NavigationManager.NavigateTo($"dashboard/events/{EventId}/activities/{item.Id}"))" />
+                    </Template>
+                </RadzenDataGridColumn>
             </Columns>
             <EmptyTemplate>
                 <RadzenCard Variant="Variant.Outlined" Style="margin-block-start: 1rem;">

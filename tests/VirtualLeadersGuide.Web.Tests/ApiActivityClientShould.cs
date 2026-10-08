@@ -8,7 +8,9 @@ namespace VirtualLeadersGuide.Web.Tests;
 /// <remarks>
 /// Mirrors <see cref="ApiInfoPageClientShould"/>'s shape - <see cref="ApiActivityClient.CreateAsync"/> was the
 /// only method <see cref="ApiActivityClient"/> exposed through P5-6 (#87);
-/// <see cref="ApiActivityClient.GetActivitiesForEventAsync"/> was added by P5-7 (#93). Response bodies are
+/// <see cref="ApiActivityClient.GetActivitiesForEventAsync"/> was added by P5-7 (#93), and
+/// <see cref="ApiActivityClient.GetActivityAsync"/> and <see cref="ApiActivityClient.UpdateAsync"/> by P5-8
+/// (#94). Response bodies are
 /// anonymous objects with already-lowercase property names, reproducing Api's actual wire shape without
 /// touching <see cref="ApiActivityClient"/>'s <see langword="internal"/> envelope types.
 /// </remarks>
@@ -103,6 +105,67 @@ public class ApiActivityClientShould
 
         await Assert.ThrowsAsync<ActivityDataUnavailableException>(
             () => client.GetActivitiesForEventAsync(Guid.NewGuid(), 1, 10, null, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ReturnTheMappedActivity_WhenApiRespondsWithOk_ForGetActivityAsync()
+    {
+        var activityId = Guid.NewGuid();
+        var eventId = Guid.NewGuid();
+        HttpRequestMessage? capturedRequest = null;
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            capturedRequest = request;
+            return JsonApiResponse(HttpStatusCode.OK, new
+            {
+                data = ActivityResource(activityId, eventId, "Canoe Basics", "Paddle strokes and the buddy system.")
+            });
+        });
+        ApiActivityClient client = CreateClient(handler);
+
+        (ActivityReadOutcome outcome, ActivityDto? activity) = await client.GetActivityAsync(activityId, CancellationToken.None);
+
+        Assert.Equal(ActivityReadOutcome.Success, outcome);
+        Assert.Equal(activityId, activity?.Id);
+        Assert.Equal(eventId, activity?.EventId);
+        Assert.Equal("Canoe Basics", activity?.Name);
+        Assert.Equal("Paddle strokes and the buddy system.", activity?.Description);
+        Assert.Equal(HttpMethod.Get, capturedRequest!.Method);
+        Assert.EndsWith($"/api/activities/{activityId}", capturedRequest.RequestUri!.AbsolutePath, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ReturnForbidden_WhenApiRespondsWithForbidden_ForGetActivityAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.Forbidden));
+        ApiActivityClient client = CreateClient(handler);
+
+        (ActivityReadOutcome outcome, ActivityDto? activity) = await client.GetActivityAsync(Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal(ActivityReadOutcome.Forbidden, outcome);
+        Assert.Null(activity);
+    }
+
+    [Fact]
+    public async Task ReturnNotFound_WhenApiRespondsWithNotFound_ForGetActivityAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
+        ApiActivityClient client = CreateClient(handler);
+
+        (ActivityReadOutcome outcome, ActivityDto? activity) = await client.GetActivityAsync(Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal(ActivityReadOutcome.NotFound, outcome);
+        Assert.Null(activity);
+    }
+
+    [Fact]
+    public async Task ThrowActivityDataUnavailableException_WhenApiRespondsWithAnUnexpectedStatus_ForGetActivityAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        ApiActivityClient client = CreateClient(handler);
+
+        await Assert.ThrowsAsync<ActivityDataUnavailableException>(
+            () => client.GetActivityAsync(Guid.NewGuid(), CancellationToken.None));
     }
 
     [Fact]
@@ -216,6 +279,63 @@ public class ApiActivityClientShould
 
         await Assert.ThrowsAsync<ActivityDataUnavailableException>(
             () => client.CreateAsync(Guid.NewGuid(), "Canoe Basics", "content", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task SendOnlyTheIdNameAndDescription_WhenUpdating_ForUpdateAsync()
+    {
+        var activityId = Guid.NewGuid();
+        HttpRequestMessage? capturedRequest = null;
+        string? capturedBody = null;
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            capturedRequest = request;
+            capturedBody = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
+        });
+        ApiActivityClient client = CreateClient(handler);
+
+        await client.UpdateAsync(activityId, "Canoe Basics II", "Now with portaging.", CancellationToken.None);
+
+        Assert.Equal(HttpMethod.Patch, capturedRequest!.Method);
+        Assert.EndsWith($"/api/activities/{activityId}", capturedRequest.RequestUri!.AbsolutePath, StringComparison.Ordinal);
+        Assert.Equal(JsonApiMediaType, capturedRequest.Content!.Headers.ContentType?.MediaType);
+        Assert.Contains($"\"id\":\"{activityId}\"", capturedBody, StringComparison.Ordinal);
+        Assert.Contains("\"name\":\"Canoe Basics II\"", capturedBody, StringComparison.Ordinal);
+        Assert.Contains("\"description\":\"Now with portaging.\"", capturedBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("eventId", capturedBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ReturnSuccess_WhenApiRespondsWithNoContent_ForUpdateAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.NoContent));
+        ApiActivityClient client = CreateClient(handler);
+
+        ActivityWriteOutcome outcome = await client.UpdateAsync(Guid.NewGuid(), "Canoe Basics", "content", CancellationToken.None);
+
+        Assert.Equal(ActivityWriteOutcome.Success, outcome);
+    }
+
+    [Fact]
+    public async Task ReturnForbidden_WhenApiRespondsWithForbidden_ForUpdateAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.Forbidden));
+        ApiActivityClient client = CreateClient(handler);
+
+        ActivityWriteOutcome outcome = await client.UpdateAsync(Guid.NewGuid(), "Canoe Basics", "content", CancellationToken.None);
+
+        Assert.Equal(ActivityWriteOutcome.Forbidden, outcome);
+    }
+
+    [Fact]
+    public async Task ThrowActivityDataUnavailableException_WhenApiRespondsWithAnUnexpectedStatus_ForUpdateAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        ApiActivityClient client = CreateClient(handler);
+
+        await Assert.ThrowsAsync<ActivityDataUnavailableException>(
+            () => client.UpdateAsync(Guid.NewGuid(), "Canoe Basics", "content", CancellationToken.None));
     }
 
     private static ApiActivityClient CreateClient(HttpMessageHandler apiHandler) =>

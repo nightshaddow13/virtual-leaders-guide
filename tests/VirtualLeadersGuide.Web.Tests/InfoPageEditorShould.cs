@@ -12,9 +12,8 @@ namespace VirtualLeadersGuide.Web.Tests;
 /// <remarks>
 /// Covers <c>InfoPageEditor.razor.cs</c>'s <c>PageState</c> transitions, the grilled decision that Save is
 /// actually gated on <c>Title</c>'s validity (via <c>EditForm</c>'s <c>OnValidSubmit</c>, not a header button
-/// calling <c>SaveAsync</c> directly like <c>EventEditor</c>), and the responsive Write/Preview pane markup
-/// (both panes always present in the DOM; CSS, not C#, decides visibility - see
-/// <c>InfoPageEditor.razor.css</c>).
+/// calling <c>SaveAsync</c> directly like <c>EventEditor</c>). The Write/Preview pane behavior itself belongs
+/// to <c>MarkdownFieldShould</c> (ADR-0073); the tests here only prove this page binds its model through it.
 /// </remarks>
 public class InfoPageEditorShould : BunitContext
 {
@@ -221,47 +220,6 @@ public class InfoPageEditorShould : BunitContext
     }
 
     [Fact]
-    public void RenderBothWriteAndPreviewPanes_RegardlessOfActivePane_ForRender()
-    {
-        Guid eventId = Guid.NewGuid();
-        RegisterClients(
-            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = EventResource(eventId) }),
-            StubHttpMessageHandler.RespondingWith(HttpStatusCode.NotFound));
-        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
-        auth.SetAuthorized("admin-1");
-        auth.SetRoles("Admin");
-
-        IRenderedComponent<InfoPageEditor> cut = Render<InfoPageEditor>(parameters =>
-            parameters.Add(component => component.EventId, eventId));
-
-        Assert.Single(cut.FindAll(".ip-pane-write"));
-        Assert.Single(cut.FindAll(".ip-pane-preview"));
-    }
-
-    [Fact]
-    public void SwitchTheActivePaneAttribute_WhenPreviewIsSelected_ForRender()
-    {
-        Guid eventId = Guid.NewGuid();
-        RegisterClients(
-            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = EventResource(eventId) }),
-            StubHttpMessageHandler.RespondingWith(HttpStatusCode.NotFound));
-        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
-        auth.SetAuthorized("admin-1");
-        auth.SetRoles("Admin");
-
-        IRenderedComponent<InfoPageEditor> cut = Render<InfoPageEditor>(parameters =>
-            parameters.Add(component => component.EventId, eventId));
-
-        Assert.Equal("Write", cut.Find(".ip-panes").GetAttribute("data-active-pane"));
-
-        cut.FindAll("button[role=radio]")
-            .Single(item => item.TextContent.Contains("Preview", StringComparison.Ordinal))
-            .Click();
-
-        Assert.Equal("Preview", cut.Find(".ip-panes").GetAttribute("data-active-pane"));
-    }
-
-    [Fact]
     public void RenderTheSanitizedPreview_WhenMarkdownContentIsSet_ForRender()
     {
         Guid eventId = Guid.NewGuid();
@@ -280,14 +238,6 @@ public class InfoPageEditorShould : BunitContext
         Assert.Contains("<strong>bold</strong>", cut.Markup, StringComparison.Ordinal);
     }
 
-    /// <remarks>
-    /// Regression coverage for the E2E-caught bug this ticket shipped with: the textarea's
-    /// <c>@bind-Value:event="oninput"</c> means every keystroke updates the Preview pane, not just a
-    /// blur/tab-away - <c>Input(...)</c> fires the DOM <c>input</c> event bUnit's binding actually listens
-    /// for, matching what a real admin typing (without ever leaving the field) would trigger. Using
-    /// <c>Change(...)</c> here instead would have passed even with the bug present, since <c>onchange</c> was
-    /// the default this regression came from.
-    /// </remarks>
     [Fact]
     public void UpdateThePreviewImmediately_WhenTypingWithoutLeavingTheField_ForRender()
     {

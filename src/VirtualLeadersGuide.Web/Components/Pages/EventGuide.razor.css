@@ -80,8 +80,8 @@
     margin-block-end: 0.5rem;
 }
 
-/* First/last-child margin collapsing on rendered markdown, same rule InfoPageEditor.razor.css's
-   .ip-preview-surface already applies to the same MarkdownRenderer output. */
+/* First/last-child margin collapsing on rendered markdown, same rule MarkdownField.razor.css's
+   .md-preview-surface already applies to the same MarkdownRenderer output. */
 .vlg-guide-page-content :first-child {
     margin-block-start: 0;
 }

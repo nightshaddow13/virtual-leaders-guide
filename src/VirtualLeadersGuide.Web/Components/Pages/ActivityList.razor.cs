@@ -12,12 +12,12 @@ using VirtualLeadersGuide.Web.JsonApi;
 namespace VirtualLeadersGuide.Web.Components.Pages;
 
 /// <remarks>
-/// Deliberately Name-only this slice - no "Placed under" chip column and no row-action column.
+/// Deliberately has no "Placed under" chip column.
 /// <c>Placement</c>/<c>Tab</c>/<c>SubTab</c>/<c>Section</c>/<c>SubSection</c> don't exist yet; that schema
 /// and the chip-per-Placement column it would render both land in P5-11 (#96), which depends on this story
-/// (see the comments left on #93/#96 recording the moved criterion). Row actions (edit/delete) wait on P5-8
-/// (#94)/P5-9 (#95), which own the pages those icons would navigate to - nothing ships disabled or dead in
-/// the meantime. The empty state is a <c>RadzenCard</c> via <c>&lt;EmptyTemplate&gt;</c>, not the
+/// (see the comments left on #93/#96 recording the moved criterion). The one row action is Edit (P5-8, #94);
+/// Delete waits on P5-9 (#95), which owns the confirm flow its icon would open - nothing ships disabled or
+/// dead in the meantime. The empty state is a <c>RadzenCard</c> via <c>&lt;EmptyTemplate&gt;</c>, not the
 /// <c>EmptyText</c> string <c>InfoPageList</c>/<c>Dashboard</c>/<c>Users</c> all use - wireframe turn 1a
 /// explicitly overrides that convention ("the copy has to teach the inline-create model"), though the
 /// shipped copy here is trimmed to this slice (no Tab/Category-creation sentence, since nothing in this
@@ -39,6 +39,13 @@ public partial class ActivityList
 
     [CascadingParameter]
     private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
+    /// <remarks>
+    /// One icon-only button's width (ADR-0037), matching <c>Users.razor.cs</c>'s single-button precedent and
+    /// <c>InfoPageList.razor.cs</c>'s arithmetic of 76px for one button plus 48px per extra. P5-9 (#95) widens
+    /// this when it adds Delete.
+    /// </remarks>
+    private const string ActionColumnWidth = "76px";
 
     private enum PageState { Loading, Denied, Unavailable, Ready }
 

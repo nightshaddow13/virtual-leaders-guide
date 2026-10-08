@@ -6,8 +6,8 @@ namespace VirtualLeadersGuide.Web.Markdown;
 
 /// <summary>
 /// Renders free-form markdown (InfoPage's <c>MarkdownContent</c>, CONTEXT.md's InfoPage entry) to sanitized
-/// HTML - the one shared mechanism ADR-0048 asks for, built here for P5-17 (#22) and reused as-is by
-/// Activity's Description once P5-8 (#94) wires it up.
+/// HTML - the one shared mechanism ADR-0048 asks for, built here for P5-17 (#22) and used as-is by
+/// Activity's Description through <c>MarkdownField</c> (P5-8, #94).
 /// </summary>
 /// <remarks>
 /// Markdown is stored raw, never as HTML - <c>InfoPage.MarkdownContent</c>'s own doc comment: "Sanitizing

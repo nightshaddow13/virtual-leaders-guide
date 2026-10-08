@@ -1,10 +1,11 @@
 @page "/dashboard/events/{EventId:guid}/activities/new"
+@page "/dashboard/events/{EventId:guid}/activities/{ActivityId:guid}"
 @attribute [Authorize]
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 
 @using VirtualLeadersGuide.Web.Activities
 
-<PageTitle>New activity</PageTitle>
+<PageTitle>@(ActivityId is null ? "New activity" : "Activity")</PageTitle>
 
 <RadzenComponents @rendermode="InteractiveServer" />
 
@@ -30,7 +31,8 @@
         <RadzenBreadCrumb>
             <RadzenBreadCrumbItem Text="@(isAdmin ? "EVENTS" : "MY EVENTS")" Path="dashboard" />
             <RadzenBreadCrumbItem Text="@eventName?.ToUpperInvariant()" Path="@($"dashboard/events/{EventId}")" />
-            <RadzenBreadCrumbItem Text="NEW" />
+            <RadzenBreadCrumbItem Text="ACTIVITIES" Path="@($"dashboard/events/{EventId}/activities")" />
+            <RadzenBreadCrumbItem Text="@(ActivityId is null ? "NEW" : model!.Name?.ToUpperInvariant())" />
         </RadzenBreadCrumb>
 
         <EditForm Model="model" OnValidSubmit="SaveAsync">
@@ -38,50 +40,33 @@
 
             <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween"
                          AlignItems="AlignItems.End" Gap="1rem" Style="margin-block-end: 1rem;">
-                <h1>New activity</h1>
+                <h1>@(ActivityId is null ? "New activity" : "Edit activity")</h1>
                 <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
                     <RadzenButton Text="Cancel" ButtonStyle="ButtonStyle.Light" ButtonType="ButtonType.Button"
                                   Disabled="@isSaving" Click="NavigateToList" />
-                    <RadzenButton Text="Create activity" ButtonType="ButtonType.Submit" Disabled="@isSaving" />
+                    <RadzenButton Text="@(ActivityId is null ? "Create activity" : "Save changes")"
+                                  ButtonType="ButtonType.Submit" Disabled="@(isSaving || permissionLostMessage is not null)" />
                 </RadzenStack>
             </RadzenStack>
 
+            @if (permissionLostMessage is not null)
+            {
+                <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" AllowClose="false" Text="@permissionLostMessage" />
+            }
             @if (saveErrorMessage is not null)
             {
                 <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" AllowClose="false" Text="@saveErrorMessage" />
             }
 
-            <div class="vlg-field">
-                <label for="Name">Name</label>
-                <InputText id="Name" @bind-Value="model!.Name" class="rz-textbox rz-input-md" />
-                <ValidationMessage For="() => model!.Name" class="rz-messages-error" />
-            </div>
-
-            <div class="vlg-field">
-                <label>Description</label>
-
-                <div class="ae-tabstrip">
-                    <RadzenSelectBar @bind-Value="activePane" TValue="PaneView">
-                        <Items>
-                            <RadzenSelectBarItem Text="Write" Value="PaneView.Write" />
-                            <RadzenSelectBarItem Text="Preview" Value="PaneView.Preview" />
-                        </Items>
-                    </RadzenSelectBar>
+            <fieldset disabled="@(permissionLostMessage is not null)">
+                <div class="vlg-field">
+                    <label for="Name">Name</label>
+                    <InputText id="Name" @bind-Value="model!.Name" class="rz-textbox rz-input-md" />
+                    <ValidationMessage For="() => model!.Name" class="rz-messages-error" />
                 </div>
 
-                <div class="ae-panes" data-active-pane="@activePane">
-                    <div class="ae-pane ae-pane-write">
-                        <textarea id="Description" @bind-value="model!.Description" @bind-value:event="oninput"
-                                  class="rz-textbox ae-editor-textarea" rows="14"></textarea>
-                    </div>
-                    <div class="ae-pane ae-pane-preview">
-                        <div class="ae-preview-surface">
-                            @MarkdownRenderer.RenderToHtml(model?.Description ?? "")
-                        </div>
-                    </div>
-                </div>
-                <RadzenText TextStyle="TextStyle.Caption" TagName="TagName.Div" Style="margin-block-start: 0.25rem;">Markdown supported.</RadzenText>
-            </div>
+                <MarkdownField Label="Description" FieldId="Description" @bind-Value="model!.Description" />
+            </fieldset>
         </EditForm>
         break;
 }
