@@ -42,6 +42,12 @@
                 <RadzenDataGridColumn TItem="FacilityDto" Title="Type" Sortable="false" Filterable="false">
                     <Template Context="item">@TypeName(item)</Template>
                 </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="FacilityDto" Sortable="false" Filterable="false" Width="@ActionColumnWidth" TextAlign="TextAlign.Center">
+                    <Template Context="item">
+                        <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" aria-label="Edit"
+                                      Click="@(() => NavigationManager.NavigateTo($"dashboard/facilities/{item.Id}/edit"))" />
+                    </Template>
+                </RadzenDataGridColumn>
             </Columns>
             <EmptyTemplate>
                 <RadzenCard Variant="Variant.Outlined" Style="margin-block-start: 1rem;">

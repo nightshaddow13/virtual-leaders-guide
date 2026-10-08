@@ -1,10 +1,11 @@
 @page "/dashboard/facilities/new"
+@page "/dashboard/facilities/{Id:guid}/edit"
 @attribute [Authorize]
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 
 @using VirtualLeadersGuide.Web.Facilities
 
-<PageTitle>New facility</PageTitle>
+<PageTitle>@Heading</PageTitle>
 
 <RadzenComponents @rendermode="InteractiveServer" />
 
@@ -25,10 +26,16 @@
         </StatusPanel>
         break;
 
+    case PageState.Missing:
+        <StatusPanel Title="This facility no longer exists" Message="It may have been deleted.">
+            <RadzenButton Text="Back to facilities" Click="@(() => NavigationManager.NavigateTo("dashboard/facilities", forceLoad: true))" />
+        </StatusPanel>
+        break;
+
     case PageState.Ready:
         <RadzenBreadCrumb>
             <RadzenBreadCrumbItem Text="FACILITIES" Path="dashboard/facilities" />
-            <RadzenBreadCrumbItem Text="NEW" />
+            <RadzenBreadCrumbItem Text="@BreadcrumbTail" />
         </RadzenBreadCrumb>
 
         <EditForm Model="model" OnValidSubmit="SaveAsync">
@@ -36,11 +43,11 @@
 
             <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween"
                          AlignItems="AlignItems.End" Gap="1rem" Style="margin-block-end: 1rem;">
-                <h1>New facility</h1>
+                <h1>@Heading</h1>
                 <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
                     <RadzenButton Text="Cancel" ButtonStyle="ButtonStyle.Light" ButtonType="ButtonType.Button"
                                   Disabled="@isSaving" Click="@(() => NavigationManager.NavigateTo("dashboard/facilities", forceLoad: true))" />
-                    <RadzenButton Text="Create facility" ButtonType="ButtonType.Submit" Disabled="@isSaving" />
+                    <RadzenButton Text="@SubmitText" ButtonType="ButtonType.Submit" Disabled="@isSaving" />
                 </RadzenStack>
             </RadzenStack>
 
@@ -66,8 +73,11 @@
             </div>
         </EditForm>
 
-        <RadzenText TextStyle="TextStyle.Caption" TagName="TagName.Div" Style="margin-block-start: 1rem;">
-            Areas, buildings and campsites come next, on the detail page.
-        </RadzenText>
+        @if (!IsEdit)
+        {
+            <RadzenText TextStyle="TextStyle.Caption" TagName="TagName.Div" Style="margin-block-start: 1rem;">
+                Areas, buildings and campsites come next, on the detail page.
+            </RadzenText>
+        }
         break;
 }

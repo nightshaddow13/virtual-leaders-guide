@@ -1,6 +1,6 @@
 namespace VirtualLeadersGuide.Web.Facilities;
 
-/// <summary>Outcomes <see cref="ApiFacilityClient.CreateAsync"/> distinguishes.</summary>
+/// <summary>Outcomes <see cref="ApiFacilityClient.CreateAsync"/> and <see cref="ApiFacilityClient.UpdateAsync"/> distinguish.</summary>
 public enum FacilityWriteOutcome
 {
     Success,
@@ -17,5 +17,12 @@ public enum FacilityWriteOutcome
     /// <c>FacilityEditor</c>'s autofill can't trigger since the id always comes from a just-resolved or
     /// just-created <see cref="FacilityTypeDto"/>.
     /// </remarks>
-    Invalid
+    Invalid,
+
+    /// <summary>The Facility being written no longer exists.</summary>
+    /// <remarks>
+    /// The Facility vanished between the edit form loading and Save. Only <see cref="ApiFacilityClient.UpdateAsync"/>
+    /// produces it today; P8-5's delete will join it.
+    /// </remarks>
+    NotFound
 }

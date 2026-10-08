@@ -239,6 +239,49 @@ public class FacilitiesResourceShould : IAsyncLifetime
     }
 
     [Fact]
+    public async Task RejectWithUnprocessableEntity_WhenAdminUpdatesAFacilityOntoAnUnknownFacilityType_ForPatch()
+    {
+        FacilityType facilityType = await _factory.CreateFacilityTypeAsync();
+        Facility facility = await _factory.CreateFacilityAsync(facilityType.Id);
+        using HttpClient client = AdminClient();
+        var body = new
+        {
+            data = new
+            {
+                type = "facilities",
+                id = facility.Id.ToString(),
+                attributes = new { facilityTypeId = Guid.NewGuid() }
+            }
+        };
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/facilities/{facility.Id}", body);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        await AssertErrorPointersAsync(response, "/data/attributes/facilityTypeId");
+    }
+
+    [Fact]
+    public async Task RejectWithNotFound_WhenAdminUpdatesANonexistentFacility_ForPatch()
+    {
+        FacilityType facilityType = await _factory.CreateFacilityTypeAsync();
+        using HttpClient client = AdminClient();
+        Guid missingId = Guid.NewGuid();
+        var body = new
+        {
+            data = new
+            {
+                type = "facilities",
+                id = missingId.ToString(),
+                attributes = new { name = "Renamed", facilityTypeId = facilityType.Id }
+            }
+        };
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/facilities/{missingId}", body);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
     public async Task RejectWithNotFound_WhenAdminReadsANonexistentFacility_ForGetSingle()
     {
         using HttpClient client = AdminClient();

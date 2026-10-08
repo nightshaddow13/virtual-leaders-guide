@@ -14,11 +14,19 @@ namespace VirtualLeadersGuide.Web.Components.Pages;
 /// (ADR-0070) - the gate here is this page's own choice, narrower than its Api, because
 /// <c>FacilityTypeResourceDefinition</c> stays Admin-only on every verb (ADR-0071): a Director could read
 /// every Facility row but never resolve a single Type name, which this grid's Type column needs. See
-/// ADR-0070's amendment for the full reasoning. No row-action column this slice - <c>ApiFacilityClient</c>
-/// has no update/delete yet; P8-4/P8-5 (#168/#169) add them with the pages those icons would navigate to.
+/// ADR-0070's amendment for the full reasoning. The row-action column holds one icon-only Edit button
+/// (ADR-0037) and nothing else yet: the Name stays plain text until P9's detail page exists to link to
+/// (ADR-0073), and P8-5 (#169) adds Delete beside Edit.
 /// </remarks>
 public partial class FacilityList
 {
+    /// <remarks>
+    /// One icon-only button, so the same width <c>Users.razor.cs</c> uses for its own single-button column -
+    /// <c>RadzenDataGrid</c>'s fixed table layout clips a column too narrow for its content rather than growing
+    /// it (ADR-0037). P8-5's second button will need the two-button width <c>InfoPageList.razor.cs</c> documents.
+    /// </remarks>
+    private const string ActionColumnWidth = "76px";
+
     [Inject]
     private NavigationManager NavigationManager { get; set; } = default!;
 
