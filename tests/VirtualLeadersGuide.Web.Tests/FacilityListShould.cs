@@ -1,5 +1,6 @@
 using System.Net;
 using Bunit;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using VirtualLeadersGuide.Web.Components.Pages;
 
@@ -107,6 +108,23 @@ public class FacilityListShould : BunitContext
 
         Assert.Contains("No facilities yet", cut.Markup, StringComparison.Ordinal);
         Assert.Contains(cut.FindAll("button"), button => button.TextContent.Contains("Add your first facility", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void NavigateToTheNewFacilityForm_WhenAddYourFirstFacilityIsClicked_ForTheEmptyState()
+    {
+        RegisterClients(
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = Array.Empty<object>() }),
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = Array.Empty<object>() }));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("admin-1");
+        auth.SetRoles("Admin");
+        IRenderedComponent<FacilityList> cut = Render<FacilityList>();
+
+        cut.FindAll("button").First(button => button.TextContent.Contains("Add your first facility", StringComparison.Ordinal)).Click();
+
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        Assert.EndsWith("dashboard/facilities/new", navigation.Uri, StringComparison.Ordinal);
     }
 
     [Fact]
