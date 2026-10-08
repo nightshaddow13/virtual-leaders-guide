@@ -1,3 +1,8 @@
+---
+status: amended by P5-8 (#94) - the "tracks InfoPage's content field" consequence is now mechanical; see
+  the added section below.
+---
+
 # Activity Description shares InfoPage's markdown mechanism
 
 The wireframe's editorial public view asks for rich text in Activity's Description — "multiple paragraphs,
@@ -20,3 +25,10 @@ building and securing two.
 
 - `Activity.Description`'s storage type and edit/preview UX now track InfoPage's content field exactly — a
   future change to the shared markdown mechanism (e.g. adding table support) affects both.
+
+## Amendment (P5-8, #94): the shared mechanism now includes the editor chrome
+
+This ADR shared the markdown *parse-and-sanitize* pipeline, and P5-6 copied InfoPage's editor chrome next to
+it. The "tracks InfoPage's content field exactly" consequence above therefore held only by convention - two
+hand-kept copies of the Write/Preview toggle, textarea, and preview pane. P5-8 extracts that chrome into one
+`MarkdownField` component used by both editors, so the consequence is now mechanical. See ADR-0073.
