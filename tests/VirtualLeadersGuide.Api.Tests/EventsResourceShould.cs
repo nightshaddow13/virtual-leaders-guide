@@ -180,6 +180,37 @@ public class EventsResourceShould : IAsyncLifetime
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
 
+    /// <remarks>
+    /// Tab/SubTab/Section/SubSection/ActivityPlacement (P5-11, #96) carry no cascading FK to Event at all
+    /// (see <see cref="VirtualLeadersGuideDbContext.ConfigureTabs"/>'s remarks for why) - this is the
+    /// HTTP-level proof that <see cref="EventResourceDefinition.DeleteTierAndPlacementSubtreeAsync"/>'s
+    /// explicit bulk cleanup does the job a DB cascade can't here, covering every level of the tree at once.
+    /// </remarks>
+    [Fact]
+    public async Task DeleteItsWholeTierAndPlacementSubtree_WhenAdminDeletesAnEvent_ForDelete()
+    {
+        Event @event = await _factory.CreateEventAsync();
+        Activity activity = await _factory.CreateActivityAsync(@event.Id);
+        Tab tab = await _factory.CreateTabAsync(@event.Id);
+        SubTab subTab = await _factory.CreateSubTabAsync(@event.Id, tab.Id);
+        Section section = await _factory.CreateSectionUnderSubTabAsync(@event.Id, subTab.Id);
+        SubSection subSection = await _factory.CreateSubSectionAsync(@event.Id, section.Id);
+        ActivityPlacement placement = await _factory.CreateActivityPlacementAsync(
+            @event.Id, activity.Id, tab.Id, subTab.Id, section.Id, subSection.Id);
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Delete, $"/api/events/{@event.Id}");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        using IServiceScope scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        Assert.False(await db.ActivityPlacements.AsNoTracking().AnyAsync(p => p.Id == placement.Id));
+        Assert.False(await db.SubSections.AsNoTracking().AnyAsync(ss => ss.Id == subSection.Id));
+        Assert.False(await db.Sections.AsNoTracking().AnyAsync(s => s.Id == section.Id));
+        Assert.False(await db.SubTabs.AsNoTracking().AnyAsync(st => st.Id == subTab.Id));
+        Assert.False(await db.Tabs.AsNoTracking().AnyAsync(t => t.Id == tab.Id));
+    }
+
     [Fact]
     public async Task SucceedWithOk_WhenAnAssignedDirectorReadsTheirEvent_ForGetSingle()
     {

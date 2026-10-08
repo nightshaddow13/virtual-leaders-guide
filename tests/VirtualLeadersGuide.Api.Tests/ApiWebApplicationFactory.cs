@@ -289,6 +289,130 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>
+    /// Creates and persists a new <see cref="Tab"/> via <see cref="Tab.Create"/> - for tests (P5-11, #96)
+    /// that need a real row satisfying an <see cref="ActivityPlacement.TabId"/> foreign key.
+    /// </summary>
+    /// <param name="eventId">The Event to scope the Tab to - see <see cref="CreateEventAsync"/> for a real row satisfying the foreign key.</param>
+    /// <param name="name">The Tab's Name. Omit to get a fresh Guid-suffixed default.</param>
+    /// <param name="sortOrder">The Tab's initial position.</param>
+    /// <returns>The newly persisted <see cref="Tab"/>.</returns>
+    public async Task<Tab> CreateTabAsync(Guid eventId, string? name = null, int sortOrder = 0)
+    {
+        using IServiceScope scope = Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        Tab tab = Tab.Create(eventId, name ?? $"Tab {Guid.NewGuid()}", sortOrder);
+
+        dbContext.Tabs.Add(tab);
+        await dbContext.SaveChangesAsync();
+        return tab;
+    }
+
+    /// <summary>
+    /// Creates and persists a new <see cref="SubTab"/> via <see cref="SubTab.Create"/> - for tests (P5-11, #96).
+    /// </summary>
+    /// <param name="eventId">The Event to scope the Sub Tab to.</param>
+    /// <param name="tabId">The Tab to scope the Sub Tab to - see <see cref="CreateTabAsync"/> for a real row satisfying the foreign key.</param>
+    /// <param name="name">The Sub Tab's Name. Omit to get a fresh Guid-suffixed default.</param>
+    /// <param name="sortOrder">The Sub Tab's initial position.</param>
+    /// <returns>The newly persisted <see cref="SubTab"/>.</returns>
+    public async Task<SubTab> CreateSubTabAsync(Guid eventId, Guid tabId, string? name = null, int sortOrder = 0)
+    {
+        using IServiceScope scope = Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        SubTab subTab = SubTab.Create(eventId, tabId, name ?? $"Sub Tab {Guid.NewGuid()}", sortOrder);
+
+        dbContext.SubTabs.Add(subTab);
+        await dbContext.SaveChangesAsync();
+        return subTab;
+    }
+
+    /// <summary>
+    /// Creates and persists a new <see cref="Section"/> scoped to a bare Tab via
+    /// <see cref="Section.CreateUnderTab"/> - for tests (P5-11, #96).
+    /// </summary>
+    /// <param name="eventId">The Event to scope the Section to.</param>
+    /// <param name="parentTabId">The Tab to scope the Section to - see <see cref="CreateTabAsync"/> for a real row satisfying the foreign key.</param>
+    /// <param name="name">The Section's Name. Omit to get a fresh Guid-suffixed default.</param>
+    /// <param name="sortOrder">The Section's initial position.</param>
+    /// <returns>The newly persisted <see cref="Section"/>.</returns>
+    public async Task<Section> CreateSectionUnderTabAsync(Guid eventId, Guid parentTabId, string? name = null, int sortOrder = 0)
+    {
+        using IServiceScope scope = Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        Section section = Section.CreateUnderTab(eventId, parentTabId, name ?? $"Section {Guid.NewGuid()}", sortOrder);
+
+        dbContext.Sections.Add(section);
+        await dbContext.SaveChangesAsync();
+        return section;
+    }
+
+    /// <summary>
+    /// Creates and persists a new <see cref="Section"/> scoped to a Sub Tab via
+    /// <see cref="Section.CreateUnderSubTab"/> - for tests (P5-11, #96).
+    /// </summary>
+    /// <param name="eventId">The Event to scope the Section to.</param>
+    /// <param name="parentSubTabId">The Sub Tab to scope the Section to - see <see cref="CreateSubTabAsync"/> for a real row satisfying the foreign key.</param>
+    /// <param name="name">The Section's Name. Omit to get a fresh Guid-suffixed default.</param>
+    /// <param name="sortOrder">The Section's initial position.</param>
+    /// <returns>The newly persisted <see cref="Section"/>.</returns>
+    public async Task<Section> CreateSectionUnderSubTabAsync(Guid eventId, Guid parentSubTabId, string? name = null, int sortOrder = 0)
+    {
+        using IServiceScope scope = Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        Section section = Section.CreateUnderSubTab(eventId, parentSubTabId, name ?? $"Section {Guid.NewGuid()}", sortOrder);
+
+        dbContext.Sections.Add(section);
+        await dbContext.SaveChangesAsync();
+        return section;
+    }
+
+    /// <summary>
+    /// Creates and persists a new <see cref="SubSection"/> via <see cref="SubSection.Create"/> - for tests
+    /// (P5-11, #96).
+    /// </summary>
+    /// <param name="eventId">The Event to scope the Sub Section to.</param>
+    /// <param name="sectionId">The Section to scope the Sub Section to - see <see cref="CreateSectionUnderTabAsync"/>/<see cref="CreateSectionUnderSubTabAsync"/> for a real row satisfying the foreign key.</param>
+    /// <param name="name">The Sub Section's Name. Omit to get a fresh Guid-suffixed default.</param>
+    /// <param name="sortOrder">The Sub Section's initial position.</param>
+    /// <returns>The newly persisted <see cref="SubSection"/>.</returns>
+    public async Task<SubSection> CreateSubSectionAsync(Guid eventId, Guid sectionId, string? name = null, int sortOrder = 0)
+    {
+        using IServiceScope scope = Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        SubSection subSection = SubSection.Create(eventId, sectionId, name ?? $"Sub Section {Guid.NewGuid()}", sortOrder);
+
+        dbContext.SubSections.Add(subSection);
+        await dbContext.SaveChangesAsync();
+        return subSection;
+    }
+
+    /// <summary>
+    /// Creates and persists a new <see cref="ActivityPlacement"/> from an already-resolved Tier path via
+    /// <see cref="ActivityPlacement.Create"/> - for tests (P5-11, #96) that need an existing Placement row to
+    /// test against (duplicate detection, read scoping, update/delete), bypassing
+    /// <see cref="ActivityPlacementResourceDefinition"/>'s own resolve-or-create logic entirely.
+    /// </summary>
+    /// <param name="eventId">The Event to scope the Placement to.</param>
+    /// <param name="activityId">The Activity this Placement is for - see <see cref="CreateActivityAsync"/> for a real row satisfying the foreign key.</param>
+    /// <param name="tabId">The resolved Tab - see <see cref="CreateTabAsync"/> for a real row satisfying the foreign key.</param>
+    /// <param name="subTabId">The resolved Sub Tab, if this Placement sets one.</param>
+    /// <param name="sectionId">The resolved Section, if this Placement sets one.</param>
+    /// <param name="subSectionId">The resolved Sub Section, if this Placement sets one.</param>
+    /// <param name="sortOrder">The Placement's initial position among others sharing its exact Tier path.</param>
+    /// <returns>The newly persisted <see cref="ActivityPlacement"/>.</returns>
+    public async Task<ActivityPlacement> CreateActivityPlacementAsync(
+        Guid eventId, Guid activityId, Guid tabId, Guid? subTabId = null, Guid? sectionId = null, Guid? subSectionId = null, int sortOrder = 0)
+    {
+        using IServiceScope scope = Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        ActivityPlacement placement = ActivityPlacement.Create(eventId, activityId, tabId, subTabId, sectionId, subSectionId, sortOrder);
+
+        dbContext.ActivityPlacements.Add(placement);
+        await dbContext.SaveChangesAsync();
+        return placement;
+    }
+
+    /// <summary>
     /// A pre-formatted platform-wide <c>Admin</c> role claim (see <see cref="RoleClaimValue.Format"/>), ready
     /// to pass to <see cref="CreateUserClient"/> - for tests (P2-7, #16) exercising Admin-only access to
     /// <c>/api/events</c> without hand-building a <see cref="RoleGrantDto"/>.

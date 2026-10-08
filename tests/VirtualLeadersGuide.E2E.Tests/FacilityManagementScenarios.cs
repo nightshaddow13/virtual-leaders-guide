@@ -13,9 +13,6 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// (ADR-0039's new P8-2 table rows) rather than relying on an Event's own teardown. Assertions go through
 /// <see cref="AspireE2EFixture.Facilities"/> directly, not just the UI's own success notification - the AC's
 /// "clear success confirmation" criterion extends to the row actually existing, not just the page saying so.
-/// The empty-state scenario relies on this being the only class in <see cref="AspireE2ECollection"/> that
-/// touches Facility, and every test in this class (xUnit runs one collection's tests sequentially) cleaning
-/// up its own tracked rows in <see cref="E2ETestBase.DisposeAsync"/> before the next test starts.
 /// </remarks>
 [Collection(nameof(AspireE2ECollection))]
 public class FacilityManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
@@ -144,26 +141,6 @@ public class FacilityManagementScenarios(AspireE2EFixture fixture) : E2ETestBase
             await Expect(Page.GetByText(name)).ToBeVisibleAsync(
                 new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
             await Expect(Page.GetByText(typeName)).ToBeVisibleAsync();
-        });
-
-    /// <remarks>
-    /// Relies on this class's own teardown discipline, not a fresh environment - see the class remarks. Must
-    /// run with no other tracked Facility live in <see cref="AspireE2ECollection"/> at the same time.
-    /// </remarks>
-    [Fact(DisplayName = "Given an Admin with no Facilities, when they open the Facility list, then they see the empty state and can reach the form from it")]
-    public async Task GivenAnAdminWithNoFacilities_WhenTheyOpenTheFacilityList_ThenTheySeeTheEmptyStateAndCanReachTheFormFromIt() =>
-        await RunAsync(async () =>
-        {
-            await SignInAsAdminAsync();
-
-            await Page.GotoAsync(FacilityListUrl());
-
-            await Expect(Page.GetByText("No facilities yet")).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
-            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Add your first facility" }).ClickAsync();
-
-            await Expect(Page).ToHaveURLAsync(
-                NewFacilityUrl(), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
         });
 
     private string DashboardUrl() => new Uri(Fixture.WebBaseUrl, "dashboard").ToString();

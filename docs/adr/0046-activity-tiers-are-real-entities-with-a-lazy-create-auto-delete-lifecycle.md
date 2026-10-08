@@ -1,3 +1,7 @@
+---
+status: amended by P5-11 (#96) — Section's parent FK shape
+---
+
 # Tab/Sub Tab/Section/Sub Section are real entities, not string columns
 
 Activities and InfoPages need to be grouped under Tab/Sub Tab/Section/Sub Section values that are typed into
@@ -33,3 +37,20 @@ uniqueness constraint on `(PlaceableId, TabId, SubTabId, SectionId, SubSectionId
   four levels instead of two/three.
 - No rename path for a Tier — typing a different name always creates a different row. This is deliberate
   (see the Phase 5 epic), not an oversight.
+
+## Amendment (P5-11, #96)
+
+This ADR left `Section`'s "parent FK" at a conceptual level - "whichever a Placement gives it." P5-11 settles
+the concrete column shape: two nullable FKs, `ParentTabId` and `ParentSubTabId`, with a
+`CK_Sections_ExactlyOneParent` CHECK constraint enforcing exactly one is non-null - the same
+exactly-one-of-two-nullables pattern `Event`'s own `CK_Events_Dates_Ordered` constraint already uses for
+`StartsAt`/`EndsAt` (`VirtualLeadersGuideDbContext.BuildDatesOrderedCheckSql`), so this introduces no new EF
+Core or JsonApiDotNetCore concept. `SubSection` needed no such decision - it's always scoped to its `Section`
+by a single required `SectionId`.
+
+The alternative considered and rejected was a single `ParentId` plus a `ParentKind` discriminator column
+("Tab" or "SubTab") naming which table it points into. That was rejected because EF Core can't express a
+real foreign key from one column into two different target tables, so `ParentId` would carry no DB-level
+referential integrity at all for this relationship - and a discriminator-column idiom appears nowhere else
+in this schema, which otherwise always prefers a real, enforced FK (see `ConfigureFacilities`'s
+`Facility→FacilityType` FK for the schema's general posture on lookup references).
