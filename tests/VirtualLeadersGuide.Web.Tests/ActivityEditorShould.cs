@@ -147,47 +147,6 @@ public class ActivityEditorShould : BunitContext
         Assert.Contains("You don't have access to this Event", cut.Markup, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void RenderBothWriteAndPreviewPanes_RegardlessOfActivePane_ForRender()
-    {
-        Guid eventId = Guid.NewGuid();
-        RegisterClients(
-            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = EventResource(eventId) }),
-            StubHttpMessageHandler.RespondingWith(HttpStatusCode.NotFound));
-        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
-        auth.SetAuthorized("admin-1");
-        auth.SetRoles("Admin");
-
-        IRenderedComponent<ActivityEditor> cut = Render<ActivityEditor>(parameters =>
-            parameters.Add(component => component.EventId, eventId));
-
-        Assert.Single(cut.FindAll(".ae-pane-write"));
-        Assert.Single(cut.FindAll(".ae-pane-preview"));
-    }
-
-    [Fact]
-    public void SwitchTheActivePaneAttribute_WhenPreviewIsSelected_ForRender()
-    {
-        Guid eventId = Guid.NewGuid();
-        RegisterClients(
-            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = EventResource(eventId) }),
-            StubHttpMessageHandler.RespondingWith(HttpStatusCode.NotFound));
-        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
-        auth.SetAuthorized("admin-1");
-        auth.SetRoles("Admin");
-
-        IRenderedComponent<ActivityEditor> cut = Render<ActivityEditor>(parameters =>
-            parameters.Add(component => component.EventId, eventId));
-
-        Assert.Equal("Write", cut.Find(".ae-panes").GetAttribute("data-active-pane"));
-
-        cut.FindAll("button[role=radio]")
-            .Single(item => item.TextContent.Contains("Preview", StringComparison.Ordinal))
-            .Click();
-
-        Assert.Equal("Preview", cut.Find(".ae-panes").GetAttribute("data-active-pane"));
-    }
-
     /// <remarks>
     /// Regression coverage for the same bug class <c>InfoPageEditorShould.UpdateThePreviewImmediately...</c>
     /// pins (fixed for InfoPage by <c>c866c9a</c>): the textarea's <c>@bind-Value:event="oninput"</c> means

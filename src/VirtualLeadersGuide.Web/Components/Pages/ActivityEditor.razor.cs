@@ -7,7 +7,6 @@ using VirtualLeadersGuide.Web.Activities;
 using VirtualLeadersGuide.Web.Authorization;
 using VirtualLeadersGuide.Web.Components.Shared;
 using VirtualLeadersGuide.Web.Events;
-using VirtualLeadersGuide.Web.Markdown;
 
 namespace VirtualLeadersGuide.Web.Components.Pages;
 
@@ -23,9 +22,6 @@ public partial class ActivityEditor
     private ApiActivityClient ActivityClient { get; set; } = default!;
 
     [Inject]
-    private MarkdownRenderer MarkdownRenderer { get; set; } = default!;
-
-    [Inject]
     private NotificationService NotificationService { get; set; } = default!;
 
     [Parameter]
@@ -36,11 +32,7 @@ public partial class ActivityEditor
 
     private enum PageState { Loading, Denied, Unavailable, Ready }
 
-    /// <remarks>Drives the responsive Write/Preview pane switch, same grilled decision as <c>InfoPageEditor.razor.cs</c> - see <c>ActivityEditor.razor.css</c>. Only meaningful below the 64rem breakpoint; ignored above it, where both panes always show.</remarks>
-    private enum PaneView { Write, Preview }
-
     private PageState state = PageState.Loading;
-    private PaneView activePane = PaneView.Write;
     private string? eventName;
     private bool isAdmin;
     private ActivityFormModel? model;
@@ -149,9 +141,8 @@ public partial class ActivityEditor
         /// <remarks>
         /// No <see cref="RequiredAttribute"/> - empty content is legal at the Api layer (an Activity is real
         /// and listable before it has a Description, CONTEXT.md's Activity entry). Bound in
-        /// <c>ActivityEditor.razor</c> to a plain native <c>&lt;textarea @bind-value:event="oninput"&gt;</c>,
-        /// deliberately not the <c>InputTextArea</c> component - see <c>InfoPageEditor.razor.cs</c>'s
-        /// <c>MarkdownContent</c> remarks for why <c>InputTextArea</c> can't be made to fire on input.
+        /// <c>ActivityEditor.razor</c> through <c>MarkdownField</c>, whose <c>Value</c> remarks explain why the
+        /// editing surface is a native <c>&lt;textarea&gt;</c> rather than <c>InputTextArea</c>.
         /// </remarks>
         public string? Description { get; set; }
     }

@@ -65,31 +65,7 @@
                     <ValidationMessage For="() => model!.Title" class="rz-messages-error" />
                 </div>
 
-                <div class="vlg-field">
-                    <label>Content</label>
-
-                    <div class="ip-tabstrip">
-                        <RadzenSelectBar @bind-Value="activePane" TValue="PaneView">
-                            <Items>
-                                <RadzenSelectBarItem Text="Write" Value="PaneView.Write" />
-                                <RadzenSelectBarItem Text="Preview" Value="PaneView.Preview" />
-                            </Items>
-                        </RadzenSelectBar>
-                    </div>
-
-                    <div class="ip-panes" data-active-pane="@activePane">
-                        <div class="ip-pane ip-pane-write">
-                            <textarea id="MarkdownContent" @bind-value="model!.MarkdownContent" @bind-value:event="oninput"
-                                      class="rz-textbox ip-editor-textarea" rows="14"></textarea>
-                        </div>
-                        <div class="ip-pane ip-pane-preview">
-                            <div class="ip-preview-surface">
-                                @MarkdownRenderer.RenderToHtml(model?.MarkdownContent ?? "")
-                            </div>
-                        </div>
-                    </div>
-                    <RadzenText TextStyle="TextStyle.Caption" TagName="TagName.Div" Style="margin-block-start: 0.25rem;">Markdown supported.</RadzenText>
-                </div>
+                <MarkdownField Label="Content" FieldId="MarkdownContent" @bind-Value="model!.MarkdownContent" />
             </fieldset>
         </EditForm>
 

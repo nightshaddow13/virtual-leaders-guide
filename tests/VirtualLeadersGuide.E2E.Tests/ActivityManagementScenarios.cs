@@ -34,8 +34,8 @@ public class ActivityManagementScenarios(AspireE2EFixture fixture) : E2ETestBase
             await Page.Locator("#Name").FillAsync(name);
             await Page.Locator("#Description").FillAsync("Bring a **jacket** and <script>alert(1)</script>.");
 
-            await Expect(Page.Locator(".ae-pane-preview strong")).ToHaveTextAsync("jacket");
-            await Expect(Page.Locator(".ae-pane-preview script")).ToHaveCountAsync(0);
+            await Expect(Page.Locator(".md-pane-preview strong")).ToHaveTextAsync("jacket");
+            await Expect(Page.Locator(".md-pane-preview script")).ToHaveCountAsync(0);
 
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create activity" }).ClickAsync();
             await Expect(Page).ToHaveURLAsync(

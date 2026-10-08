@@ -1,0 +1,25 @@
+<div class="vlg-field">
+    <label for="@FieldId">@Label</label>
+
+    <div class="md-tabstrip">
+        <RadzenSelectBar @bind-Value="activePane" TValue="PaneView">
+            <Items>
+                <RadzenSelectBarItem Text="Write" Value="PaneView.Write" />
+                <RadzenSelectBarItem Text="Preview" Value="PaneView.Preview" />
+            </Items>
+        </RadzenSelectBar>
+    </div>
+
+    <div class="md-panes" data-active-pane="@activePane">
+        <div class="md-pane md-pane-write">
+            <textarea id="@FieldId" value="@Value" @oninput="OnInputAsync"
+                      class="rz-textbox md-editor-textarea" rows="14"></textarea>
+        </div>
+        <div class="md-pane md-pane-preview">
+            <div class="md-preview-surface">
+                @MarkdownRenderer.RenderToHtml(Value ?? "")
+            </div>
+        </div>
+    </div>
+    <RadzenText TextStyle="TextStyle.Caption" TagName="TagName.Div" Style="margin-block-start: 0.25rem;">Markdown supported.</RadzenText>
+</div>

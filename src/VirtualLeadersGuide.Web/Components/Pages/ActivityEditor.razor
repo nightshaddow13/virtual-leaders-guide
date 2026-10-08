@@ -57,31 +57,7 @@
                 <ValidationMessage For="() => model!.Name" class="rz-messages-error" />
             </div>
 
-            <div class="vlg-field">
-                <label>Description</label>
-
-                <div class="ae-tabstrip">
-                    <RadzenSelectBar @bind-Value="activePane" TValue="PaneView">
-                        <Items>
-                            <RadzenSelectBarItem Text="Write" Value="PaneView.Write" />
-                            <RadzenSelectBarItem Text="Preview" Value="PaneView.Preview" />
-                        </Items>
-                    </RadzenSelectBar>
-                </div>
-
-                <div class="ae-panes" data-active-pane="@activePane">
-                    <div class="ae-pane ae-pane-write">
-                        <textarea id="Description" @bind-value="model!.Description" @bind-value:event="oninput"
-                                  class="rz-textbox ae-editor-textarea" rows="14"></textarea>
-                    </div>
-                    <div class="ae-pane ae-pane-preview">
-                        <div class="ae-preview-surface">
-                            @MarkdownRenderer.RenderToHtml(model?.Description ?? "")
-                        </div>
-                    </div>
-                </div>
-                <RadzenText TextStyle="TextStyle.Caption" TagName="TagName.Div" Style="margin-block-start: 0.25rem;">Markdown supported.</RadzenText>
-            </div>
+            <MarkdownField Label="Description" FieldId="Description" @bind-Value="model!.Description" />
         </EditForm>
         break;
 }
