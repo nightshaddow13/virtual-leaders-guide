@@ -10,8 +10,8 @@ namespace VirtualLeadersGuide.Web.Tests;
 /// Mirrors <see cref="InfoPageListShould"/>'s shape - this page gates on
 /// <c>ApiEventClient.GetEventAsync</c>, not the Activity collection endpoint alone, and renders the exact
 /// same grid for an Admin and an assigned Director (ADR-0069) - no <c>PageState.Admin</c>/<c>Director</c>
-/// split, unlike <c>EventEditor</c>. Name-only this slice (P5-7, #93) - no "Placed under" chip column
-/// (P5-11, #96) and no row-action column (P5-8/P5-9, #94/#95).
+/// split, unlike <c>EventEditor</c>. No "Placed under" chip column yet (P5-11, #96); the only row action is
+/// Edit (P5-8, #94) - Delete waits on P5-9 (#95).
 /// </remarks>
 public class ActivityListShould : BunitContext
 {
@@ -101,6 +101,36 @@ public class ActivityListShould : BunitContext
     }
 
     [Fact]
+    public void ShowAnEditIcon_WhenTheSignedInUserIsAnAdmin_ForLoadDataAsync()
+    {
+        IRenderedComponent<ActivityList> cut = RenderWithOneActivity("admin-1", "Admin", Guid.NewGuid());
+
+        Assert.Contains(cut.FindAll("button"), button => button.GetAttribute("aria-label") == "Edit");
+    }
+
+    /// <remarks>Pins ADR-0069's "no Admin/Director UI split" for the row action too - the twin of <c>InfoPageListShould</c>'s ADR-0059 test.</remarks>
+    [Fact]
+    public void ShowTheSameEditIcon_WhenTheSignedInUserIsAnAssignedDirector_ForLoadDataAsync()
+    {
+        IRenderedComponent<ActivityList> cut = RenderWithOneActivity("director-1", "Director", Guid.NewGuid());
+
+        Assert.Contains(cut.FindAll("button"), button => button.GetAttribute("aria-label") == "Edit");
+    }
+
+    [Fact]
+    public void NavigateToTheActivityEditor_WhenTheRowsEditIconIsClicked_ForLoadDataAsync()
+    {
+        Guid eventId = Guid.NewGuid();
+        Guid activityId = Guid.NewGuid();
+        IRenderedComponent<ActivityList> cut = RenderWithOneActivity("admin-1", "Admin", eventId, activityId);
+
+        cut.FindAll("button").Single(button => button.GetAttribute("aria-label") == "Edit").Click();
+
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        Assert.EndsWith($"dashboard/events/{eventId}/activities/{activityId}", navigation.Uri, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ShowEventsInTheBreadcrumb_WhenTheSignedInUserIsAnAdmin_ForOnParametersSetAsync()
     {
         Guid eventId = Guid.NewGuid();
@@ -177,6 +207,18 @@ public class ActivityListShould : BunitContext
         RadzenTestServices.RegisterRadzenComponentsHost(Services);
     }
 
+    private IRenderedComponent<ActivityList> RenderWithOneActivity(string user, string role, Guid eventId, Guid? activityId = null)
+    {
+        RegisterClients(
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = EventResource(eventId) }),
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = new[] { ActivityResource(eventId, "Canoe Basics", activityId) } }));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized(user);
+        auth.SetRoles(role);
+
+        return Render<ActivityList>(parameters => parameters.Add(component => component.EventId, eventId));
+    }
+
     private static object EventResource(Guid id) => new
     {
         type = "events",
@@ -192,10 +234,10 @@ public class ActivityListShould : BunitContext
         }
     };
 
-    private static object ActivityResource(Guid eventId, string name) => new
+    private static object ActivityResource(Guid eventId, string name, Guid? id = null) => new
     {
         type = "activities",
-        id = Guid.NewGuid().ToString(),
+        id = (id ?? Guid.NewGuid()).ToString(),
         attributes = new { eventId, name, description = "content" }
     };
 }
