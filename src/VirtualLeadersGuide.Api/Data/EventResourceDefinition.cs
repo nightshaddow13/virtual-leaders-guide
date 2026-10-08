@@ -183,7 +183,39 @@ public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, G
             await BumpPasscodeVersionIfChangedAsync(resource, writeOperation, cancellationToken);
         }
 
+        if (writeOperation == WriteOperationKind.DeleteResource)
+        {
+            await DeleteTierAndPlacementSubtreeAsync(resource.Id, cancellationToken);
+        }
+
         await base.OnWritingAsync(resource, writeOperation, cancellationToken);
+    }
+
+    /// <remarks>
+    /// <see cref="Tab"/>/<see cref="SubTab"/>/<see cref="Section"/>/<see cref="SubSection"/>/
+    /// <see cref="ActivityPlacement"/> deliberately carry no cascading FK to <see cref="Event"/> (P5-11,
+    /// #96) - see <see cref="VirtualLeadersGuideDbContext.ConfigureTabs"/>'s remarks for why a cascading one
+    /// is unimplementable here without SQL Server rejecting it or SQLite hitting an ordering conflict. This
+    /// method is the explicit substitute: a bulk, bottom-up delete of this Event's whole Tier+Placement
+    /// subtree, each level filtered directly by the denormalized <c>EventId</c> every one of those tables
+    /// carries, so no join through <see cref="Activity"/> or any Tier level is needed. Runs before the base
+    /// call deletes the Event itself (whose own cascade to <see cref="Activity"/> then finds no remaining
+    /// <see cref="ActivityPlacement"/> to cascade to - this method already removed them). Uses
+    /// <c>ExecuteDeleteAsync</c> (bulk, bypasses change tracking) rather than loading rows into memory first
+    /// - this can run against an Event with an arbitrarily large Tier tree.
+    /// </remarks>
+    private async Task DeleteTierAndPlacementSubtreeAsync(Guid eventId, CancellationToken cancellationToken)
+    {
+        await _dbContext.ActivityPlacements.Where(placement => placement.EventId == eventId)
+            .ExecuteDeleteAsync(cancellationToken);
+        await _dbContext.SubSections.Where(subSection => subSection.EventId == eventId)
+            .ExecuteDeleteAsync(cancellationToken);
+        await _dbContext.Sections.Where(section => section.EventId == eventId)
+            .ExecuteDeleteAsync(cancellationToken);
+        await _dbContext.SubTabs.Where(subTab => subTab.EventId == eventId)
+            .ExecuteDeleteAsync(cancellationToken);
+        await _dbContext.Tabs.Where(tab => tab.EventId == eventId)
+            .ExecuteDeleteAsync(cancellationToken);
     }
 
     /// <remarks>

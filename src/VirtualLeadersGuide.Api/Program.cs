@@ -43,6 +43,11 @@ builder.Services.AddResourceDefinition<InfoPageResourceDefinition>();
 builder.Services.AddResourceDefinition<ActivityResourceDefinition>();
 builder.Services.AddResourceDefinition<FacilityTypeResourceDefinition>();
 builder.Services.AddResourceDefinition<FacilityResourceDefinition>();
+builder.Services.AddResourceDefinition<TabResourceDefinition>();
+builder.Services.AddResourceDefinition<SubTabResourceDefinition>();
+builder.Services.AddResourceDefinition<SectionResourceDefinition>();
+builder.Services.AddResourceDefinition<SubSectionResourceDefinition>();
+builder.Services.AddResourceDefinition<ActivityPlacementResourceDefinition>();
 
 var app = builder.Build();
 
