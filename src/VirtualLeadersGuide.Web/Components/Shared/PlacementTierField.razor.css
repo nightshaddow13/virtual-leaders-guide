@@ -1,0 +1,54 @@
+/* One autofill level of the Placement builder (P5-11, #96; wireframe turn 1e). Component-scoped, tokens only. */
+
+.ptf-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.ptf-field label {
+    font-size: 0.8rem;
+    color: var(--vlg-ink-muted);
+}
+
+.ptf-required {
+    color: var(--vlg-clay);
+}
+
+.ptf-optional {
+    color: var(--vlg-ink-faint);
+}
+
+.ptf-locked {
+    display: flex;
+    align-items: center;
+    min-height: 2.25rem;
+    padding-inline: 0.6rem;
+    background: var(--vlg-canvas-sunk);
+    border: 1px dashed var(--vlg-line);
+    border-radius: var(--vlg-radius);
+    font-size: 0.75rem;
+    color: var(--vlg-ink-faint);
+}
+
+.ptf-count {
+    margin-inline-start: 0.5rem;
+    font-size: 0.7rem;
+    color: var(--vlg-ink-faint);
+}
+
+.ptf-create {
+    padding: 0.4rem 0.6rem;
+    background: var(--vlg-moss-tint);
+    border-radius: var(--vlg-radius);
+    font-size: 0.8rem;
+    color: var(--vlg-ink);
+}
+
+.ptf-nudge {
+    padding: 0.4rem 0.6rem;
+    background: var(--vlg-amber-tint);
+    border-radius: var(--vlg-radius);
+    font-size: 0.8rem;
+    color: var(--vlg-ink-muted);
+}

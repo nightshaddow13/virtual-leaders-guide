@@ -65,6 +65,21 @@ public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDb
     /// <summary>Every <see cref="Facility"/> row (P8-2, #166).</summary>
     public DbSet<Facility> Facilities => Set<Facility>();
 
+    /// <summary>Every <see cref="Data.Tab"/> row (P5-11, #96).</summary>
+    public DbSet<Tab> Tabs => Set<Tab>();
+
+    /// <summary>Every <see cref="Data.SubTab"/> row (P5-11, #96).</summary>
+    public DbSet<SubTab> SubTabs => Set<SubTab>();
+
+    /// <summary>Every <see cref="Data.Section"/> row (P5-11, #96).</summary>
+    public DbSet<Section> Sections => Set<Section>();
+
+    /// <summary>Every <see cref="Data.SubSection"/> row (P5-11, #96).</summary>
+    public DbSet<SubSection> SubSections => Set<SubSection>();
+
+    /// <summary>Every <see cref="ActivityPlacement"/> row (P5-11, #96; ADR-0050).</summary>
+    public DbSet<ActivityPlacement> ActivityPlacements => Set<ActivityPlacement>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -78,6 +93,11 @@ public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDb
         builder.Entity<Activity>(ConfigureActivities);
         builder.Entity<FacilityType>(ConfigureFacilityTypes);
         builder.Entity<Facility>(ConfigureFacilities);
+        builder.Entity<Tab>(ConfigureTabs);
+        builder.Entity<SubTab>(ConfigureSubTabs);
+        builder.Entity<Section>(ConfigureSections);
+        builder.Entity<SubSection>(ConfigureSubSections);
+        builder.Entity<ActivityPlacement>(ConfigureActivityPlacements);
     }
 
     private static void ConfigureRoles(EntityTypeBuilder<Role> entity)
@@ -351,6 +371,250 @@ public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDb
     /// </remarks>
     private static void ConfigureFacilityCheckConstraints(TableBuilder<Facility> table) =>
         table.HasCheckConstraint("CK_Facilities_Name_NotEmpty", "TRIM(Name) <> ''");
+
+    /// <remarks>
+    /// <see cref="Tab.EventId"/> gets no FK at all, the same denormalized-column treatment as
+    /// <see cref="ActivityPlacement.EventId"/> (ADR-0050) and for the same reason: a Tab's lifecycle is
+    /// app-driven (ADR-0046 - created and reaped only inside <see cref="ActivityPlacementResourceDefinition"/>),
+    /// never a DB cascade side effect. This isn't just a style choice - once <see cref="Section"/>'s two
+    /// optional parents (<see cref="Section.ParentTabId"/>/<see cref="Section.ParentSubTabId"/>) are
+    /// accounted for, a cascading <see cref="Event"/>→Tier FK on every one of
+    /// <see cref="Tab"/>/<see cref="SubTab"/>/<see cref="Section"/>/<see cref="SubSection"/> is
+    /// unimplementable without SQL Server's "multiple cascade paths" rejection (branching from Tab into
+    /// both a direct Section parent and a SubTab-mediated one), and even a single-path attempt at
+    /// cascading directly from Event while Restrict FKs point deeper into this subtree (see
+    /// <see cref="ConfigureActivityPlacements"/>'s remarks) is a demonstrated SQLite ordering bug: whichever
+    /// cascade branch the engine processes first can try to delete a row another, not-yet-processed branch
+    /// still Restricts. <see cref="EventResourceDefinition"/>'s delete handling explicitly cleans up a
+    /// deleted Event's whole Tier+Placement subtree instead, bottom-up, before the Event row itself goes.
+    /// </remarks>
+    private static void ConfigureTabs(EntityTypeBuilder<Tab> entity)
+    {
+        entity.ToTable("Tabs", ConfigureTabCheckConstraints);
+
+        entity.Property(t => t.Name).HasMaxLength(200);
+
+        entity.HasIndex(t => t.EventId);
+    }
+
+    /// <remarks>
+    /// <see cref="Tab.Name"/>'s setter already trims (<c>Tab.cs</c>); this is the backstop for anything
+    /// that writes the column outside that setter, matching <see cref="BuildNameNotEmptyCheckSql"/>'s
+    /// portable <c>TRIM</c> form (ADR-0014: no <c>LEN()</c>/<c>LENGTH()</c> comparison is portable).
+    /// </remarks>
+    private static void ConfigureTabCheckConstraints(TableBuilder<Tab> table) =>
+        table.HasCheckConstraint("CK_Tabs_Name_NotEmpty", "TRIM(Name) <> ''");
+
+    /// <remarks>
+    /// <see cref="SubTab.EventId"/> gets no FK, same reasoning as <see cref="ConfigureTabs"/>.
+    /// <see cref="SubTab"/>→<see cref="Tab"/> restricts - a Tab is reaped only once nothing references it
+    /// anymore (ADR-0046); restricting here backstops that invariant at the DB level, safely, since nothing
+    /// else in this schema cascades into <c>SubTabs</c> or <c>Tabs</c> to create an ordering conflict (see
+    /// <see cref="ConfigureTabs"/>'s remarks).
+    /// </remarks>
+    private static void ConfigureSubTabs(EntityTypeBuilder<SubTab> entity)
+    {
+        entity.ToTable("SubTabs", ConfigureSubTabCheckConstraints);
+
+        entity.Property(st => st.Name).HasMaxLength(200);
+
+        entity.HasOne(st => st.Tab)
+            .WithMany()
+            .HasForeignKey(st => st.TabId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        entity.HasIndex(st => st.EventId);
+        entity.HasIndex(st => st.TabId);
+    }
+
+    private static void ConfigureSubTabCheckConstraints(TableBuilder<SubTab> table) =>
+        table.HasCheckConstraint("CK_SubTabs_Name_NotEmpty", "TRIM(Name) <> ''");
+
+    /// <remarks>
+    /// <see cref="Section.EventId"/> gets no FK, same reasoning as <see cref="ConfigureTabs"/>. Both parent
+    /// FKs - <see cref="Section.ParentTabId"/> and <see cref="Section.ParentSubTabId"/> (ADR-0046's P5-11
+    /// amendment) - restrict, same reasoning as <see cref="ConfigureSubTabs"/>'s <see cref="SubTab"/>→<see cref="Tab"/>
+    /// FK. <c>CK_Sections_ExactlyOneParent</c> is this column pair's own backstop - app code in
+    /// <see cref="ActivityPlacementResourceDefinition"/> always sets exactly one when resolving-or-creating
+    /// a <see cref="Section"/>.
+    /// </remarks>
+    private static void ConfigureSections(EntityTypeBuilder<Section> entity)
+    {
+        entity.ToTable("Sections", ConfigureSectionCheckConstraints);
+
+        entity.Property(s => s.Name).HasMaxLength(200);
+
+        entity.HasOne(s => s.ParentTab)
+            .WithMany()
+            .HasForeignKey(s => s.ParentTabId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        entity.HasOne(s => s.ParentSubTab)
+            .WithMany()
+            .HasForeignKey(s => s.ParentSubTabId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        entity.HasIndex(s => s.EventId);
+        entity.HasIndex(s => s.ParentTabId);
+        entity.HasIndex(s => s.ParentSubTabId);
+    }
+
+    /// <remarks>
+    /// Both constraints in one call, matching <see cref="ConfigureEventCheckConstraints"/>'s "repeated
+    /// <c>ToTable</c> clobbers earlier configuration" rule. <c>CK_Sections_ExactlyOneParent</c> mirrors
+    /// <see cref="BuildDatesOrderedCheckSql"/>'s exactly-one-of-two-nullables shape (ADR-0046's P5-11
+    /// amendment), just without that constraint's ordering clause - either parent being set is
+    /// interchangeable here, unlike <see cref="Event.StartsAt"/>/<see cref="Event.EndsAt"/>.
+    /// </remarks>
+    private static void ConfigureSectionCheckConstraints(TableBuilder<Section> table)
+    {
+        table.HasCheckConstraint("CK_Sections_Name_NotEmpty", "TRIM(Name) <> ''");
+        table.HasCheckConstraint("CK_Sections_ExactlyOneParent", BuildExactlyOneParentCheckSql());
+    }
+
+    private static string BuildExactlyOneParentCheckSql() =>
+        "(ParentTabId IS NOT NULL AND ParentSubTabId IS NULL) OR (ParentTabId IS NULL AND ParentSubTabId IS NOT NULL)";
+
+    /// <remarks>
+    /// <see cref="SubSection.EventId"/> gets no FK, same reasoning as <see cref="ConfigureTabs"/>.
+    /// <see cref="SubSection"/>→<see cref="Section"/> restricts, same reasoning as
+    /// <see cref="ConfigureSubTabs"/>'s <see cref="SubTab"/>→<see cref="Tab"/> FK.
+    /// </remarks>
+    private static void ConfigureSubSections(EntityTypeBuilder<SubSection> entity)
+    {
+        entity.ToTable("SubSections", ConfigureSubSectionCheckConstraints);
+
+        entity.Property(ss => ss.Name).HasMaxLength(200);
+
+        entity.HasOne(ss => ss.Section)
+            .WithMany()
+            .HasForeignKey(ss => ss.SectionId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        entity.HasIndex(ss => ss.EventId);
+        entity.HasIndex(ss => ss.SectionId);
+    }
+
+    private static void ConfigureSubSectionCheckConstraints(TableBuilder<SubSection> table) =>
+        table.HasCheckConstraint("CK_SubSections_Name_NotEmpty", "TRIM(Name) <> ''");
+
+    /// <remarks>
+    /// <see cref="ActivityPlacement.EventId"/> gets no FK at all - ADR-0050 settles it as a denormalized
+    /// column app code keeps consistent via the same write-time pre-check that enforces every other
+    /// Placement rule, not a DB-enforced relationship. This is deliberate, not an oversight: giving it a
+    /// cascading FK to <see cref="Event"/> alongside <see cref="ActivityPlacement"/>→<see cref="Activity"/>'s
+    /// own cascade (below) would be a second cascade path from <see cref="Event"/> to <c>ActivityPlacements</c>
+    /// (the first being <see cref="Event"/>→<see cref="Activity"/>→<c>ActivityPlacements</c>), which SQL
+    /// Server refuses at migration time. <see cref="ActivityPlacement"/>→<see cref="Activity"/> cascades - a
+    /// Placement is meaningless once its Activity is gone (P5-9, #95). Every Tier FK
+    /// (<see cref="ActivityPlacement.TabId"/>/<see cref="ActivityPlacement.SubTabId"/>/
+    /// <see cref="ActivityPlacement.SectionId"/>/<see cref="ActivityPlacement.SubSectionId"/>) restricts -
+    /// a Tier is reaped only after its last Placement reference is gone (ADR-0046), so a Placement should
+    /// never be the row that vanishes because its Tier did. <see cref="ActivityPlacement.TabId"/> is
+    /// <c>IsRequired()</c> despite its nullable CLR type (<c>ActivityPlacement.cs</c>'s remarks) -
+    /// <see cref="ActivityPlacementResourceDefinition.OnWritingAsync"/> always resolves it before
+    /// <see cref="JsonApiDotNetCore.Resources.JsonApiResourceDefinition{TResource,TId}.OnWritingAsync"/>'s
+    /// own base call persists the row, so the column is never actually null. <see cref="ActivityPlacement.TabName"/>/
+    /// <see cref="ActivityPlacement.SubTabName"/>/<see cref="ActivityPlacement.SectionName"/>/
+    /// <see cref="ActivityPlacement.SubSectionName"/> are <c>Ignore</c>-d below - wire-only write input,
+    /// never a column.
+    /// </remarks>
+    private static void ConfigureActivityPlacements(EntityTypeBuilder<ActivityPlacement> entity)
+    {
+        entity.ToTable("ActivityPlacements", ConfigureActivityPlacementCheckConstraints);
+
+        entity.Ignore(p => p.TabName);
+        entity.Ignore(p => p.SubTabName);
+        entity.Ignore(p => p.SectionName);
+        entity.Ignore(p => p.SubSectionName);
+
+        entity.Property(p => p.TabId).IsRequired();
+
+        entity.HasOne(p => p.Activity)
+            .WithMany()
+            .HasForeignKey(p => p.ActivityId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        entity.HasOne(p => p.Tab)
+            .WithMany()
+            .HasForeignKey(p => p.TabId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        entity.HasOne(p => p.SubTab)
+            .WithMany()
+            .HasForeignKey(p => p.SubTabId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        entity.HasOne(p => p.Section)
+            .WithMany()
+            .HasForeignKey(p => p.SectionId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        entity.HasOne(p => p.SubSection)
+            .WithMany()
+            .HasForeignKey(p => p.SubSectionId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        entity.HasIndex(p => p.EventId);
+        entity.HasIndex(p => p.ActivityId);
+
+        ConfigureActivityPlacementUniqueness(entity);
+    }
+
+    /// <remarks>
+    /// The uniqueness rule is one logical constraint - "the same Activity can't occupy the identical
+    /// resolved Tier path twice" (ADR-0046) - but <see cref="ActivityPlacement.SubTabId"/>/
+    /// <see cref="ActivityPlacement.SectionId"/>/<see cref="ActivityPlacement.SubSectionId"/> are all
+    /// independently nullable, and a plain unique index treats every NULL as distinct from every other NULL
+    /// (two rows both leaving <see cref="ActivityPlacement.SectionId"/> null would never collide). Six
+    /// filtered indexes, one per Sub Tab/Section/Sub Section presence combination CONTEXT.md's
+    /// "independent chains" rule and <see cref="CK_ActivityPlacements_SubSectionRequiresSection"/> actually
+    /// allow (Sub Tab present/absent is independent of the Section chain; Sub Section present requires
+    /// Section present, cutting the Section/Sub Section pairing from four combinations to three) - the same
+    /// per-nullable-shape filtered-index technique <see cref="ConfigureUserRoles"/> already uses for its one
+    /// nullable column, scaled up for three.
+    /// </remarks>
+    private static void ConfigureActivityPlacementUniqueness(EntityTypeBuilder<ActivityPlacement> entity)
+    {
+        entity.HasIndex(p => new { p.ActivityId, p.TabId })
+            .IsUnique()
+            .HasDatabaseName("IX_ActivityPlacements_TabOnly")
+            .HasFilter("[SubTabId] IS NULL AND [SectionId] IS NULL AND [SubSectionId] IS NULL");
+
+        entity.HasIndex(p => new { p.ActivityId, p.TabId, p.SubTabId })
+            .IsUnique()
+            .HasDatabaseName("IX_ActivityPlacements_TabSubTab")
+            .HasFilter("[SubTabId] IS NOT NULL AND [SectionId] IS NULL AND [SubSectionId] IS NULL");
+
+        entity.HasIndex(p => new { p.ActivityId, p.TabId, p.SectionId })
+            .IsUnique()
+            .HasDatabaseName("IX_ActivityPlacements_TabSection")
+            .HasFilter("[SubTabId] IS NULL AND [SectionId] IS NOT NULL AND [SubSectionId] IS NULL");
+
+        entity.HasIndex(p => new { p.ActivityId, p.TabId, p.SubTabId, p.SectionId })
+            .IsUnique()
+            .HasDatabaseName("IX_ActivityPlacements_TabSubTabSection")
+            .HasFilter("[SubTabId] IS NOT NULL AND [SectionId] IS NOT NULL AND [SubSectionId] IS NULL");
+
+        entity.HasIndex(p => new { p.ActivityId, p.TabId, p.SectionId, p.SubSectionId })
+            .IsUnique()
+            .HasDatabaseName("IX_ActivityPlacements_TabSectionSubSection")
+            .HasFilter("[SubTabId] IS NULL AND [SectionId] IS NOT NULL AND [SubSectionId] IS NOT NULL");
+
+        entity.HasIndex(p => new { p.ActivityId, p.TabId, p.SubTabId, p.SectionId, p.SubSectionId })
+            .IsUnique()
+            .HasDatabaseName("IX_ActivityPlacements_TabSubTabSectionSubSection")
+            .HasFilter("[SubTabId] IS NOT NULL AND [SectionId] IS NOT NULL AND [SubSectionId] IS NOT NULL");
+    }
+
+    /// <remarks>
+    /// <c>CK_ActivityPlacements_SubSectionRequiresSection</c> backstops the "Sub Section requires a Section
+    /// on the same Placement" rule <see cref="ActivityPlacementResourceDefinition.OnWritingAsync"/> enforces
+    /// as a 422 - matching every other backstop-a-write-time-rule CHECK on this type, portable across SQL
+    /// Server/SQLite (ADR-0014).
+    /// </remarks>
+    private static void ConfigureActivityPlacementCheckConstraints(TableBuilder<ActivityPlacement> table) =>
+        table.HasCheckConstraint("CK_ActivityPlacements_SubSectionRequiresSection", "[SubSectionId] IS NULL OR [SectionId] IS NOT NULL");
 
     /// <remarks>
     /// <see cref="Event.Passcode"/>'s <see cref="IDataProtector"/> can't be constructor-injected:

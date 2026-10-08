@@ -56,6 +56,34 @@ public sealed class ApiActivityClient(InternalApiClient apiClient)
         return (activities, document.Meta?.Total ?? activities.Count);
     }
 
+    /// <summary>Reads one Activity by id - the Activity page (P5-11, #96) needs its Name and owning Event.</summary>
+    /// <param name="activityId">The Activity to read.</param>
+    /// <param name="cancellationToken">Propagated to the underlying HTTP call.</param>
+    /// <returns>
+    /// <see cref="ActivityReadOutcome.Success"/> with the Activity; <see cref="ActivityReadOutcome.Forbidden"/>
+    /// for an unassigned Director (ADR-0069); or <see cref="ActivityReadOutcome.NotFound"/>.
+    /// </returns>
+    public async Task<(ActivityReadOutcome Outcome, ActivityDto? Activity)> GetActivityAsync(
+        Guid activityId, CancellationToken cancellationToken)
+    {
+        using var request = NewRequest(HttpMethod.Get, $"{ActivitiesPath}/{activityId}");
+        using HttpResponseMessage response = await SendAsync(request, cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            return (ActivityReadOutcome.Forbidden, null);
+        }
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return (ActivityReadOutcome.NotFound, null);
+        }
+
+        EnsureExpectedStatus(response, HttpStatusCode.OK);
+        ActivityDocument document = await ReadAsync<ActivityDocument>(response, cancellationToken);
+        return (ActivityReadOutcome.Success, ToDto(document.Data));
+    }
+
     /// <summary>Creates a new Activity on the given Event.</summary>
     /// <param name="eventId">The Event this Activity belongs to.</param>
     /// <param name="name">The Activity's display Name.</param>

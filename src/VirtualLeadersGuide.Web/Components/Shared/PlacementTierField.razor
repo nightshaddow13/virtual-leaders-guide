@@ -1,0 +1,38 @@
+@using VirtualLeadersGuide.Web.Activities
+
+<div class="ptf-field">
+    <label for="@Name">
+        @Label
+        @if (Required) { <span class="ptf-required">*</span> } else { <span class="ptf-optional">&mdash; optional</span> }
+    </label>
+
+    @if (!Enabled)
+    {
+        <div class="ptf-locked">@LockedHint</div>
+    }
+    else
+    {
+        <RadzenAutoComplete Value="@Value" ValueChanged="@ValueChanged" Data="@Options.Select(o => o.Name).ToList()"
+                            Name="@Name" Placeholder="@Placeholder" MinLength="0"
+                            class="rz-textbox rz-input-md" Style="width: 100%;">
+            <Template>
+                <span>@context</span>
+                <span class="ptf-count">@CountText((string)context)</span>
+            </Template>
+        </RadzenAutoComplete>
+
+        @if (NearDuplicate is not null)
+        {
+            <div class="ptf-nudge">
+                Did you mean <b>@NearDuplicate</b>? Matching ignores case, so you won't end up with two.
+                <RadzenButton Text="@($"Use {NearDuplicate}")" Variant="Variant.Text" ButtonStyle="ButtonStyle.Primary"
+                              Size="ButtonSize.ExtraSmall" ButtonType="ButtonType.Button"
+                              Click="@(() => ValueChanged.InvokeAsync(NearDuplicate))" />
+            </div>
+        }
+        else if (IsCreating)
+        {
+            <div class="ptf-create">+ Create @Noun <b>&ldquo;@Value!.Trim()&rdquo;</b></div>
+        }
+    }
+</div>

@@ -12,16 +12,14 @@ using VirtualLeadersGuide.Web.JsonApi;
 namespace VirtualLeadersGuide.Web.Components.Pages;
 
 /// <remarks>
-/// Deliberately Name-only this slice - no "Placed under" chip column and no row-action column.
-/// <c>Placement</c>/<c>Tab</c>/<c>SubTab</c>/<c>Section</c>/<c>SubSection</c> don't exist yet; that schema
-/// and the chip-per-Placement column it would render both land in P5-11 (#96), which depends on this story
-/// (see the comments left on #93/#96 recording the moved criterion). Row actions (edit/delete) wait on P5-8
-/// (#94)/P5-9 (#95), which own the pages those icons would navigate to - nothing ships disabled or dead in
-/// the meantime. The empty state is a <c>RadzenCard</c> via <c>&lt;EmptyTemplate&gt;</c>, not the
-/// <c>EmptyText</c> string <c>InfoPageList</c>/<c>Dashboard</c>/<c>Users</c> all use - wireframe turn 1a
-/// explicitly overrides that convention ("the copy has to teach the inline-create model"), though the
-/// shipped copy here is trimmed to this slice (no Tab/Category-creation sentence, since nothing in this
-/// story lets you type one yet).
+/// Since P5-11 (#96) a "Placed under" column renders one chip per Placement (the criterion #93 deferred to
+/// that story, see the comments left on #93/#96) and the header counts Placements alongside Activities.
+/// Row click opens the Activity's page (<c>ActivityDetail</c>), which hosts the Placement builder and tree -
+/// the wireframe's "row click opens the detail form" - so there is still no row-action column; icon actions
+/// (edit/delete) wait on P5-8 (#94)/P5-9 (#95). The empty state is a <c>RadzenCard</c> via
+/// <c>&lt;EmptyTemplate&gt;</c>, not the <c>EmptyText</c> string <c>InfoPageList</c>/<c>Dashboard</c>/<c>Users</c>
+/// all use - wireframe turn 1a explicitly overrides that convention ("the copy has to teach the
+/// inline-create model").
 /// </remarks>
 public partial class ActivityList
 {
@@ -33,6 +31,9 @@ public partial class ActivityList
 
     [Inject]
     private ApiActivityClient ActivityClient { get; set; } = default!;
+
+    [Inject]
+    private ApiPlacementClient PlacementClient { get; set; } = default!;
 
     [Parameter]
     public Guid EventId { get; set; }
@@ -51,6 +52,8 @@ public partial class ActivityList
     private IEnumerable<ActivityDto>? activities;
 
     private int totalCount;
+    private int placementCount;
+    private IReadOnlyDictionary<Guid, IReadOnlyList<PlacementPath>> pathsByActivity = new Dictionary<Guid, IReadOnlyList<PlacementPath>>();
     private bool isLoading;
     private string? loadErrorMessage;
 
@@ -118,6 +121,10 @@ public partial class ActivityList
             (IReadOnlyList<ActivityDto> pageActivities, int total) =
                 await ActivityClient.GetActivitiesForEventAsync(EventId, pageNumber, pageSize, sort, CancellationToken.None);
 
+            PlacementTreeDto tree = await PlacementClient.GetTreeForEventAsync(EventId, CancellationToken.None);
+            pathsByActivity = tree.PathsByActivity();
+            placementCount = tree.Placements.Count;
+
             activities = pageActivities;
             totalCount = total;
         }
@@ -130,6 +137,12 @@ public partial class ActivityList
 
         isLoading = false;
     }
+
+    private IEnumerable<string> ChipsFor(Guid activityId) =>
+        pathsByActivity.TryGetValue(activityId, out IReadOnlyList<PlacementPath>? paths) ? paths.Select(p => p.Display) : [];
+
+    private void OpenActivity(ActivityDto activity) =>
+        NavigationManager.NavigateTo($"dashboard/events/{EventId}/activities/{activity.Id}");
 
     private void NavigateToDashboard() => NavigationManager.NavigateTo("dashboard", forceLoad: true);
 }

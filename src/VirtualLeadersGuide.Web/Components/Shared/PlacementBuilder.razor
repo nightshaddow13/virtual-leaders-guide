@@ -1,0 +1,42 @@
+@using VirtualLeadersGuide.Web.Activities
+
+<section class="pb-card" aria-label="Add a placement">
+    <div class="pb-header">
+        <span class="pb-title">Add a placement</span>
+        <span class="pb-count">@PlacedCount SO FAR</span>
+    </div>
+
+    <PlacementTierField Label="Tab" Name="PlacementTab" Noun="tab" Required="true"
+                        Placeholder="Search or type a tab name"
+                        Options="@Model.TabOptions()" Value="@tab" ValueChanged="OnTabChanged" />
+
+    <PlacementTierField Label="Sub Tab" Name="PlacementSubTab" Noun="sub tab"
+                        Enabled="@HasTab" LockedHint="pick a tab first"
+                        Options="@(HasTab ? Model.SubTabOptions(tab!) : [])" Value="@subTab" ValueChanged="OnSubTabChanged" />
+
+    <PlacementTierField Label="Section" Name="PlacementSection" Noun="section"
+                        Enabled="@HasTab" LockedHint="pick a tab first"
+                        Options="@(HasTab ? Model.SectionOptions(tab!, subTab) : [])" Value="@section" ValueChanged="OnSectionChanged" />
+
+    <PlacementTierField Label="Sub Section" Name="PlacementSubSection" Noun="sub section"
+                        Enabled="@HasSection" LockedHint="pick a section first"
+                        Options="@(HasSection ? Model.SubSectionOptions(tab!, subTab, section!) : [])" Value="@subSection" ValueChanged="OnSubSectionChanged" />
+
+    @if (resolved is not null)
+    {
+        <div class="pb-path" aria-label="Resolved path">
+            @foreach (PathLevel level in levels)
+            {
+                @if (level != levels[0]) { <span class="pb-sep">&rsaquo;</span> }
+                <span class="pb-chip @(level.IsNew ? "pb-chip-new" : "")">@level.Name @if (level.IsNew) { <span class="pb-new">NEW</span> }</span>
+            }
+        </div>
+
+        @if (isDuplicate)
+        {
+            <div class="pb-duplicate" role="alert">&#9888; This activity is already placed here. Change a level or leave this one as it is.</div>
+        }
+    }
+
+    <RadzenButton Text="Place it" ButtonType="ButtonType.Button" class="pb-place" Disabled="@(resolved is null || isDuplicate)" Click="PlaceAsync" />
+</section>

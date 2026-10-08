@@ -1,0 +1,16 @@
+/* Activity page layout (P5-11, #96; wireframe turns 2a/2d, Direction C): builder beside the live tree on a
+   wide window; below ~64rem the tree drops under the form and stays a full section rather than collapsing
+   to a summary - seeing the whole structure is the point of this direction. */
+
+.ad-columns {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    align-items: start;
+}
+
+@media (min-width: 64rem) {
+    .ad-columns {
+        grid-template-columns: 1.1fr 1fr;
+    }
+}

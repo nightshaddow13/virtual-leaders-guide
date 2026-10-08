@@ -1,0 +1,62 @@
+/* One Tier row of the Activity page's "Where it appears" tree (P5-11, #96; wireframe turns 2a/2b).
+   Component-scoped, tokens only (ADR-0034/0040). Lit rows are this Activity's saved Placements;
+   dashed rows are unsaved ghosts. Remove / reorder controls arrive with P5-12 / P5-13. */
+
+.ptn-tier {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    font-weight: 600;
+    color: var(--vlg-ink);
+}
+
+.ptn-children {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding-inline-start: 0.75rem;
+    margin-block-start: 0.3rem;
+}
+
+.ptn-node + .ptn-node {
+    margin-block-start: 0.1rem;
+}
+
+.ptn-leaf {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid transparent;
+    border-radius: var(--vlg-radius);
+    color: var(--vlg-ink-faint);
+    font-weight: 400;
+}
+
+.ptn-lit {
+    background: var(--vlg-moss-tint);
+    border-color: var(--vlg-moss);
+    color: var(--vlg-ink);
+    font-weight: 600;
+}
+
+.ptn-pending {
+    background: var(--vlg-moss-tint);
+    border: 1px dashed var(--vlg-moss);
+    color: var(--vlg-ink);
+}
+
+.ptn-badge,
+.ptn-status {
+    font-size: 0.65rem;
+    letter-spacing: 0.06em;
+    font-weight: 400;
+}
+
+.ptn-badge {
+    color: var(--vlg-moss);
+}
+
+.ptn-status {
+    color: var(--vlg-ink-faint);
+}

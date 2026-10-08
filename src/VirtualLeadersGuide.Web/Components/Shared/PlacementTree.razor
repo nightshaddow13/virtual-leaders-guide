@@ -1,0 +1,22 @@
+@using VirtualLeadersGuide.Web.Activities
+
+<section class="pt-pane" aria-label="Where it appears">
+    <div class="pt-heading">WHERE IT APPEARS</div>
+
+    @if (Roots.Count == 0)
+    {
+        <p class="pt-empty">Not placed anywhere yet. Add its first Placement with the builder.</p>
+    }
+    else
+    {
+        @foreach (TierNode root in Roots)
+        {
+            <PlacementTreeNode Node="root" />
+        }
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<TierNode> Roots { get; set; } = [];
+}

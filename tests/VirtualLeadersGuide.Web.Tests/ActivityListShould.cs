@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
@@ -170,10 +171,82 @@ public class ActivityListShould : BunitContext
         Assert.Contains("Something went wrong loading Activities", cut.Markup, StringComparison.Ordinal);
     }
 
-    private void RegisterClients(HttpMessageHandler eventHandler, HttpMessageHandler activityHandler)
+    [Fact]
+    public void ShowOneChipPerPlacementAndTheCounts_WhenAnActivityIsPlacedTwice_ForLoadDataAsync()
+    {
+        Guid eventId = Guid.NewGuid();
+        Guid activityId = Guid.NewGuid();
+        Guid morning = Guid.NewGuid(), afternoon = Guid.NewGuid(), waterfront = Guid.NewGuid();
+        var placementHandler = new StubHttpMessageHandler(request => request.RequestUri!.AbsolutePath switch
+        {
+            "/api/tabs" => Collection(
+                TierResource("tabs", morning, new { eventId, name = "Morning", sortOrder = 0 }),
+                TierResource("tabs", afternoon, new { eventId, name = "Afternoon", sortOrder = 1 })),
+            "/api/sections" => Collection(TierResource("sections", waterfront, new { eventId, parentTabId = morning, name = "Waterfront", sortOrder = 0 })),
+            "/api/placements" => Collection(
+                TierResource("placements", Guid.NewGuid(), new { eventId, activityId, tabId = morning, sectionId = waterfront, sortOrder = 0 }),
+                TierResource("placements", Guid.NewGuid(), new { eventId, activityId, tabId = afternoon, sortOrder = 0 })),
+            _ => Collection()
+        });
+        RegisterClients(
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = EventResource(eventId) }),
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = new[] { ActivityResource(eventId, "Canoe Basics", activityId) } }),
+            placementHandler);
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("admin-1");
+        auth.SetRoles("Admin");
+
+        IRenderedComponent<ActivityList> cut = Render<ActivityList>(parameters =>
+            parameters.Add(component => component.EventId, eventId));
+
+        Assert.Equal(["Afternoon", "Morning › Waterfront"], cut.FindAll(".al-chip").Select(chip => chip.TextContent));
+        Assert.Contains("2 placements", cut.Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShowNoChips_WhenAnActivityIsNotPlacedAnywhereYet_ForLoadDataAsync()
+    {
+        Guid eventId = Guid.NewGuid();
+        RegisterClients(
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = EventResource(eventId) }),
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = new[] { ActivityResource(eventId, "Canoe Basics") } }));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("admin-1");
+        auth.SetRoles("Admin");
+
+        IRenderedComponent<ActivityList> cut = Render<ActivityList>(parameters =>
+            parameters.Add(component => component.EventId, eventId));
+
+        Assert.Empty(cut.FindAll(".al-chip"));
+        Assert.Contains("0 placements", cut.Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OpenTheActivitysPage_WhenARowIsClicked_ForOpenActivity()
+    {
+        Guid eventId = Guid.NewGuid();
+        Guid activityId = Guid.NewGuid();
+        RegisterClients(
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = EventResource(eventId) }),
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = new[] { ActivityResource(eventId, "Canoe Basics", activityId) } }));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("admin-1");
+        auth.SetRoles("Admin");
+        IRenderedComponent<ActivityList> cut = Render<ActivityList>(parameters =>
+            parameters.Add(component => component.EventId, eventId));
+
+        cut.Find("tbody tr").Click();
+
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        Assert.EndsWith($"dashboard/events/{eventId}/activities/{activityId}", navigation.Uri, StringComparison.Ordinal);
+    }
+
+    private void RegisterClients(HttpMessageHandler eventHandler, HttpMessageHandler activityHandler, HttpMessageHandler? placementHandler = null)
     {
         Services.AddSingleton(ApiClientTestFactory.CreateEventClient(eventHandler));
         Services.AddSingleton(ApiClientTestFactory.CreateActivityClient(activityHandler));
+        Services.AddSingleton(ApiClientTestFactory.CreatePlacementClient(
+            placementHandler ?? StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = Array.Empty<object>() })));
         RadzenTestServices.RegisterRadzenComponentsHost(Services);
     }
 
@@ -192,10 +265,17 @@ public class ActivityListShould : BunitContext
         }
     };
 
-    private static object ActivityResource(Guid eventId, string name) => new
+    private static object TierResource(string type, Guid id, object attributes) => new { type, id = id.ToString(), attributes };
+
+    private static HttpResponseMessage Collection(params object[] resources) => new(HttpStatusCode.OK)
+    {
+        Content = JsonContent.Create(new { data = resources, meta = new { total = resources.Length } })
+    };
+
+    private static object ActivityResource(Guid eventId, string name, Guid? id = null) => new
     {
         type = "activities",
-        id = Guid.NewGuid().ToString(),
+        id = (id ?? Guid.NewGuid()).ToString(),
         attributes = new { eventId, name, description = "content" }
     };
 }
