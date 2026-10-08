@@ -48,12 +48,12 @@
                 <RadzenDataGridColumn TItem="ActivityDto" Property="@nameof(ActivityDto.Name)" Title="Name" Sortable="true" Filterable="false" />
                 <RadzenDataGridColumn TItem="ActivityDto" Title="Placed under" Sortable="false" Filterable="false">
                     <Template Context="row">
-                        <div class="al-chips">
+                        <RadzenStack Orientation="Orientation.Horizontal" Wrap="FlexWrap.Wrap" Gap="0.4rem">
                             @foreach (string chip in ChipsFor(row.Id))
                             {
-                                <span class="al-chip">@chip</span>
+                                <RadzenBadge Text="@chip" BadgeStyle="BadgeStyle.Light" IsPill="true" class="al-chip" />
                             }
-                        </div>
+                        </RadzenStack>
                     </Template>
                 </RadzenDataGridColumn>
             </Columns>

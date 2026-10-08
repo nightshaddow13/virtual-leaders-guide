@@ -59,9 +59,13 @@
             <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" AllowClose="false" Text="@saveErrorMessage" />
         }
 
-        <div class="ad-columns">
-            <PlacementBuilder Model="model!" PlacedCount="@PlacedCount" OnPlace="OnPlace" />
-            <PlacementTree Roots="@model!.Roots" />
-        </div>
+        <RadzenRow Gap="1rem">
+            <RadzenColumn Size="12" SizeLG="7">
+                <PlacementBuilder Model="model!" PlacedCount="@PlacedCount" OnPlace="OnPlace" />
+            </RadzenColumn>
+            <RadzenColumn Size="12" SizeLG="5">
+                <PlacementTree Roots="@model!.Roots" />
+            </RadzenColumn>
+        </RadzenRow>
         break;
 }

@@ -14,7 +14,11 @@ public enum TierKind
 /// <param name="ActivityName">Its display name.</param>
 /// <param name="IsThisActivity">Whether this is the Activity whose page is open - drawn lit.</param>
 /// <param name="IsPending">Whether this is an unsaved ghost row - drawn dashed.</param>
-public sealed record PlacementLeaf(Guid ActivityId, string ActivityName, bool IsThisActivity, bool IsPending);
+public sealed record PlacementLeaf(Guid ActivityId, string ActivityName, bool IsThisActivity, bool IsPending)
+{
+    /// <summary>Always empty - a placed Activity is a leaf. Exists so <c>RadzenTree</c>'s single level can read the same <c>Items</c> property off every row, tier or leaf.</summary>
+    public IEnumerable<object> Items => [];
+}
 
 /// <summary>One Tier row in the live tree, with whatever hangs beneath it.</summary>
 public sealed class TierNode
@@ -44,6 +48,9 @@ public sealed class TierNode
 
     /// <summary>Activities placed directly at this Tier.</summary>
     public IReadOnlyList<PlacementLeaf> Leaves => LeafList;
+
+    /// <summary>Everything that hangs beneath this Tier - its placed Activities, then its child Tiers - as one list, the shape <c>RadzenTree</c>'s level template walks.</summary>
+    public IEnumerable<object> Items => LeafList.Cast<object>().Concat(ChildList);
 
     internal List<TierNode> ChildList { get; } = [];
 
