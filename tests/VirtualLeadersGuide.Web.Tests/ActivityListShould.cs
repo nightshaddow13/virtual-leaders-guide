@@ -108,7 +108,6 @@ public class ActivityListShould : BunitContext
         Assert.Contains(cut.FindAll("button"), button => button.GetAttribute("aria-label") == "Edit");
     }
 
-    /// <remarks>Pins ADR-0069's "no Admin/Director UI split" for the row action too - the twin of <c>InfoPageListShould</c>'s ADR-0059 test.</remarks>
     [Fact]
     public void ShowTheSameEditIcon_WhenTheSignedInUserIsAnAssignedDirector_ForLoadDataAsync()
     {

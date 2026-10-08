@@ -27,6 +27,7 @@ public partial class ActivityEditor
     [Parameter]
     public Guid EventId { get; set; }
 
+    /// <summary>The Activity being edited, or <see langword="null"/> when creating a new one.</summary>
     /// <remarks><see langword="null"/> on <c>.../activities/new</c>; set on <c>.../activities/{ActivityId:guid}</c> - same shape as <c>InfoPageEditor.InfoPageId</c>.</remarks>
     [Parameter]
     public Guid? ActivityId { get; set; }

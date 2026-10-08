@@ -238,14 +238,6 @@ public class InfoPageEditorShould : BunitContext
         Assert.Contains("<strong>bold</strong>", cut.Markup, StringComparison.Ordinal);
     }
 
-    /// <remarks>
-    /// Regression coverage for the E2E-caught bug this ticket shipped with: the textarea's
-    /// <c>@bind-Value:event="oninput"</c> means every keystroke updates the Preview pane, not just a
-    /// blur/tab-away - <c>Input(...)</c> fires the DOM <c>input</c> event bUnit's binding actually listens
-    /// for, matching what a real admin typing (without ever leaving the field) would trigger. Using
-    /// <c>Change(...)</c> here instead would have passed even with the bug present, since <c>onchange</c> was
-    /// the default this regression came from.
-    /// </remarks>
     [Fact]
     public void UpdateThePreviewImmediately_WhenTypingWithoutLeavingTheField_ForRender()
     {

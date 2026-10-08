@@ -8,7 +8,10 @@ namespace VirtualLeadersGuide.Web.Tests;
 /// <remarks>
 /// Owns the Write/Preview behavior <c>ActivityEditorShould</c> and <c>InfoPageEditorShould</c> used to each
 /// assert for themselves before ADR-0073 extracted the editor into <see cref="MarkdownField"/>. Those classes
-/// keep one test apiece proving their own model is actually bound through it.
+/// keep one test apiece proving their own model is actually bound through it. The typing test drives
+/// <c>Input(...)</c>, not <c>Change(...)</c>, on purpose: every keystroke must update the Preview, not only a
+/// blur/tab-away (an E2E-caught bug the InfoPage editor once shipped with), and <c>Change(...)</c> would have
+/// passed even with that bug present since <c>onchange</c> was the default it came from.
 /// </remarks>
 public class MarkdownFieldShould : BunitContext
 {
@@ -59,12 +62,6 @@ public class MarkdownFieldShould : BunitContext
         Assert.Empty(cut.FindAll(".md-pane-preview script"));
     }
 
-    /// <remarks>
-    /// Regression coverage for the E2E-caught bug the InfoPage editor shipped with: every keystroke must raise
-    /// <c>ValueChanged</c> and update the Preview, not only a blur/tab-away. <c>Input(...)</c> fires the DOM
-    /// <c>input</c> event; <c>Change(...)</c> would have passed even with the bug present, since
-    /// <c>onchange</c> was the default it came from.
-    /// </remarks>
     [Fact]
     public void RaiseValueChangedAndUpdateThePreview_WhenTypingWithoutLeavingTheField_ForOnInputAsync()
     {

@@ -145,12 +145,6 @@ public class ActivityEditorShould : BunitContext
         Assert.Contains("You don't have access to this Event", cut.Markup, StringComparison.Ordinal);
     }
 
-    /// <remarks>
-    /// Regression coverage for the same bug class <c>InfoPageEditorShould.UpdateThePreviewImmediately...</c>
-    /// pins (fixed for InfoPage by <c>c866c9a</c>): the textarea's <c>@bind-Value:event="oninput"</c> means
-    /// every keystroke updates the Preview pane, not just a blur/tab-away - <c>Input(...)</c> fires the DOM
-    /// <c>input</c> event bUnit's binding actually listens for.
-    /// </remarks>
     [Fact]
     public void UpdateThePreviewImmediately_WhenTypingWithoutLeavingTheField_ForRender()
     {
