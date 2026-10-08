@@ -87,6 +87,28 @@ public class PlacementManagementScenarios(AspireE2EFixture fixture) : E2ETestBas
             await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Place it" })).ToBeDisabledAsync();
         });
 
+    [Fact(DisplayName = "Given an Event with an existing Tab, when an Admin focuses an empty Tab field, then the existing Tabs are listed before anything is typed")]
+    public async Task GivenAnEventWithAnExistingTab_WhenAnAdminFocusesAnEmptyTabField_ThenTheExistingTabsAreListedBeforeAnythingIsTyped() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, _) = await CreateEventAsync("Options Host");
+            (_, Guid first) = await CreateActivityAsync(eventId, "Canoe Basics");
+            (_, Guid second) = await CreateActivityAsync(eventId, "Kayak Basics");
+            string tab = $"e2e-Morning {Guid.NewGuid():n}";
+
+            await Page.GotoAsync(ActivityUrl(eventId, first));
+            await PlaceAsync(tab);
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" }).ClickAsync();
+            await Expect(Page.Locator(".ptn-pending")).ToHaveCountAsync(0, new LocatorAssertionsToHaveCountOptions { Timeout = InteractiveTimeoutMs });
+
+            await Page.GotoAsync(ActivityUrl(eventId, second));
+            await Page.Locator("#PlacementTab").ClickAsync();
+
+            await Expect(Page.Locator(".rz-autocomplete-panel").GetByText(tab)).ToBeVisibleAsync(Interactive());
+            await Expect(Page.Locator(".rz-autocomplete-panel")).ToContainTextAsync("1 activity", new LocatorAssertionsToContainTextOptions { Timeout = InteractiveTimeoutMs });
+        });
+
     [Fact(DisplayName = "Given an Activity with an unsaved ghost row, when an Admin clicks Cancel, then they are asked once and can keep editing or discard and leave")]
     public async Task GivenAnActivityWithAnUnsavedGhostRow_WhenAnAdminClicksCancel_ThenTheyAreAskedOnceAndCanKeepEditingOrDiscardAndLeave() =>
         await RunAsync(async () =>

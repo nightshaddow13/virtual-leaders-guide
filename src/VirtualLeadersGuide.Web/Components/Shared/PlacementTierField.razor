@@ -14,7 +14,7 @@
     else
     {
         <RadzenAutoComplete Value="@Value" ValueChanged="@ValueChanged" Data="@Options.Select(o => o.Name).ToList()"
-                            Name="@Name" Placeholder="@Placeholder" MinLength="0"
+                            Name="@Name" Placeholder="@Placeholder" MinLength="0" OpenOnFocus="true"
                             class="rz-textbox rz-input-md" Style="width: 100%;">
             <Template>
                 <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween" Gap="1rem">
@@ -22,6 +22,9 @@
                     <RadzenText TextStyle="TextStyle.Caption" TagName="TagName.Span">@CountText((string)context)</RadzenText>
                 </RadzenStack>
             </Template>
+            <EmptyTemplate>
+                <RadzenText TextStyle="TextStyle.Caption">No @Noun matches yet - type a name to create one.</RadzenText>
+            </EmptyTemplate>
         </RadzenAutoComplete>
 
         @if (NearDuplicate is not null)
