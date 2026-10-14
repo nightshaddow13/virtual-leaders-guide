@@ -41,8 +41,13 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// read directly off the source's own edit form rather than re-derived, so the "never the source's" comparison
 /// is against what the source actually has, not an assumption about what it should be.
 /// </remarks>
-[Collection(nameof(AspireE2ECollection))]
-public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
+/// <remarks>
+/// The only class in <see cref="NonParallelE2ECollection"/>, so it runs alone after every parallel class has
+/// finished: its Admin-grid row lookups assume the Event it just made is on page 1, which other classes
+/// creating Events concurrently can break. P2.1-8 (#205) removes that dependence and this attribute with it.
+/// </remarks>
+[Collection(nameof(NonParallelE2ECollection))]
+public class EventManagementScenarios : E2ETestBase
 {
     /// <remarks>
     /// Every page in this class is <c>InteractiveServer</c> (ADR-0034), so an assertion that depends on a

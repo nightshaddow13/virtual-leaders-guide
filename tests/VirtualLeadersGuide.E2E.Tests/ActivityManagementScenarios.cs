@@ -16,8 +16,7 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// "Activities" button rather than trusting the create redirect already landed on the list - that's what
 /// actually proves the new <c>EventEditor</c> entry point works, not just that create-then-redirect does.
 /// </remarks>
-[Collection(nameof(AspireE2ECollection))]
-public class ActivityManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
+public class ActivityManagementScenarios : E2ETestBase
 {
     /// <remarks>See <see cref="EventManagementScenarios.InteractiveTimeoutMs"/>'s identical remarks - every page here is <c>InteractiveServer</c> too.</remarks>
     private const int InteractiveTimeoutMs = 15_000;

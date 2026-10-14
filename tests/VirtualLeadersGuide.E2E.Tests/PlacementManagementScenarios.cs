@@ -13,8 +13,7 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// <c>RadzenAutoComplete</c> is typed into with a fill followed by Tab, so the value is committed by blur
 /// rather than depending on the popup.
 /// </remarks>
-[Collection(nameof(AspireE2ECollection))]
-public class PlacementManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
+public class PlacementManagementScenarios : E2ETestBase
 {
     /// <remarks>See <see cref="EventManagementScenarios.InteractiveTimeoutMs"/>'s identical remarks - every page here is <c>InteractiveServer</c> too.</remarks>
     private const int InteractiveTimeoutMs = 15_000;

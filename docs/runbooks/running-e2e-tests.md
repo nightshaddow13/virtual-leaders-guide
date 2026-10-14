@@ -76,9 +76,32 @@ becomes `../../../../../artifacts/e2e` (five levels back up to the repo root).
 dotnet test tests/VirtualLeadersGuide.E2E.Tests
 ```
 
-Expect this to take a couple of minutes - `AspireE2EFixture` boots the whole stack once for the entire
-run (container pulls on a cold cache add more). Every test shares that one boot via
-`AspireE2ECollection`, so they run sequentially, not in parallel.
+Expect the boot to take a couple of minutes (container pulls on a cold cache add more). The whole stack boots
+exactly **once** per run - `AspireE2ETestFramework` starts it before the first test and sweeps, verifies and
+disposes it after the last, whether you run everything or a single class with `--filter`
+([ADR-0075](../adr/0075-e2e-stack-lifetime-is-owned-by-an-assembly-level-test-framework.md)).
+
+### Parallelism
+
+Test **classes** run in parallel against that one stack; the tests *inside* a class stay serial.
+`EventManagementScenarios` is the exception that runs alone, after all the parallel classes have finished
+(until P2.1-8, #205, makes its grid lookups independent of paging).
+
+The cap is half the machine's logical cores (`"maxParallelThreads": "0.5x"` in
+`tests/VirtualLeadersGuide.E2E.Tests/xunit.runner.json`). Each concurrent test drives its own Chromium, so a
+higher cap costs CPU, memory and video-recording disk. Override it for one run - for example, back to
+fully serial to rule parallelism out when chasing a flaky test:
+
+```powershell
+dotnet test tests/VirtualLeadersGuide.E2E.Tests -- xUnit.MaxParallelThreads=1
+```
+
+The dev AppHost must still be stopped (Section 1): parallelism changes how many tests run at once, not how
+many stacks - there is still only one, on the same fixed ports and SQL volume.
+
+If the end-of-run retention check (ADR-0039) finds leftover data, the run fails with a **Test Assembly
+Cleanup Failure** and `dotnet test` exits non-zero. The summary line can still read `Passed!` - trust the exit
+code and the failure message, not the summary.
 
 ## 5. Test data
 
@@ -115,7 +138,8 @@ A passing run leaves no `artifacts/e2e/` folder at all - nothing to clean up. `a
 gitignored.
 
 Two fallback markers can appear at the `artifacts/e2e/<run timestamp>/` level instead of a per-test
-folder, if something about capturing a specific file didn't go to plan:
+folder, if something about capturing a specific file didn't go to plan (concurrent tests append to them
+safely, one line at a time):
 
 - **`TOO_LONG.txt`** - one or more resolved artifact paths would have exceeded a safe length under
   Windows' `MAX_PATH` (260 characters; this is a real constraint unless [Windows long-path support]
@@ -123,6 +147,15 @@ folder, if something about capturing a specific file didn't go to plan:
 - **`CAPTURE_ERRORS.txt`** - anything else that went wrong capturing a specific file (a transient I/O
   error, a locked file handle). The test's own reported pass/fail result is never affected either way -
   a capture problem only ever costs evidence, never correctness of the result.
+
+Two more markers live directly in `artifacts/e2e/`, not under a run timestamp, because they belong to the
+stack rather than any one test:
+
+- **`BOOT_ERROR.txt`** - the stack failed to come up (Docker not running, dev certs untrusted, another
+  AppHost holding the ports). Every test then fails with the same Docker/dev-certs/AppHost checklist; the run-end
+  sweep is skipped, since there is nothing to sweep.
+- **`SWEEP_ERRORS.txt`** - the best-effort run-end sweep itself threw. The retention check that follows is
+  what actually fails the run.
 
 [Windows long-path support]: https://learn.microsoft.com/windows/win32/fileio/maximum-file-path-limitation
 

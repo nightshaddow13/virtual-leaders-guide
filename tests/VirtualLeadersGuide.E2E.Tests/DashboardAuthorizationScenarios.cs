@@ -11,8 +11,7 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// in as the fixture <see cref="AspireE2EFixture.NoRoleEmail"/> account rather than a throwaway one - nothing
 /// here mutates account state, so there's nothing to isolate (ADR-0039).
 /// </remarks>
-[Collection(nameof(AspireE2ECollection))]
-public class DashboardAuthorizationScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
+public class DashboardAuthorizationScenarios : E2ETestBase
 {
     [Fact(DisplayName = "Given an anonymous user, when navigating to /dashboard, then the browser redirects to Account/Login with a returnUrl")]
     public async Task GivenAnAnonymousUser_WhenNavigatingToDashboard_ThenItRedirectsToLoginWithAReturnUrl() =>

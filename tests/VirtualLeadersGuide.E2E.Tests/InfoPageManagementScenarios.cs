@@ -15,8 +15,7 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// precedent for why (each scenario class keeps what it needs, rather than growing a shared surface no
 /// other class asked for).
 /// </remarks>
-[Collection(nameof(AspireE2ECollection))]
-public class InfoPageManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
+public class InfoPageManagementScenarios : E2ETestBase
 {
     /// <remarks>See <see cref="EventManagementScenarios.InteractiveTimeoutMs"/>'s identical remarks - every page here is <c>InteractiveServer</c> too.</remarks>
     private const int InteractiveTimeoutMs = 15_000;

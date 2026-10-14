@@ -15,8 +15,7 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// <see cref="AspireE2EFixture.Facilities"/> directly, not just the UI's own success notification - the AC's
 /// "clear success confirmation" criterion extends to the row actually existing, not just the page saying so.
 /// </remarks>
-[Collection(nameof(AspireE2ECollection))]
-public class FacilityManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
+public class FacilityManagementScenarios : E2ETestBase
 {
     /// <remarks>See <see cref="EventManagementScenarios.InteractiveTimeoutMs"/>'s identical remarks - every page here is <c>InteractiveServer</c> too.</remarks>
     private const int InteractiveTimeoutMs = 15_000;

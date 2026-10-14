@@ -14,8 +14,7 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// (<c>UserRole.UserId</c>'s <c>OnDelete(DeleteBehavior.Cascade)</c>), not application logic, so it isn't
 /// this suite's job to prove.
 /// </remarks>
-[Collection(nameof(AspireE2ECollection))]
-public class PersonalDataScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
+public class PersonalDataScenarios : E2ETestBase
 {
     [Fact(DisplayName = "Given a signed-in user, when they download their personal data, then a PersonalData.json file for that user is downloaded")]
     public async Task GivenASignedInUser_WhenTheyDownloadTheirPersonalData_ThenAPersonalDataJsonFileForThatUserIsDownloaded() =>

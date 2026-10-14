@@ -9,11 +9,22 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// are proven to actually serve requests - not merely "started" (see <see cref="InitializeAsync"/>).
 /// </summary>
 /// <remarks>
-/// Shared across the whole run via <see cref="AspireE2ECollection"/> - see ADR-0025's Consequences for why
-/// every E2E test class must join that exact collection rather than declaring its own.
+/// Not an xUnit fixture: <see cref="AspireE2EStack"/> creates the one instance, boots it from the assembly
+/// runner before the first test, and disposes it after the last (ADR-0075). Test classes reach it through
+/// <see cref="E2ETestBase.Fixture"/>, which is what lets every class run in parallel against it.
 /// </remarks>
 public sealed class AspireE2EFixture : IAsyncLifetime
 {
+    /// <remarks>
+    /// <see langword="internal"/> on purpose: xUnit can only construct a class or collection fixture through a
+    /// public constructor, so re-adding <c>ICollectionFixture&lt;AspireE2EFixture&gt;</c> or
+    /// <c>IClassFixture&lt;AspireE2EFixture&gt;</c> fails loudly at run start instead of silently booting a
+    /// second stack (ADR-0075, which turns ADR-0025's "a reviewer has to catch it" into an enforced rule).
+    /// </remarks>
+    internal AspireE2EFixture()
+    {
+    }
+
     /// <remarks>
     /// Cold CI has to pull the mssql/azurite images before SQL Server's first-boot init even starts
     /// (<c>AppHostShould</c> observed ~40s locally with a warm cache) - this covers container start, both
@@ -107,6 +118,14 @@ public sealed class AspireE2EFixture : IAsyncLifetime
 
     private string _directorUserId = null!;
     private string _invitedUserId = null!;
+
+    /// <remarks>
+    /// Set only once <see cref="SeedFixtureDataAsync"/> has finished. <see cref="DisposeAsync"/> sweeps and
+    /// verifies retention only when this is true - a stack that failed part-way through
+    /// <see cref="InitializeAsync"/> has no API clients to sweep with (and nothing to verify), but its
+    /// containers and processes still need disposing.
+    /// </remarks>
+    private bool _seeded;
 
     /// <summary>
     /// The <c>web</c> resource's HTTPS base URL, populated once <see cref="InitializeAsync"/> has proven both
@@ -222,6 +241,7 @@ public sealed class AspireE2EFixture : IAsyncLifetime
             Facilities = new FacilitiesApiClient(_facilitiesApiHttpClient, InternalJwtKey);
 
             await SeedFixtureDataAsync(cancellationToken);
+            _seeded = true;
         }
         catch (TimeoutException ex)
         {
@@ -241,18 +261,19 @@ public sealed class AspireE2EFixture : IAsyncLifetime
     /// existing per-test teardown discipline - a backstop for a crashed or killed test's own tracked cleanup
     /// never running. <see cref="VerifyRetentionAsync"/> runs second and is deliberately allowed to throw:
     /// unlike a per-test <c>DisposeAsync</c> failure (which ADR-0028 protects from corrupting that test's own
-    /// already-decided result), a collection-fixture <c>DisposeAsync</c> exception isn't attached to any one
-    /// test - xUnit surfaces it as its own distinct run-level error. That's what makes ADR-0039's "nothing
-    /// else survives" rule an enforced fact rather than an aspiration a log file quietly ignores. An earlier
-    /// draft of this design planned a dedicated <c>[Fact]</c> for this instead, ordered to run last - dropped
-    /// because xUnit v2 doesn't actually guarantee execution order across test *classes* sharing one
-    /// collection (only that they run sequentially, not in what order), which a same-collection <c>[Fact]</c>
-    /// can't rely on. This fixture's own <c>DisposeAsync</c> has the one ordering guarantee that's real: it
-    /// runs after every test in the collection has finished, unconditionally.
+    /// already-decided result), this exception isn't attached to any one test - <see cref="AspireE2EStack"/>
+    /// calls this from the assembly runner's <c>BeforeTestAssemblyFinishedAsync</c> inside the runner's
+    /// <c>Aggregator</c>, so xUnit surfaces it as its own run-level "Test Assembly Cleanup Failure" and
+    /// <c>dotnet test</c> exits non-zero. That's what makes ADR-0039's "nothing else survives" rule an enforced
+    /// fact rather than an aspiration a log file quietly ignores. A dedicated <c>[Fact]</c> ordered to run last
+    /// was dropped because xUnit v2 doesn't guarantee execution order across test classes; the assembly
+    /// runner's end-of-run hook has the one ordering guarantee that's real: it runs once, after every
+    /// collection (parallel and non-parallel alike) has finished, unconditionally (ADR-0075).
+    /// Skipped entirely when <see cref="InitializeAsync"/> never finished seeding (<see cref="_seeded"/>).
     /// </remarks>
     public async Task DisposeAsync()
     {
-        if (!KeepData && _app is not null)
+        if (!KeepData && _seeded)
         {
             await SweepOrphanedDataAsync();
             await VerifyRetentionAsync();
@@ -450,10 +471,9 @@ public sealed class AspireE2EFixture : IAsyncLifetime
         }
         catch (Exception ex)
         {
-            Directory.CreateDirectory(SweepLogDirectory);
-            await File.AppendAllTextAsync(
+            E2EArtifactLog.Append(
                 Path.Combine(SweepLogDirectory, "SWEEP_ERRORS.txt"),
-                $"AspireE2EFixture's run-end sweep failed: {ex.GetType().Name}: {ex.Message}{Environment.NewLine}");
+                $"AspireE2EFixture's run-end sweep failed: {ex.GetType().Name}: {ex.Message}");
         }
     }
 

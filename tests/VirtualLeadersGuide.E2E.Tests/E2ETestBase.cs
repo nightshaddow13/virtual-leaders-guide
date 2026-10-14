@@ -15,14 +15,13 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// <see cref="CreateEventAsync"/>, unless <c>VLG_E2E_KEEP_DATA=1</c> is set (ADR-0039).
 /// </summary>
 /// <remarks>
-/// Extends <see cref="PageTest"/> directly rather than wrapping it, so xUnit's constructor-injection of
-/// <see cref="AspireE2EFixture"/> via <see cref="AspireE2ECollection"/> keeps working unchanged on every
-/// derived test class - it's resolved purely by matching the concrete class's own constructor parameter type,
-/// independently of this base class's <see cref="IAsyncLifetime"/> chain. See ADR-0028 for why this class
-/// decides pass/fail itself via <see cref="RunAsync"/> rather than
-/// <c>Microsoft.Playwright.Xunit</c>'s own <c>ExceptionCapturer</c>.
+/// Extends <see cref="PageTest"/> directly rather than wrapping it. A derived class takes no constructor
+/// arguments: the one shared <see cref="AspireE2EFixture"/> is read from <see cref="AspireE2EStack"/> via
+/// <see cref="Fixture"/> instead of being injected, so each class can be its own xUnit collection and run in
+/// parallel with the others (ADR-0075). See ADR-0028 for why this class decides pass/fail itself via
+/// <see cref="RunAsync"/> rather than <c>Microsoft.Playwright.Xunit</c>'s own <c>ExceptionCapturer</c>.
 /// </remarks>
-public abstract class E2ETestBase(AspireE2EFixture fixture) : PageTest
+public abstract class E2ETestBase : PageTest
 {
     /// <remarks>
     /// A conservative margin under Windows' 260-char <c>MAX_PATH</c>, not the literal ceiling (ADR-0028) -
@@ -41,18 +40,18 @@ public abstract class E2ETestBase(AspireE2EFixture fixture) : PageTest
 
     /// <remarks>
     /// One folder per *run*, not per test: a static field initializer runs exactly once per test-assembly
-    /// load, and every E2E test class shares that one process via <see cref="AspireE2ECollection"/>
-    /// (ADR-0025) - so every failure in a run lands under the same timestamp. Not created here (see
+    /// load, and every E2E test class shares that one process and one <see cref="AspireE2EStack"/>
+    /// (ADR-0025, ADR-0075) - so every failure in a run lands under the same timestamp. Not created here (see
     /// <see cref="ResolveArtifactPath"/>) - a run where every test passes must leave no <c>artifacts/e2e/</c>
     /// folder behind at all (AC #2).
     /// </remarks>
     private static readonly string RunRoot = Path.Combine(ArtifactRoot, DateTime.Now.ToString("yyyyMMdd-HHmmss"));
 
     /// <summary>
-    /// The running Aspire stack, hoisted here so every derived test class gets it without redeclaring its own
-    /// constructor-injected field.
+    /// The running Aspire stack, shared by every test class in the run.
     /// </summary>
-    protected AspireE2EFixture Fixture { get; } = fixture;
+    /// <exception cref="InvalidOperationException">The stack failed to boot - see <see cref="AspireE2EStack.Current"/>.</exception>
+    protected AspireE2EFixture Fixture => AspireE2EStack.Current;
 
     /// <remarks>Defaults to <see langword="false"/> on purpose - see ADR-0028.</remarks>
     private bool _passed;
@@ -235,7 +234,8 @@ public abstract class E2ETestBase(AspireE2EFixture fixture) : PageTest
 
     /// <remarks>
     /// <see cref="AspireE2EFixture.AdminAllowlistedEmail"/> is one value shared by every test in this run
-    /// (ADR-0025 - one Aspire stack, one fixture instance), unlike every other account most tests create,
+    /// (ADR-0025, ADR-0075 - one Aspire stack, one fixture instance, even with classes running in parallel),
+    /// unlike every other account most tests create,
     /// which is freshly guid-suffixed per call - so this checks for an existing account before creating
     /// one, rather than assuming a fresh account the way most other seeding calls in this project do.
     /// </remarks>
@@ -414,10 +414,9 @@ public abstract class E2ETestBase(AspireE2EFixture fixture) : PageTest
         }
         catch (Exception ex)
         {
-            Directory.CreateDirectory(RunRoot);
-            await File.AppendAllTextAsync(
+            E2EArtifactLog.Append(
                 Path.Combine(RunRoot, "CAPTURE_ERRORS.txt"),
-                $"{fileName} for {Path.GetFileName(testDir)} failed: {ex.GetType().Name}: {ex.Message}{Environment.NewLine}");
+                $"{fileName} for {Path.GetFileName(testDir)} failed: {ex.GetType().Name}: {ex.Message}");
         }
     }
 
@@ -481,10 +480,9 @@ public abstract class E2ETestBase(AspireE2EFixture fixture) : PageTest
             return path;
         }
 
-        Directory.CreateDirectory(RunRoot);
-        File.AppendAllText(
+        E2EArtifactLog.Append(
             Path.Combine(RunRoot, "TOO_LONG.txt"),
-            $"{fileName} for {Path.GetFileName(testDir)} would exceed the path-length limit: {path}{Environment.NewLine}");
+            $"{fileName} for {Path.GetFileName(testDir)} would exceed the path-length limit: {path}");
         return null;
     }
 }

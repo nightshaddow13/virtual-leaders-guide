@@ -23,8 +23,7 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// <see cref="IdentityApiClient.CreateUserAsync"/>) is what creates the row - a revoked invite's own delete
 /// makes a second, tracked delete a tolerated no-op, not a double-delete failure (ADR-0039).
 /// </remarks>
-[Collection(nameof(AspireE2ECollection))]
-public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
+public class DirectorInviteScenarios : E2ETestBase
 {
     /// <remarks>Same reasoning as <see cref="EventManagementScenarios"/>'s own constant - every page here is <c>InteractiveServer</c> (ADR-0036).</remarks>
     private const int InteractiveTimeoutMs = 15_000;
