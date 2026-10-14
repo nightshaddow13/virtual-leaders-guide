@@ -14,11 +14,3 @@ public enum PlacementWriteOutcome
     /// <remarks>The same Activity is already placed at this exact path (ADR-0046) - normally caught earlier by the builder's own duplicate check, so this is the race/stale-tree case.</remarks>
     Conflict
 }
-
-/// <summary>Outcomes <see cref="ApiActivityClient.GetActivityAsync"/> distinguishes.</summary>
-public enum ActivityReadOutcome
-{
-    Success,
-    Forbidden,
-    NotFound
-}

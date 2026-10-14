@@ -173,21 +173,19 @@ public class PlacementManagementScenarios(AspireE2EFixture fixture) : E2ETestBas
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Place it" }).ClickAsync();
     }
 
-    /// <remarks>Creates through the real new-Activity form, then reads the id back from the list row's navigation target by opening it.</remarks>
+    /// <remarks>Creates through the real new-Activity form. A create lands on the new Activity's own page (P5-8, #94), so the id is read straight from that URL.</remarks>
     private async Task<(string Name, Guid Id)> CreateActivityAsync(Guid eventId, string label)
     {
         string name = $"e2e-{label} {Guid.NewGuid():n}";
         await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, $"dashboard/events/{eventId}/activities/new").ToString());
         await Page.Locator("#Name").FillAsync(name);
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create activity" }).ClickAsync();
-        await Expect(Page).ToHaveURLAsync(ActivitiesListUrl(eventId), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
-
-        await Page.GetByText(name).ClickAsync();
         await Expect(Page).ToHaveURLAsync(
             new System.Text.RegularExpressions.Regex($"/dashboard/events/{eventId}/activities/[0-9a-f-]{{36}}$"),
             new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
-        Guid id = Guid.Parse(Page.Url[(Page.Url.LastIndexOf('/') + 1)..]);
-        return (name, id);
+
+        string path = new Uri(Page.Url).AbsolutePath;
+        return (name, Guid.Parse(path[(path.LastIndexOf('/') + 1)..]));
     }
 
     private static LocatorAssertionsToBeVisibleOptions Interactive() => new() { Timeout = InteractiveTimeoutMs };
