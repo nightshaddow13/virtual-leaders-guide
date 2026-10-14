@@ -34,6 +34,9 @@ internal static class ApiClientTestFactory
     public static ApiActivityClient CreateActivityClient(HttpMessageHandler apiHandler) =>
         new(CreateInternalApiClient(apiHandler));
 
+    public static ApiPlacementClient CreatePlacementClient(HttpMessageHandler apiHandler) =>
+        new(CreateInternalApiClient(apiHandler));
+
     public static ApiFacilityClient CreateFacilityClient(HttpMessageHandler apiHandler) =>
         new(CreateInternalApiClient(apiHandler));
 

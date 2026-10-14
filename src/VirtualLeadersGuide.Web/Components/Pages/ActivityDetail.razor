@@ -1,0 +1,71 @@
+@page "/dashboard/events/{EventId:guid}/activities/{ActivityId:guid}"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+@using VirtualLeadersGuide.Web.Activities
+
+<PageTitle>@(activity?.Name ?? "Activity")</PageTitle>
+
+<RadzenComponents @rendermode="InteractiveServer" />
+
+@switch (state)
+{
+    case PageState.Denied:
+        <StatusPanel Title="You don't have access to this Activity"
+                     Message="Ask an Admin to grant you access, or check you're signed in as the right person.">
+            <RadzenButton Text="Back to dashboard" Click="@(() => NavigationManager.NavigateTo("dashboard", forceLoad: true))" />
+        </StatusPanel>
+        break;
+
+    case PageState.NotFound:
+        <StatusPanel Title="Activity not found" Message="It may have been deleted.">
+            <RadzenButton Text="Back to activities" Click="NavigateToList" />
+        </StatusPanel>
+        break;
+
+    case PageState.Unavailable:
+        <StatusPanel Title="Something went wrong loading this page" Message="The store didn't respond. Try again.">
+            <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
+                <RadzenButton Text="Try again" Click="@(() => NavigationManager.Refresh(forceReload: true))" />
+                <RadzenButton Text="Back to dashboard" ButtonStyle="ButtonStyle.Light" Click="@(() => NavigationManager.NavigateTo("dashboard", forceLoad: true))" />
+            </RadzenStack>
+        </StatusPanel>
+        break;
+
+    case PageState.Ready:
+        <RadzenBreadCrumb>
+            <RadzenBreadCrumbItem Text="@(isAdmin ? "EVENTS" : "MY EVENTS")" Path="dashboard" />
+            <RadzenBreadCrumbItem Text="@eventName?.ToUpperInvariant()" Path="@($"dashboard/events/{EventId}")" />
+            <RadzenBreadCrumbItem Text="ACTIVITIES" Path="@($"dashboard/events/{EventId}/activities")" />
+            <RadzenBreadCrumbItem Text="@activity!.Name.ToUpperInvariant()" />
+        </RadzenBreadCrumb>
+
+        <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween"
+                     AlignItems="AlignItems.End" Gap="1rem" Style="margin-block-end: 1rem;">
+            <div>
+                <h1>@activity!.Name</h1>
+                <RadzenText TextStyle="TextStyle.Caption">Where this activity appears in the guide</RadzenText>
+            </div>
+            <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
+                <RadzenButton Text="Cancel" ButtonStyle="ButtonStyle.Light" ButtonType="ButtonType.Button"
+                              Disabled="@isSaving" Click="NavigateToList" />
+                <RadzenButton Text="Save changes" ButtonType="ButtonType.Button"
+                              Disabled="@(isSaving || ghosts.Count == 0)" Click="SaveAsync" />
+            </RadzenStack>
+        </RadzenStack>
+
+        @if (saveErrorMessage is not null)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" AllowClose="false" Text="@saveErrorMessage" />
+        }
+
+        <RadzenRow Gap="1rem">
+            <RadzenColumn Size="12" SizeLG="7">
+                <PlacementBuilder Model="model!" PlacedCount="@PlacedCount" OnPlace="OnPlace" />
+            </RadzenColumn>
+            <RadzenColumn Size="12" SizeLG="5">
+                <PlacementTree Roots="@model!.Roots" />
+            </RadzenColumn>
+        </RadzenRow>
+        break;
+}

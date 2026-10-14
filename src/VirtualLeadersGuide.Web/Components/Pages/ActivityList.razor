@@ -37,19 +37,29 @@
                      AlignItems="AlignItems.End" Gap="1rem" Style="margin-block-end: 1rem;">
             <div>
                 <h1>Activities</h1>
-                <RadzenText TextStyle="TextStyle.Caption">@totalCount activities</RadzenText>
+                <RadzenText TextStyle="TextStyle.Caption">@totalCount activities · @placementCount placements</RadzenText>
             </div>
             <RadzenButton Text="+ New activity" Click="@(() => NavigationManager.NavigateTo($"dashboard/events/{EventId}/activities/new"))" />
         </RadzenStack>
 
         <RadzenDataGrid @ref="grid" TItem="ActivityDto" Data="@activities" Count="@totalCount" LoadData="@LoadDataAsync"
-                         AllowPaging="true" PageSize="10" AllowSorting="true" IsLoading="@isLoading">
+                         AllowPaging="true" PageSize="10" AllowSorting="true" IsLoading="@isLoading" RowSelect="@OpenActivity">
             <Columns>
                 <RadzenDataGridColumn TItem="ActivityDto" Property="@nameof(ActivityDto.Name)" Title="Name" Sortable="true" Filterable="false" />
+                <RadzenDataGridColumn TItem="ActivityDto" Title="Placed under" Sortable="false" Filterable="false">
+                    <Template Context="row">
+                        <RadzenStack Orientation="Orientation.Horizontal" Wrap="FlexWrap.Wrap" Gap="0.4rem">
+                            @foreach (string chip in ChipsFor(row.Id))
+                            {
+                                <RadzenBadge Text="@chip" BadgeStyle="BadgeStyle.Light" IsPill="true" class="al-chip" />
+                            }
+                        </RadzenStack>
+                    </Template>
+                </RadzenDataGridColumn>
                 <RadzenDataGridColumn TItem="ActivityDto" Sortable="false" Filterable="false" Width="@ActionColumnWidth" TextAlign="TextAlign.Center">
                     <Template Context="item">
-                        <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" aria-label="Edit"
-                                      Click="@(() => NavigationManager.NavigateTo($"dashboard/events/{EventId}/activities/{item.Id}"))" />
+                        <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" aria-label="Edit" @onclick:stopPropagation="true"
+                                      Click="@(() => NavigationManager.NavigateTo($"dashboard/events/{EventId}/activities/{item.Id}/edit"))" />
                     </Template>
                 </RadzenDataGridColumn>
             </Columns>
@@ -58,7 +68,7 @@
                     <RadzenStack Orientation="Orientation.Vertical" Gap="0.75rem" Style="align-items: flex-start;">
                         <RadzenText TextStyle="TextStyle.H6" TagName="TagName.H2">No activities yet</RadzenText>
                         <RadzenText TextStyle="TextStyle.Body2">
-                            Add your first Activity to get started - give it a Name and a Description.
+                            Add your first Activity, then open it to place it under a Tab - Tabs, Sub Tabs and Sections are created as you type them there, so there is nothing to set up first.
                         </RadzenText>
                         <RadzenButton Text="+ New activity" Click="@(() => NavigationManager.NavigateTo($"dashboard/events/{EventId}/activities/new"))" />
                     </RadzenStack>

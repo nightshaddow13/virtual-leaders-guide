@@ -61,6 +61,7 @@ builder.Services.AddScoped<ApiDirectorClient>();
 builder.Services.AddScoped<DirectorInviteService>();
 builder.Services.AddScoped<ApiInfoPageClient>();
 builder.Services.AddScoped<ApiActivityClient>();
+builder.Services.AddScoped<ApiPlacementClient>();
 builder.Services.AddScoped<ApiFacilityClient>();
 builder.Services.AddScoped<ApiFacilityTypeClient>();
 builder.Services.AddSingleton<MarkdownRenderer>();

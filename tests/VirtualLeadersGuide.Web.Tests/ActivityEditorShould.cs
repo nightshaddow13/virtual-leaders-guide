@@ -11,7 +11,7 @@ namespace VirtualLeadersGuide.Web.Tests;
 /// <remarks>
 /// Covers <c>ActivityEditor.razor.cs</c>'s <c>PageState</c> transitions on both its routes - create (P5-6,
 /// #87) and edit (P5-8, #94) - mirroring <see cref="InfoPageEditorShould"/>. The Write/Preview pane behavior
-/// belongs to <c>MarkdownFieldShould</c> (ADR-0073); the tests here only prove this page binds its model
+/// belongs to <c>MarkdownFieldShould</c> (ADR-0074); the tests here only prove this page binds its model
 /// through it.
 /// </remarks>
 public class ActivityEditorShould : BunitContext

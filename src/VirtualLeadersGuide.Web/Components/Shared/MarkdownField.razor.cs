@@ -6,7 +6,7 @@ namespace VirtualLeadersGuide.Web.Components.Shared;
 /// <summary>
 /// A labelled markdown authoring field: a Write textarea beside a live, sanitized Preview of what's typed,
 /// shared by every editor that authors markdown (<c>InfoPageEditor</c>'s content, <c>ActivityEditor</c>'s
-/// Description) so a change to the editing surface is made once (ADR-0073, ADR-0048).
+/// Description) so a change to the editing surface is made once (ADR-0074, ADR-0048).
 /// </summary>
 /// <remarks>
 /// Bind it with <c>@bind-Value</c>. Both panes always render in the DOM and CSS alone decides which shows -

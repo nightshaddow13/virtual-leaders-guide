@@ -7,7 +7,8 @@ namespace VirtualLeadersGuide.Web.Tests;
 
 /// <remarks>
 /// Mirrors <see cref="ApiActivityClientShould"/>'s shape. <see cref="ApiFacilityClient.ListAsync"/> was added
-/// by P8-3 (#167). Response bodies are anonymous objects with already-lowercase property names, reproducing
+/// by P8-3 (#167); <see cref="ApiFacilityClient.GetAsync"/> and <see cref="ApiFacilityClient.UpdateAsync"/>
+/// by P8-4 (#168). Response bodies are anonymous objects with already-lowercase property names, reproducing
 /// Api's actual wire shape without touching <see cref="ApiFacilityClient"/>'s <see langword="internal"/>
 /// envelope types.
 /// </remarks>
@@ -229,6 +230,183 @@ public class ApiFacilityClientShould
 
         await Assert.ThrowsAsync<FacilityDataUnavailableException>(
             () => client.CreateAsync("Camp Blackhawk", Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ReturnTheMappedFacility_WhenApiRespondsWithOk_ForGetAsync()
+    {
+        var facilityId = Guid.NewGuid();
+        var facilityTypeId = Guid.NewGuid();
+        HttpRequestMessage? capturedRequest = null;
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            capturedRequest = request;
+            return JsonApiResponse(
+                HttpStatusCode.OK, new { data = FacilityResource(facilityId, facilityTypeId, "Camp Blackhawk") });
+        });
+        ApiFacilityClient client = CreateClient(handler);
+
+        (FacilityReadOutcome outcome, FacilityDto? facility) = await client.GetAsync(facilityId, CancellationToken.None);
+
+        Assert.Equal(FacilityReadOutcome.Success, outcome);
+        Assert.Equal(facilityId, facility?.Id);
+        Assert.Equal("Camp Blackhawk", facility?.Name);
+        Assert.Equal(facilityTypeId, facility?.FacilityTypeId);
+        Assert.Equal(HttpMethod.Get, capturedRequest!.Method);
+        Assert.Equal($"/api/facilities/{facilityId}", capturedRequest.RequestUri!.AbsolutePath);
+        Assert.NotNull(capturedRequest.Headers.Authorization);
+    }
+
+    [Fact]
+    public async Task ReturnForbidden_WhenApiRespondsWithForbidden_ForGetAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.Forbidden));
+        ApiFacilityClient client = CreateClient(handler);
+
+        (FacilityReadOutcome outcome, FacilityDto? facility) = await client.GetAsync(Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal(FacilityReadOutcome.Forbidden, outcome);
+        Assert.Null(facility);
+    }
+
+    [Fact]
+    public async Task ReturnNotFound_WhenApiRespondsWithNotFound_ForGetAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
+        ApiFacilityClient client = CreateClient(handler);
+
+        (FacilityReadOutcome outcome, FacilityDto? facility) = await client.GetAsync(Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal(FacilityReadOutcome.NotFound, outcome);
+        Assert.Null(facility);
+    }
+
+    [Fact]
+    public async Task ThrowFacilityDataUnavailableException_WhenTheHttpCallFails_ForGetAsync()
+    {
+        var handler = StubHttpMessageHandler.ThrowingOn(() => new HttpRequestException("simulated Api outage"));
+        ApiFacilityClient client = CreateClient(handler);
+
+        await Assert.ThrowsAsync<FacilityDataUnavailableException>(
+            () => client.GetAsync(Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ThrowFacilityDataUnavailableException_WhenApiRespondsWithAnUnexpectedStatus_ForGetAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        ApiFacilityClient client = CreateClient(handler);
+
+        await Assert.ThrowsAsync<FacilityDataUnavailableException>(
+            () => client.GetAsync(Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task PatchTheTypeIdAndAttributes_WhenUpdating_ForUpdateAsync()
+    {
+        var facilityId = Guid.NewGuid();
+        var facilityTypeId = Guid.NewGuid();
+        HttpRequestMessage? capturedRequest = null;
+        string? capturedBody = null;
+        string? capturedContentType = null;
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            capturedRequest = request;
+            capturedBody = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            capturedContentType = request.Content.Headers.ContentType?.MediaType;
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
+        });
+        ApiFacilityClient client = CreateClient(handler);
+
+        await client.UpdateAsync(facilityId, "Renamed", facilityTypeId, CancellationToken.None);
+
+        Assert.Equal(HttpMethod.Patch, capturedRequest!.Method);
+        Assert.Equal($"/api/facilities/{facilityId}", capturedRequest.RequestUri!.AbsolutePath);
+        Assert.NotNull(capturedRequest.Headers.Authorization);
+        Assert.Equal(JsonApiMediaType, capturedContentType);
+        Assert.NotNull(capturedBody);
+        Assert.Contains("\"type\":\"facilities\"", capturedBody, StringComparison.Ordinal);
+        Assert.Contains($"\"id\":\"{facilityId}\"", capturedBody, StringComparison.Ordinal);
+        Assert.Contains("\"name\":\"Renamed\"", capturedBody, StringComparison.Ordinal);
+        Assert.Contains($"\"facilityTypeId\":\"{facilityTypeId}\"", capturedBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ReturnSuccess_WhenApiRespondsWithNoContent_ForUpdateAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.NoContent));
+        ApiFacilityClient client = CreateClient(handler);
+
+        (FacilityWriteOutcome outcome, IReadOnlyList<string> pointers) =
+            await client.UpdateAsync(Guid.NewGuid(), "Renamed", Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal(FacilityWriteOutcome.Success, outcome);
+        Assert.Empty(pointers);
+    }
+
+    [Fact]
+    public async Task ReturnForbidden_WhenApiRespondsWithForbidden_ForUpdateAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.Forbidden));
+        ApiFacilityClient client = CreateClient(handler);
+
+        (FacilityWriteOutcome outcome, IReadOnlyList<string> pointers) =
+            await client.UpdateAsync(Guid.NewGuid(), "Renamed", Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal(FacilityWriteOutcome.Forbidden, outcome);
+        Assert.Empty(pointers);
+    }
+
+    [Fact]
+    public async Task ReturnNotFound_WhenApiRespondsWithNotFound_ForUpdateAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
+        ApiFacilityClient client = CreateClient(handler);
+
+        (FacilityWriteOutcome outcome, IReadOnlyList<string> pointers) =
+            await client.UpdateAsync(Guid.NewGuid(), "Renamed", Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal(FacilityWriteOutcome.NotFound, outcome);
+        Assert.Empty(pointers);
+    }
+
+    [Fact]
+    public async Task ReturnInvalidWithThePointer_WhenApiRespondsWithUnprocessableEntity_ForUpdateAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => JsonApiResponse(HttpStatusCode.UnprocessableEntity, new
+        {
+            errors = new[]
+            {
+                new { title = "Unknown Facility Type.", source = new { pointer = "/data/attributes/facilityTypeId" } }
+            }
+        }));
+        ApiFacilityClient client = CreateClient(handler);
+
+        (FacilityWriteOutcome outcome, IReadOnlyList<string> pointers) =
+            await client.UpdateAsync(Guid.NewGuid(), "Renamed", Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal(FacilityWriteOutcome.Invalid, outcome);
+        Assert.Equal(["/data/attributes/facilityTypeId"], pointers);
+    }
+
+    [Fact]
+    public async Task ThrowFacilityDataUnavailableException_WhenTheHttpCallFails_ForUpdateAsync()
+    {
+        var handler = StubHttpMessageHandler.ThrowingOn(() => new HttpRequestException("simulated Api outage"));
+        ApiFacilityClient client = CreateClient(handler);
+
+        await Assert.ThrowsAsync<FacilityDataUnavailableException>(
+            () => client.UpdateAsync(Guid.NewGuid(), "Renamed", Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ThrowFacilityDataUnavailableException_WhenApiRespondsWithAnUnexpectedStatus_ForUpdateAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        ApiFacilityClient client = CreateClient(handler);
+
+        await Assert.ThrowsAsync<FacilityDataUnavailableException>(
+            () => client.UpdateAsync(Guid.NewGuid(), "Renamed", Guid.NewGuid(), CancellationToken.None));
     }
 
     private static ApiFacilityClient CreateClient(HttpMessageHandler apiHandler) =>

@@ -31,4 +31,4 @@ building and securing two.
 This ADR shared the markdown *parse-and-sanitize* pipeline, and P5-6 copied InfoPage's editor chrome next to
 it. The "tracks InfoPage's content field exactly" consequence above therefore held only by convention - two
 hand-kept copies of the Write/Preview toggle, textarea, and preview pane. P5-8 extracts that chrome into one
-`MarkdownField` component used by both editors, so the consequence is now mechanical. See ADR-0073.
+`MarkdownField` component used by both editors, so the consequence is now mechanical. See ADR-0074.

@@ -1,0 +1,49 @@
+@using VirtualLeadersGuide.Web.Activities
+
+<RadzenCard Variant="Variant.Outlined" aria-label="Add a placement">
+    <RadzenStack Gap="0.75rem">
+        <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween" AlignItems="AlignItems.Center">
+            <RadzenText TextStyle="TextStyle.Subtitle1" TagName="TagName.H2" Style="margin: 0;">Add a placement</RadzenText>
+            <RadzenText TextStyle="TextStyle.Caption" class="pb-count">@PlacedCount SO FAR</RadzenText>
+        </RadzenStack>
+
+        <PlacementTierField Label="Tab" Name="PlacementTab" Noun="tab" Required="true"
+                            Placeholder="Search or type a tab name"
+                            Options="@Model.TabOptions()" Value="@tab" ValueChanged="OnTabChanged" />
+
+        <PlacementTierField Label="Sub Tab" Name="PlacementSubTab" Noun="sub tab"
+                            Enabled="@HasTab" LockedHint="pick a tab first"
+                            Options="@(HasTab ? Model.SubTabOptions(tab!) : [])" Value="@subTab" ValueChanged="OnSubTabChanged" />
+
+        <PlacementTierField Label="Section" Name="PlacementSection" Noun="section"
+                            Enabled="@HasTab" LockedHint="pick a tab first"
+                            Options="@(HasTab ? Model.SectionOptions(tab!, subTab) : [])" Value="@section" ValueChanged="OnSectionChanged" />
+
+        <PlacementTierField Label="Sub Section" Name="PlacementSubSection" Noun="sub section"
+                            Enabled="@HasSection" LockedHint="pick a section first"
+                            Options="@(HasSection ? Model.SubSectionOptions(tab!, subTab, section!) : [])" Value="@subSection" ValueChanged="OnSubSectionChanged" />
+
+        @if (resolved is not null)
+        {
+            <RadzenStack Orientation="Orientation.Horizontal" Wrap="FlexWrap.Wrap" AlignItems="AlignItems.Center" Gap="0.35rem" class="pb-path">
+                @foreach (PathLevel level in levels)
+                {
+                    @if (level != levels[0]) { <RadzenText TextStyle="TextStyle.Caption" TagName="TagName.Span">&rsaquo;</RadzenText> }
+                    <RadzenBadge BadgeStyle="@(level.IsNew ? BadgeStyle.Success : BadgeStyle.Light)" IsPill="true"
+                                 class="@(level.IsNew ? "pb-chip pb-chip-new" : "pb-chip")">
+                        @level.Name
+                        @if (level.IsNew) { <span class="pb-new">NEW</span> }
+                    </RadzenBadge>
+                }
+            </RadzenStack>
+
+            @if (isDuplicate)
+            {
+                <RadzenAlert AlertStyle="AlertStyle.Warning" Variant="Variant.Flat" AllowClose="false" class="pb-duplicate"
+                             Text="This activity is already placed here. Change a level or leave this one as it is." />
+            }
+        }
+
+        <RadzenButton Text="Place it" ButtonType="ButtonType.Button" class="pb-place" Disabled="@(resolved is null || isDuplicate)" Click="PlaceAsync" />
+    </RadzenStack>
+</RadzenCard>

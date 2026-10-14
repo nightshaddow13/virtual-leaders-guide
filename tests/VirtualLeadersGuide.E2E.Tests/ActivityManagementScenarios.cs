@@ -90,6 +90,10 @@ public class ActivityManagementScenarios(AspireE2EFixture fixture) : E2ETestBase
             await Expect(Page).ToHaveURLAsync(
                 ActivityDetailUrlPattern, new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
 
+            string createdPath = new Uri(Page.Url).AbsolutePath;
+            Guid activityId = Guid.Parse(createdPath[(createdPath.LastIndexOf('/') + 1)..]);
+            await Page.GotoAsync(ActivityEditorUrl(eventId, activityId));
+
             string renamedTo = $"e2e-Director Renamed {Guid.NewGuid():n}";
             await Page.Locator("#Name").FillAsync(renamedTo);
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" }).ClickAsync();
@@ -176,7 +180,7 @@ public class ActivityManagementScenarios(AspireE2EFixture fixture) : E2ETestBase
     private static Regex ActivityDetailUrlPattern { get; } = new(@"activities/[0-9a-f-]{36}$");
 
     private string ActivityEditorUrl(Guid eventId, Guid activityId) =>
-        new Uri(Fixture.WebBaseUrl, $"dashboard/events/{eventId}/activities/{activityId}").ToString();
+        new Uri(Fixture.WebBaseUrl, $"dashboard/events/{eventId}/activities/{activityId}/edit").ToString();
 
     /// <summary>Creates an Activity through the real UI, returning its id. See <see cref="E2ETestBase.CreateEventAsync"/>'s identical shape.</summary>
     private async Task<Guid> CreateActivityAsync(Guid eventId, string label)

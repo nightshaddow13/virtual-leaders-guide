@@ -1,0 +1,48 @@
+@using VirtualLeadersGuide.Web.Activities
+
+<RadzenCard Variant="Variant.Outlined" aria-label="Where it appears">
+    <RadzenStack Gap="0.5rem">
+        <RadzenText TextStyle="TextStyle.Overline" TagName="TagName.H2" Style="margin: 0;">WHERE IT APPEARS</RadzenText>
+
+        @if (Roots.Count == 0)
+        {
+            <RadzenText TextStyle="TextStyle.Body2">Not placed anywhere yet. Add its first Placement with the builder.</RadzenText>
+        }
+        else
+        {
+            @* One level, not one per depth: RadzenTree applies the last level to every deeper row, and a tier's
+               children mix child tiers with placed Activities, so the template switches on the row's type. *@
+            <RadzenTree Data="@Roots" Style="width: 100%;">
+                <RadzenTreeLevel ChildrenProperty="Items" HasChildren="@(row => row is TierNode tier && tier.Items.Any())"
+                                 Expanded="@(_ => true)">
+                    <Template>
+                        @if (context.Value is TierNode tier)
+                        {
+                            <span class="ptn-tier ptn-@tier.Kind.ToString().ToLowerInvariant()">
+                                <b>@tier.Name</b>
+                                @if (tier.IsPending) { <RadzenBadge BadgeStyle="BadgeStyle.Success" IsPill="true" Text="NEW" /> }
+                            </span>
+                        }
+                        else if (context.Value is PlacementLeaf { IsPending: true } ghost)
+                        {
+                            <RadzenBadge BadgeStyle="BadgeStyle.Info" Variant="Variant.Outlined" class="ptn-pending">@ghost.ActivityName PENDING</RadzenBadge>
+                        }
+                        else if (context.Value is PlacementLeaf { IsThisActivity: true } lit)
+                        {
+                            <RadzenBadge BadgeStyle="BadgeStyle.Success" class="ptn-lit">@lit.ActivityName</RadzenBadge>
+                        }
+                        else if (context.Value is PlacementLeaf other)
+                        {
+                            <RadzenText TextStyle="TextStyle.Body2" TagName="TagName.Span">@other.ActivityName</RadzenText>
+                        }
+                    </Template>
+                </RadzenTreeLevel>
+            </RadzenTree>
+        }
+    </RadzenStack>
+</RadzenCard>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<TierNode> Roots { get; set; } = [];
+}

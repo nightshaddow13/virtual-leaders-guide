@@ -1,0 +1,48 @@
+@using VirtualLeadersGuide.Web.Activities
+
+<div class="vlg-field">
+    <label for="@Name">
+        @Label
+        @if (Required) { <RadzenText TextStyle="TextStyle.Caption" TagName="TagName.Span">*</RadzenText> }
+        else { <RadzenText TextStyle="TextStyle.Caption" TagName="TagName.Span">&mdash; optional</RadzenText> }
+    </label>
+
+    @if (!Enabled)
+    {
+        <RadzenTextBox Disabled="true" Placeholder="@LockedHint" Style="width: 100%;" />
+    }
+    else
+    {
+        <RadzenAutoComplete Value="@Value" ValueChanged="@ValueChanged" Data="@Options.Select(o => o.Name).ToList()"
+                            Name="@Name" Placeholder="@Placeholder" MinLength="0" OpenOnFocus="true"
+                            class="rz-textbox rz-input-md" Style="width: 100%;">
+            <Template>
+                <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween" Gap="1rem">
+                    <span>@context</span>
+                    <RadzenText TextStyle="TextStyle.Caption" TagName="TagName.Span">@CountText((string)context)</RadzenText>
+                </RadzenStack>
+            </Template>
+            <EmptyTemplate>
+                <RadzenText TextStyle="TextStyle.Caption">No @Noun matches yet - type a name to create one.</RadzenText>
+            </EmptyTemplate>
+        </RadzenAutoComplete>
+
+        @if (NearDuplicate is not null)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Warning" Variant="Variant.Flat" Size="AlertSize.ExtraSmall" ShowIcon="false"
+                         AllowClose="false" class="ptf-nudge">
+                Did you mean <b>@NearDuplicate</b>? Matching ignores case, so you won't end up with two.
+                <RadzenButton Text="@($"Use {NearDuplicate}")" Variant="Variant.Text" ButtonStyle="ButtonStyle.Primary"
+                              Size="ButtonSize.ExtraSmall" ButtonType="ButtonType.Button"
+                              Click="@(() => ValueChanged.InvokeAsync(NearDuplicate))" />
+            </RadzenAlert>
+        }
+        else if (IsCreating)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Success" Variant="Variant.Flat" Size="AlertSize.ExtraSmall" ShowIcon="false"
+                         AllowClose="false" class="ptf-create">
+                + Create @Noun <b>&ldquo;@Value!.Trim()&rdquo;</b>
+            </RadzenAlert>
+        }
+    }
+</div>

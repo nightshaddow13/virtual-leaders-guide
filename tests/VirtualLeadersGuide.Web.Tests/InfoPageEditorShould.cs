@@ -13,7 +13,7 @@ namespace VirtualLeadersGuide.Web.Tests;
 /// Covers <c>InfoPageEditor.razor.cs</c>'s <c>PageState</c> transitions, the grilled decision that Save is
 /// actually gated on <c>Title</c>'s validity (via <c>EditForm</c>'s <c>OnValidSubmit</c>, not a header button
 /// calling <c>SaveAsync</c> directly like <c>EventEditor</c>). The Write/Preview pane behavior itself belongs
-/// to <c>MarkdownFieldShould</c> (ADR-0073); the tests here only prove this page binds its model through it.
+/// to <c>MarkdownFieldShould</c> (ADR-0074); the tests here only prove this page binds its model through it.
 /// </remarks>
 public class InfoPageEditorShould : BunitContext
 {

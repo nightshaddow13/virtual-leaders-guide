@@ -28,7 +28,7 @@ public partial class ActivityEditor
     public Guid EventId { get; set; }
 
     /// <summary>The Activity being edited, or <see langword="null"/> when creating a new one.</summary>
-    /// <remarks><see langword="null"/> on <c>.../activities/new</c>; set on <c>.../activities/{ActivityId:guid}</c> - same shape as <c>InfoPageEditor.InfoPageId</c>.</remarks>
+    /// <remarks><see langword="null"/> on <c>.../activities/new</c>; set on <c>.../activities/{ActivityId:guid}/edit</c> - same shape as <c>InfoPageEditor.InfoPageId</c>, but at <c>/edit</c> because <c>/{ActivityId}</c> is the detail page.</remarks>
     [Parameter]
     public Guid? ActivityId { get; set; }
 
@@ -153,11 +153,9 @@ public partial class ActivityEditor
     }
 
     /// <remarks>
-    /// Lands on the new Activity's own edit page rather than the list, matching
-    /// <c>InfoPageEditor.razor.cs</c> - and so that once the Placement builder arrives on that page (P5-11,
-    /// #96), creating an Activity flows straight into placing it. The navigation is in-circuit (no
-    /// <c>forceLoad</c>): this same component instance survives, <see cref="ActivityId"/> goes from
-    /// <see langword="null"/> to set, and <see cref="OnParametersSetAsync"/> re-reads the saved Activity.
+    /// Lands on the new Activity's own page (<c>ActivityDetail</c>, which hosts the Placement builder - P5-11,
+    /// #96) rather than the list, so creating an Activity flows straight into placing it. The navigation is
+    /// in-circuit (no <c>forceLoad</c>).
     /// <see cref="ActivityWriteOutcome.Invalid"/> is only reachable via the unknown-Event pointer, which
     /// normal navigation can't trigger since <see cref="EventId"/> always comes from an already-verified
     /// route - there is no form field to attach that error to.

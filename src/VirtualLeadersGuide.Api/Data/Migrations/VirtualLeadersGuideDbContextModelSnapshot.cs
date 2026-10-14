@@ -183,6 +183,83 @@ namespace VirtualLeadersGuide.Api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("VirtualLeadersGuide.Api.Data.ActivityPlacement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ActivityId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("SectionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("SubSectionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("SubTabId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("TabId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActivityId");
+
+                    b.HasIndex("EventId");
+
+                    b.HasIndex("SectionId");
+
+                    b.HasIndex("SubSectionId");
+
+                    b.HasIndex("SubTabId");
+
+                    b.HasIndex("TabId");
+
+                    b.HasIndex("ActivityId", "TabId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_ActivityPlacements_TabOnly")
+                        .HasFilter("[SubTabId] IS NULL AND [SectionId] IS NULL AND [SubSectionId] IS NULL");
+
+                    b.HasIndex("ActivityId", "TabId", "SectionId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_ActivityPlacements_TabSection")
+                        .HasFilter("[SubTabId] IS NULL AND [SectionId] IS NOT NULL AND [SubSectionId] IS NULL");
+
+                    b.HasIndex("ActivityId", "TabId", "SubTabId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_ActivityPlacements_TabSubTab")
+                        .HasFilter("[SubTabId] IS NOT NULL AND [SectionId] IS NULL AND [SubSectionId] IS NULL");
+
+                    b.HasIndex("ActivityId", "TabId", "SectionId", "SubSectionId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_ActivityPlacements_TabSectionSubSection")
+                        .HasFilter("[SubTabId] IS NULL AND [SectionId] IS NOT NULL AND [SubSectionId] IS NOT NULL");
+
+                    b.HasIndex("ActivityId", "TabId", "SubTabId", "SectionId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_ActivityPlacements_TabSubTabSection")
+                        .HasFilter("[SubTabId] IS NOT NULL AND [SectionId] IS NOT NULL AND [SubSectionId] IS NULL");
+
+                    b.HasIndex("ActivityId", "TabId", "SubTabId", "SectionId", "SubSectionId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_ActivityPlacements_TabSubTabSectionSubSection")
+                        .HasFilter("[SubTabId] IS NOT NULL AND [SectionId] IS NOT NULL AND [SubSectionId] IS NOT NULL");
+
+                    b.ToTable("ActivityPlacements", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ActivityPlacements_SubSectionRequiresSection", "[SubSectionId] IS NULL OR [SectionId] IS NOT NULL");
+                        });
+                });
+
             modelBuilder.Entity("VirtualLeadersGuide.Api.Data.ApplicationUser", b =>
                 {
                     b.Property<string>("Id")
@@ -440,6 +517,45 @@ namespace VirtualLeadersGuide.Api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("VirtualLeadersGuide.Api.Data.Section", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid?>("ParentSubTabId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ParentTabId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId");
+
+                    b.HasIndex("ParentSubTabId");
+
+                    b.HasIndex("ParentTabId");
+
+                    b.ToTable("Sections", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Sections_ExactlyOneParent", "(ParentTabId IS NOT NULL AND ParentSubTabId IS NULL) OR (ParentTabId IS NULL AND ParentSubTabId IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_Sections_Name_NotEmpty", "TRIM(Name) <> ''");
+                        });
+                });
+
             modelBuilder.Entity("VirtualLeadersGuide.Api.Data.SmokeTestEntity", b =>
                 {
                     b.Property<int>("Id")
@@ -455,6 +571,97 @@ namespace VirtualLeadersGuide.Api.Data.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("SmokeTestEntities");
+                });
+
+            modelBuilder.Entity("VirtualLeadersGuide.Api.Data.SubSection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid>("SectionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId");
+
+                    b.HasIndex("SectionId");
+
+                    b.ToTable("SubSections", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SubSections_Name_NotEmpty", "TRIM(Name) <> ''");
+                        });
+                });
+
+            modelBuilder.Entity("VirtualLeadersGuide.Api.Data.SubTab", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("TabId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId");
+
+                    b.HasIndex("TabId");
+
+                    b.ToTable("SubTabs", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SubTabs_Name_NotEmpty", "TRIM(Name) <> ''");
+                        });
+                });
+
+            modelBuilder.Entity("VirtualLeadersGuide.Api.Data.Tab", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId");
+
+                    b.ToTable("Tabs", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Tabs_Name_NotEmpty", "TRIM(Name) <> ''");
+                        });
                 });
 
             modelBuilder.Entity("VirtualLeadersGuide.Api.Data.UserRole", b =>
@@ -568,6 +775,46 @@ namespace VirtualLeadersGuide.Api.Data.Migrations
                     b.Navigation("Event");
                 });
 
+            modelBuilder.Entity("VirtualLeadersGuide.Api.Data.ActivityPlacement", b =>
+                {
+                    b.HasOne("VirtualLeadersGuide.Api.Data.Activity", "Activity")
+                        .WithMany()
+                        .HasForeignKey("ActivityId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("VirtualLeadersGuide.Api.Data.Section", "Section")
+                        .WithMany()
+                        .HasForeignKey("SectionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("VirtualLeadersGuide.Api.Data.SubSection", "SubSection")
+                        .WithMany()
+                        .HasForeignKey("SubSectionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("VirtualLeadersGuide.Api.Data.SubTab", "SubTab")
+                        .WithMany()
+                        .HasForeignKey("SubTabId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("VirtualLeadersGuide.Api.Data.Tab", "Tab")
+                        .WithMany()
+                        .HasForeignKey("TabId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Activity");
+
+                    b.Navigation("Section");
+
+                    b.Navigation("SubSection");
+
+                    b.Navigation("SubTab");
+
+                    b.Navigation("Tab");
+                });
+
             modelBuilder.Entity("VirtualLeadersGuide.Api.Data.Facility", b =>
                 {
                     b.HasOne("VirtualLeadersGuide.Api.Data.FacilityType", "FacilityType")
@@ -596,6 +843,45 @@ namespace VirtualLeadersGuide.Api.Data.Migrations
                     b.Navigation("Event");
 
                     b.Navigation("PageType");
+                });
+
+            modelBuilder.Entity("VirtualLeadersGuide.Api.Data.Section", b =>
+                {
+                    b.HasOne("VirtualLeadersGuide.Api.Data.SubTab", "ParentSubTab")
+                        .WithMany()
+                        .HasForeignKey("ParentSubTabId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("VirtualLeadersGuide.Api.Data.Tab", "ParentTab")
+                        .WithMany()
+                        .HasForeignKey("ParentTabId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ParentSubTab");
+
+                    b.Navigation("ParentTab");
+                });
+
+            modelBuilder.Entity("VirtualLeadersGuide.Api.Data.SubSection", b =>
+                {
+                    b.HasOne("VirtualLeadersGuide.Api.Data.Section", "Section")
+                        .WithMany()
+                        .HasForeignKey("SectionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Section");
+                });
+
+            modelBuilder.Entity("VirtualLeadersGuide.Api.Data.SubTab", b =>
+                {
+                    b.HasOne("VirtualLeadersGuide.Api.Data.Tab", "Tab")
+                        .WithMany()
+                        .HasForeignKey("TabId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Tab");
                 });
 
             modelBuilder.Entity("VirtualLeadersGuide.Api.Data.UserRole", b =>

@@ -1,6 +1,6 @@
 namespace VirtualLeadersGuide.Web.Facilities;
 
-/// <summary>Outcomes <see cref="ApiFacilityClient.ListAsync"/> distinguishes.</summary>
+/// <summary>Outcomes <see cref="ApiFacilityClient.ListAsync"/> and <see cref="ApiFacilityClient.GetAsync"/> distinguish.</summary>
 public enum FacilityReadOutcome
 {
     Success,
@@ -12,5 +12,13 @@ public enum FacilityReadOutcome
     /// behind its own <c>EventAccessView.IsAdmin</c> gate (ADR-0031 - that gate is a rendering hint, never
     /// the authority).
     /// </remarks>
-    Forbidden
+    Forbidden,
+
+    /// <summary>No Facility has the requested id.</summary>
+    /// <remarks>
+    /// The Facility id doesn't resolve - a stale bookmark, or a row another Admin deleted between the list
+    /// render and the click. Only <see cref="ApiFacilityClient.GetAsync"/> produces it; a collection read
+    /// has no single id to miss.
+    /// </remarks>
+    NotFound
 }

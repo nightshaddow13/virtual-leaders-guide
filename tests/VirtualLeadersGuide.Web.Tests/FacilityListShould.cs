@@ -1,5 +1,6 @@
 using System.Net;
 using Bunit;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using VirtualLeadersGuide.Web.Components.Pages;
 
@@ -9,7 +10,8 @@ namespace VirtualLeadersGuide.Web.Tests;
 /// Covers the grilled access-guard design (P8-3, #167): this page is Admin-only despite
 /// <c>FacilityAccessPolicy.CanRead</c> being open to any signed-in Admin or Director (ADR-0070's amendment) -
 /// a Director sees the Denied panel, not a narrower grid. Mirrors <see cref="ActivityListShould"/>'s shape
-/// otherwise.
+/// otherwise. P8-4 (#168) adds the icon-only Edit row action (ADR-0037); the Name stays unlinked until P9's
+/// detail page exists (ADR-0073).
 /// </remarks>
 public class FacilityListShould : BunitContext
 {
@@ -110,6 +112,23 @@ public class FacilityListShould : BunitContext
     }
 
     [Fact]
+    public void NavigateToTheNewFacilityForm_WhenAddYourFirstFacilityIsClicked_ForTheEmptyState()
+    {
+        RegisterClients(
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = Array.Empty<object>() }),
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = Array.Empty<object>() }));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("admin-1");
+        auth.SetRoles("Admin");
+        IRenderedComponent<FacilityList> cut = Render<FacilityList>();
+
+        cut.FindAll("button").First(button => button.TextContent.Contains("Add your first facility", StringComparison.Ordinal)).Click();
+
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        Assert.EndsWith("dashboard/facilities/new", navigation.Uri, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ShowAnInlineError_WhenTheFacilityStoreThrows_ForLoadDataAsync()
     {
         RegisterClients(
@@ -140,6 +159,66 @@ public class FacilityListShould : BunitContext
         Assert.Contains('—'.ToString(), cut.Markup, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void RenderOneIconOnlyEditButtonPerRow_WhenFacilitiesExist_ForLoadDataAsync()
+    {
+        var facilityTypeId = Guid.NewGuid();
+        RegisterClients(
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = new[] { FacilityTypeResource(facilityTypeId, "Camp") } }),
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new
+            {
+                data = new[] { FacilityResource(facilityTypeId, "Camp Blackhawk"), FacilityResource(facilityTypeId, "Pinewood") }
+            }));
+        SignInAsAdmin();
+
+        IRenderedComponent<FacilityList> cut = Render<FacilityList>();
+
+        var editButtons = cut.FindAll("button[aria-label='Edit']");
+        Assert.Equal(2, editButtons.Count);
+        Assert.All(editButtons, button => Assert.DoesNotContain("Edit", button.TextContent, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void NavigateToTheFacilitysEditPage_WhenTheEditButtonIsClicked_ForLoadDataAsync()
+    {
+        var facilityTypeId = Guid.NewGuid();
+        var facilityId = Guid.NewGuid();
+        RegisterClients(
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = new[] { FacilityTypeResource(facilityTypeId, "Camp") } }),
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new
+            {
+                data = new[] { FacilityResource(facilityTypeId, "Camp Blackhawk", facilityId) }
+            }));
+        SignInAsAdmin();
+
+        IRenderedComponent<FacilityList> cut = Render<FacilityList>();
+        cut.Find("button[aria-label='Edit']").Click();
+
+        var navigation = Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>();
+        Assert.EndsWith($"dashboard/facilities/{facilityId}/edit", navigation.Uri, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void NotLinkTheName_WhenFacilitiesExist_ForLoadDataAsync()
+    {
+        var facilityTypeId = Guid.NewGuid();
+        RegisterClients(
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = new[] { FacilityTypeResource(facilityTypeId, "Camp") } }),
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = new[] { FacilityResource(facilityTypeId, "Camp Blackhawk") } }));
+        SignInAsAdmin();
+
+        IRenderedComponent<FacilityList> cut = Render<FacilityList>();
+
+        Assert.DoesNotContain(cut.FindAll("a"), link => link.TextContent.Contains("Camp Blackhawk", StringComparison.Ordinal));
+    }
+
+    private void SignInAsAdmin()
+    {
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("admin-1");
+        auth.SetRoles("Admin");
+    }
+
     private void RegisterClients(HttpMessageHandler facilityTypeHandler, HttpMessageHandler facilityHandler)
     {
         Services.AddSingleton(ApiClientTestFactory.CreateFacilityTypeClient(facilityTypeHandler));
@@ -154,10 +233,10 @@ public class FacilityListShould : BunitContext
         attributes = new { name }
     };
 
-    private static object FacilityResource(Guid facilityTypeId, string name) => new
+    private static object FacilityResource(Guid facilityTypeId, string name, Guid? id = null) => new
     {
         type = "facilities",
-        id = Guid.NewGuid().ToString(),
+        id = (id ?? Guid.NewGuid()).ToString(),
         attributes = new { name, facilityTypeId }
     };
 }

@@ -7,7 +7,7 @@ namespace VirtualLeadersGuide.Web.Tests;
 
 /// <remarks>
 /// Owns the Write/Preview behavior <c>ActivityEditorShould</c> and <c>InfoPageEditorShould</c> used to each
-/// assert for themselves before ADR-0073 extracted the editor into <see cref="MarkdownField"/>. Those classes
+/// assert for themselves before ADR-0074 extracted the editor into <see cref="MarkdownField"/>. Those classes
 /// keep one test apiece proving their own model is actually bound through it. The typing test drives
 /// <c>Input(...)</c>, not <c>Change(...)</c>, on purpose: every keystroke must update the Preview, not only a
 /// blur/tab-away (an E2E-caught bug the InfoPage editor once shipped with), and <c>Change(...)</c> would have

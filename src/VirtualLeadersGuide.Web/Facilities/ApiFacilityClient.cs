@@ -11,7 +11,8 @@ namespace VirtualLeadersGuide.Web.Facilities;
 /// through <see cref="InternalApiClient"/>, not a bare <c>IHttpClientFactory.CreateClient("Api")</c>,
 /// because <c>/api/*</c> requires the internal JWT that only <see cref="InternalApiClient"/> attaches. The
 /// read/update/delete methods <c>FacilityResourceDefinition</c> already authorizes on the Api side arrive as
-/// their own UI needs them - P8-3 (#167) adds the list read; P8-4/P8-5 (#168/#169) still owe update/delete.
+/// their own UI needs them - P8-3 (#167) adds the list read, P8-4 (#168) the single read and update; P8-5
+/// (#169) still owes delete.
 /// Request plumbing shared with <see cref="ApiFacilityTypeClient"/> lives in
 /// <see cref="FacilityApiClientBase"/>.
 /// </remarks>
@@ -89,6 +90,80 @@ public sealed class ApiFacilityClient(InternalApiClient apiClient) : FacilityApi
         EnsureExpectedStatus(response, HttpStatusCode.Created);
         FacilityDocument created = await ReadAsync<FacilityDocument>(response, cancellationToken);
         return (FacilityWriteOutcome.Success, ToDto(created.Data), []);
+    }
+
+    /// <summary>Reads a single Facility by id.</summary>
+    /// <param name="id">The Facility's id.</param>
+    /// <param name="cancellationToken">Propagated to the underlying HTTP call.</param>
+    /// <returns>
+    /// <see cref="FacilityReadOutcome.Success"/> with the Facility; <see cref="FacilityReadOutcome.Forbidden"/>
+    /// if the caller holds no recognized role claim (ADR-0070); or <see cref="FacilityReadOutcome.NotFound"/>
+    /// if no such Facility exists.
+    /// </returns>
+    public async Task<(FacilityReadOutcome Outcome, FacilityDto? Facility)> GetAsync(
+        Guid id, CancellationToken cancellationToken)
+    {
+        using var request = NewRequest(HttpMethod.Get, $"{FacilitiesPath}/{id}");
+        using HttpResponseMessage response = await SendAsync(request, cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            return (FacilityReadOutcome.Forbidden, null);
+        }
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return (FacilityReadOutcome.NotFound, null);
+        }
+
+        EnsureExpectedStatus(response, HttpStatusCode.OK);
+        FacilityDocument document = await ReadAsync<FacilityDocument>(response, cancellationToken);
+        return (FacilityReadOutcome.Success, ToDto(document.Data));
+    }
+
+    /// <summary>Changes an existing Facility's Name and Facility Type.</summary>
+    /// <param name="id">The Facility to change.</param>
+    /// <param name="name">The Facility's new display Name.</param>
+    /// <param name="facilityTypeId">The Facility Type to tag it with - resolved or just created by the caller.</param>
+    /// <param name="cancellationToken">Propagated to the underlying HTTP call.</param>
+    /// <returns>
+    /// <see cref="FacilityWriteOutcome.Success"/> (Api returns 204); <see cref="FacilityWriteOutcome.Forbidden"/>
+    /// if the caller isn't an Admin (ADR-0070); <see cref="FacilityWriteOutcome.NotFound"/> if the Facility is
+    /// gone; or <see cref="FacilityWriteOutcome.Invalid"/> with the offending pointer if
+    /// <paramref name="facilityTypeId"/> doesn't exist.
+    /// </returns>
+    public async Task<(FacilityWriteOutcome Outcome, IReadOnlyList<string> Pointers)> UpdateAsync(
+        Guid id, string name, Guid facilityTypeId, CancellationToken cancellationToken)
+    {
+        var body = new FacilityDocument
+        {
+            Data = new FacilityResourceObject
+            {
+                Type = ResourceType,
+                Id = id.ToString(),
+                Attributes = new FacilityAttributesDto { Name = name, FacilityTypeId = facilityTypeId }
+            }
+        };
+        using var request = NewRequest(HttpMethod.Patch, $"{FacilitiesPath}/{id}", body);
+        using HttpResponseMessage response = await SendAsync(request, cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            return (FacilityWriteOutcome.Forbidden, []);
+        }
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return (FacilityWriteOutcome.NotFound, []);
+        }
+
+        if (response.StatusCode == HttpStatusCode.UnprocessableEntity)
+        {
+            return (FacilityWriteOutcome.Invalid, await ReadErrorPointersAsync(response, cancellationToken));
+        }
+
+        EnsureExpectedStatus(response, HttpStatusCode.NoContent);
+        return (FacilityWriteOutcome.Success, []);
     }
 
     private static async Task<IReadOnlyList<string>> ReadErrorPointersAsync(
