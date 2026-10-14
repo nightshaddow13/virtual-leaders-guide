@@ -412,4 +412,93 @@ public class PlacementTreeModelShould
         Assert.Equal("Morning › Round Robin › Waterfront › Canoeing", leaf.Path.Display);
         Assert.Null(Model(new PlacementPath("Evening")).Roots.Single(r => r.Name == "Evening").Leaves.Single().PlacementId);
     }
+    // Paired with PlacementsResourceShould's *_ForDelete cases: TierReaper (Api) and DescribeRemoval (Web)
+    // apply the same reference rules and can't share code, so each scenario below exists in both suites.
+
+    private static PlacementTreeModel ModelOf(PlacementTreeDto server) =>
+        new(server, ThisActivity, "Canoe Basics", new Dictionary<Guid, string> { [OtherActivity] = "Swamped Canoe Rescue" }, []);
+
+    [Fact]
+    public void ReapEveryLevel_WhenNothingElseUsesAnyOfThem_ForDescribeRemoval()
+    {
+        Guid removed = Guid.NewGuid();
+        PlacementTreeModel model = ModelOf(new PlacementTreeDto
+        {
+            Tabs = [new TabDto { Id = _morning, Name = "Morning", SortOrder = 0 }],
+            SubTabs = [new SubTabDto { Id = _roundRobin, TabId = _morning, Name = "Round Robin", SortOrder = 0 }],
+            Sections = [new SectionDto { Id = _waterfront, ParentSubTabId = _roundRobin, Name = "Waterfront", SortOrder = 0 }],
+            SubSections = [new SubSectionDto { Id = _canoeing, SectionId = _waterfront, Name = "Canoeing", SortOrder = 0 }],
+            Placements = [new PlacementDto { Id = removed, ActivityId = ThisActivity, TabId = _morning, SubTabId = _roundRobin, SectionId = _waterfront, SubSectionId = _canoeing, SortOrder = 0 }]
+        });
+
+        RemovalImpact impact = model.DescribeRemoval(removed)!;
+
+        Assert.Equal([TierKind.SubSection, TierKind.Section, TierKind.SubTab, TierKind.Tab], impact.Reaped.Select(t => t.Kind));
+        Assert.Empty(impact.Surviving);
+    }
+
+    [Fact]
+    public void ReapASubTabParentedSectionAndItsSubTabButKeepTheTab_ForDescribeRemoval()
+    {
+        Guid removed = Guid.NewGuid();
+        PlacementTreeModel model = ModelOf(new PlacementTreeDto
+        {
+            Tabs = [new TabDto { Id = _morning, Name = "Morning", SortOrder = 0 }],
+            SubTabs = [new SubTabDto { Id = _roundRobin, TabId = _morning, Name = "Round Robin", SortOrder = 0 }],
+            Sections = [new SectionDto { Id = _waterfront, ParentSubTabId = _roundRobin, Name = "Waterfront", SortOrder = 0 }],
+            Placements =
+            [
+                new PlacementDto { Id = removed, ActivityId = ThisActivity, TabId = _morning, SubTabId = _roundRobin, SectionId = _waterfront, SortOrder = 0 },
+                new PlacementDto { Id = Guid.NewGuid(), ActivityId = OtherActivity, TabId = _morning, SortOrder = 0 }
+            ]
+        });
+
+        RemovalImpact impact = model.DescribeRemoval(removed)!;
+
+        Assert.Equal([TierKind.Section, TierKind.SubTab], impact.Reaped.Select(t => t.Kind));
+        Assert.Equal(["Morning"], impact.Surviving.Select(t => t.Name));
+    }
+
+    [Fact]
+    public void ReapATabParentedSectionButKeepTheTab_ForDescribeRemoval()
+    {
+        Guid removed = Guid.NewGuid();
+        PlacementTreeModel model = ModelOf(new PlacementTreeDto
+        {
+            Tabs = [new TabDto { Id = _morning, Name = "Morning", SortOrder = 0 }],
+            Sections = [new SectionDto { Id = _waterfront, ParentTabId = _morning, Name = "Waterfront", SortOrder = 0 }],
+            Placements =
+            [
+                new PlacementDto { Id = removed, ActivityId = ThisActivity, TabId = _morning, SectionId = _waterfront, SortOrder = 0 },
+                new PlacementDto { Id = Guid.NewGuid(), ActivityId = OtherActivity, TabId = _morning, SortOrder = 0 }
+            ]
+        });
+
+        RemovalImpact impact = model.DescribeRemoval(removed)!;
+
+        Assert.Equal([TierKind.Section], impact.Reaped.Select(t => t.Kind));
+        Assert.Equal(["Morning"], impact.Surviving.Select(t => t.Name));
+    }
+
+    [Fact]
+    public void KeepTheSection_WhenOnlyItsSubSectionStillHasPlacements_ForDescribeRemoval()
+    {
+        Guid removed = Guid.NewGuid();
+        PlacementTreeModel model = ModelOf(new PlacementTreeDto
+        {
+            Tabs = [new TabDto { Id = _morning, Name = "Morning", SortOrder = 0 }],
+            Sections = [new SectionDto { Id = _waterfront, ParentTabId = _morning, Name = "Waterfront", SortOrder = 0 }],
+            SubSections = [new SubSectionDto { Id = _canoeing, SectionId = _waterfront, Name = "Canoeing", SortOrder = 0 }],
+            Placements =
+            [
+                new PlacementDto { Id = removed, ActivityId = ThisActivity, TabId = _morning, SectionId = _waterfront, SortOrder = 0 },
+                new PlacementDto { Id = Guid.NewGuid(), ActivityId = OtherActivity, TabId = _morning, SectionId = _waterfront, SubSectionId = _canoeing, SortOrder = 0 }
+            ]
+        });
+
+        RemovalImpact impact = model.DescribeRemoval(removed)!;
+
+        Assert.Empty(impact.Reaped);
+        Assert.Equal(["Morning", "Waterfront"], impact.Surviving.Select(t => t.Name));
+    }
 }
