@@ -22,3 +22,18 @@ public enum ActivityReadOutcome
     Forbidden,
     NotFound
 }
+
+/// <summary>Outcomes <see cref="ApiPlacementClient.DeleteAsync"/> distinguishes (P5-12, #97).</summary>
+public enum PlacementRemoveOutcome
+{
+    Success,
+
+    /// <remarks>The caller isn't an Admin or an assigned Director (ADR-0069's posture, extended to Placement).</remarks>
+    Forbidden,
+
+    /// <remarks>The Placement is already gone - another tab or user removed it first. The caller reloads the tree.</remarks>
+    NotFound,
+
+    /// <remarks>Api refused: this is the Activity's only Placement (ADR-0050). Normally caught client-side first, so this is the stale-tree case.</remarks>
+    LastPlacement
+}

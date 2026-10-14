@@ -292,4 +292,124 @@ public class PlacementTreeModelShould
     {
         Assert.Equal("Morning › Waterfront", new PlacementPath("Morning", null, "Waterfront").Display);
     }
+
+    // --- DescribeRemoval (P5-12, #97) -------------------------------------------------------------------
+
+    /// <summary>
+    /// Morning › Round Robin › Waterfront › Canoeing holds "This" (the placement under test) and "Other" sits at
+    /// Morning › Round Robin; "This" is also placed at the bare Afternoon Tab. Which of those Tiers a removal
+    /// reaps depends on what <paramref name="otherAtCanoeing"/>/<paramref name="otherAtWaterfront"/> add.
+    /// </summary>
+    private (PlacementTreeModel Model, Guid Removed) RemovalTree(bool otherAtCanoeing = false, bool otherAtWaterfront = false)
+    {
+        Guid removed = Guid.NewGuid();
+        var placements = new List<PlacementDto>
+        {
+            new() { Id = removed, ActivityId = ThisActivity, TabId = _morning, SubTabId = _roundRobin, SectionId = _waterfront, SubSectionId = _canoeing, SortOrder = 2 },
+            new() { Id = Guid.NewGuid(), ActivityId = ThisActivity, TabId = _afternoon, SortOrder = 0 },
+            new() { Id = Guid.NewGuid(), ActivityId = OtherActivity, TabId = _morning, SubTabId = _roundRobin, SortOrder = 0 }
+        };
+        if (otherAtCanoeing)
+        {
+            placements.Add(new() { Id = Guid.NewGuid(), ActivityId = OtherActivity, TabId = _morning, SubTabId = _roundRobin, SectionId = _waterfront, SubSectionId = _canoeing, SortOrder = 0 });
+        }
+
+        if (otherAtWaterfront)
+        {
+            placements.Add(new() { Id = Guid.NewGuid(), ActivityId = OtherActivity, TabId = _morning, SubTabId = _roundRobin, SectionId = _waterfront, SortOrder = 0 });
+        }
+
+        PlacementTreeDto server = new()
+        {
+            Tabs = [new TabDto { Id = _morning, Name = "Morning", SortOrder = 0 }, new TabDto { Id = _afternoon, Name = "Afternoon", SortOrder = 1 }],
+            SubTabs = [new SubTabDto { Id = _roundRobin, TabId = _morning, Name = "Round Robin", SortOrder = 0 }],
+            Sections = [new SectionDto { Id = _waterfront, ParentSubTabId = _roundRobin, Name = "Waterfront", SortOrder = 0 }],
+            SubSections = [new SubSectionDto { Id = _canoeing, SectionId = _waterfront, Name = "Canoeing", SortOrder = 0 }],
+            Placements = placements
+        };
+
+        return (new PlacementTreeModel(server, ThisActivity, "Canoe Basics", new Dictionary<Guid, string> { [OtherActivity] = "Swamped Canoe Rescue" }, []), removed);
+    }
+
+    [Fact]
+    public void ReapTheSubSectionAndSectionButKeepTheSubTabAndTab_WhenNothingElseIsUnderThem_ForDescribeRemoval()
+    {
+        (PlacementTreeModel model, Guid removed) = RemovalTree();
+
+        RemovalImpact impact = model.DescribeRemoval(removed)!;
+
+        Assert.Equal([TierKind.SubSection, TierKind.Section], impact.Reaped.Select(t => t.Kind));
+        Assert.Equal(["Morning", "Round Robin"], impact.Surviving.Select(t => t.Name));
+        Assert.Equal("Morning › Round Robin › Waterfront › Canoeing", impact.Path.Display);
+    }
+
+    [Fact]
+    public void ReapNothing_WhenAnotherActivityIsAtTheSameSubSection_ForDescribeRemoval()
+    {
+        (PlacementTreeModel model, Guid removed) = RemovalTree(otherAtCanoeing: true);
+
+        RemovalImpact impact = model.DescribeRemoval(removed)!;
+
+        Assert.Empty(impact.Reaped);
+        Assert.Equal(["Morning", "Round Robin", "Waterfront", "Canoeing"], impact.Surviving.Select(t => t.Name));
+    }
+
+    [Fact]
+    public void ReapOnlyTheSubSection_WhenAnotherActivityIsAtItsSection_ForDescribeRemoval()
+    {
+        (PlacementTreeModel model, Guid removed) = RemovalTree(otherAtWaterfront: true);
+
+        RemovalImpact impact = model.DescribeRemoval(removed)!;
+
+        Assert.Equal([TierKind.SubSection], impact.Reaped.Select(t => t.Kind));
+        Assert.Equal(["Canoeing"], impact.Reaped.Select(t => t.Name));
+    }
+
+    [Fact]
+    public void CountTheActivitysOtherSavedPlacements_WhenDescribed_ForDescribeRemoval()
+    {
+        (PlacementTreeModel model, Guid removed) = RemovalTree();
+
+        Assert.Equal(1, model.DescribeRemoval(removed)!.OtherPlacementsOfThisActivity);
+    }
+
+    [Fact]
+    public void IgnoreGhostRows_WhenCountingOtherPlacementsAndTierUse_ForDescribeRemoval()
+    {
+        (_, Guid removed) = RemovalTree();
+        var withGhost = new PlacementTreeModel(
+            new PlacementTreeDto
+            {
+                Tabs = [new TabDto { Id = _morning, Name = "Morning", SortOrder = 0 }],
+                Placements = [new PlacementDto { Id = removed, ActivityId = ThisActivity, TabId = _morning, SortOrder = 0 }]
+            },
+            ThisActivity, "Canoe Basics", new Dictionary<Guid, string>(), [new PlacementPath("Morning"), new PlacementPath("Evening")]);
+
+        RemovalImpact impact = withGhost.DescribeRemoval(removed)!;
+
+        Assert.Equal(0, impact.OtherPlacementsOfThisActivity);
+        Assert.Equal([TierKind.Tab], impact.Reaped.Select(t => t.Kind));
+    }
+
+    [Fact]
+    public void ReturnNull_WhenThePlacementIsNotInTheLoadedTree_ForDescribeRemoval()
+    {
+        (PlacementTreeModel model, _) = RemovalTree();
+
+        Assert.Null(model.DescribeRemoval(Guid.NewGuid()));
+    }
+
+    [Fact]
+    public void CarryThePlacementIdPathAndSortOrderOnSavedLeavesAndNullOnGhosts_WhenTheTreeIsBuilt_ForLeaves()
+    {
+        (PlacementTreeModel model, Guid removed) = RemovalTree();
+        TierNode canoeing = model.Roots[0].Children.Single().Children.Single().Children.Single();
+
+        PlacementLeaf leaf = Assert.Single(canoeing.Leaves);
+
+        Assert.Equal(removed, leaf.PlacementId);
+        Assert.Equal(2, leaf.SortOrder);
+        Assert.Equal("Morning › Round Robin › Waterfront › Canoeing", leaf.Path.Display);
+        Assert.Null(Model(new PlacementPath("Evening")).Roots.Single(r => r.Name == "Evening").Leaves.Single().PlacementId);
+    }
 }

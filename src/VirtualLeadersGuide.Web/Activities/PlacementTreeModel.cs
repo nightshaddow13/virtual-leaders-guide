@@ -14,7 +14,12 @@ public enum TierKind
 /// <param name="ActivityName">Its display name.</param>
 /// <param name="IsThisActivity">Whether this is the Activity whose page is open - drawn lit.</param>
 /// <param name="IsPending">Whether this is an unsaved ghost row - drawn dashed.</param>
-public sealed record PlacementLeaf(Guid ActivityId, string ActivityName, bool IsThisActivity, bool IsPending)
+/// <param name="PlacementId">The saved Placement's id, or <see langword="null"/> for a ghost row (P5-12, #97).</param>
+/// <param name="Path">The Tier path this row sits at - what a remove names in its dialog, toast, and Undo.</param>
+/// <param name="SortOrder">The saved Placement's position among those sharing its path, restored by Undo; 0 for a ghost.</param>
+public sealed record PlacementLeaf(
+    Guid ActivityId, string ActivityName, bool IsThisActivity, bool IsPending,
+    Guid? PlacementId, PlacementPath Path, int SortOrder)
 {
     /// <summary>Always empty - a placed Activity is a leaf. Exists so <c>RadzenTree</c>'s single level can read the same <c>Items</c> property off every row, tier or leaf.</summary>
     public IEnumerable<object> Items => [];
@@ -62,6 +67,19 @@ public sealed class TierNode
 /// <param name="ActivityCount">Distinct Activities placed at or under it, ghosts included.</param>
 public sealed record TierOption(string Name, int ActivityCount);
 
+/// <summary>One Tier named by kind and name - a level a removal reaps or leaves standing.</summary>
+/// <param name="Kind">Which Tier this is.</param>
+/// <param name="Name">Its name.</param>
+public sealed record TierRef(TierKind Kind, string Name);
+
+/// <summary>What removing one saved Placement does to the guide (P5-12, #97; wireframe turn 2c).</summary>
+/// <param name="Path">The removed Placement's Tier path.</param>
+/// <param name="Reaped">Tiers nothing else references afterwards, deepest first - Api deletes them with the Placement.</param>
+/// <param name="Surviving">Tiers on the path that stay because something else still uses them, shallowest first.</param>
+/// <param name="OtherPlacementsOfThisActivity">How many saved Placements the Activity keeps. Zero means this is its last (ADR-0050).</param>
+public sealed record RemovalImpact(
+    PlacementPath Path, IReadOnlyList<TierRef> Reaped, IReadOnlyList<TierRef> Surviving, int OtherPlacementsOfThisActivity);
+
 /// <summary>One level of a resolved path, for the NEW badges (wireframe 1e-7).</summary>
 /// <param name="Kind">Which Tier this level is.</param>
 /// <param name="Name">The name as it will be sent (canonicalized to an existing Tier's casing when one matches).</param>
@@ -87,6 +105,7 @@ public sealed class PlacementTreeModel
 
     private readonly List<TierNode> _roots = [];
     private readonly HashSet<PlacementPath> _thisActivitysPaths = [];
+    private readonly PlacementTreeDto _server;
 
     /// <summary>Builds the merged model.</summary>
     /// <param name="server">The Event's persisted Tiers and Placements.</param>
@@ -98,6 +117,7 @@ public sealed class PlacementTreeModel
         PlacementTreeDto server, Guid activityId, string activityName,
         IReadOnlyDictionary<Guid, string> activityNames, IReadOnlyList<PlacementPath> ghosts)
     {
+        _server = server;
         var tabs = server.Tabs.ToDictionary(t => t.Id);
         var subTabs = server.SubTabs.ToDictionary(t => t.Id);
         var sections = server.Sections.ToDictionary(t => t.Id);
@@ -121,7 +141,7 @@ public sealed class PlacementTreeModel
             bool isThis = placement.ActivityId == activityId;
             deepest.LeafList.Add(new PlacementLeaf(
                 placement.ActivityId, isThis ? activityName : activityNames.GetValueOrDefault(placement.ActivityId, "(unknown activity)"),
-                isThis, IsPending: false));
+                isThis, IsPending: false, placement.Id, path, placement.SortOrder));
 
             if (isThis)
             {
@@ -133,7 +153,8 @@ public sealed class PlacementTreeModel
         {
             PlacementPath path = Canonicalize(ghost);
             TierNode deepest = Insert(path, pending: true, PendingSortOrder, PendingSortOrder, PendingSortOrder, PendingSortOrder);
-            deepest.LeafList.Add(new PlacementLeaf(activityId, activityName, IsThisActivity: true, IsPending: true));
+            deepest.LeafList.Add(new PlacementLeaf(
+                activityId, activityName, IsThisActivity: true, IsPending: true, PlacementId: null, path, SortOrder: 0));
             _thisActivitysPaths.Add(path);
         }
 
@@ -182,6 +203,66 @@ public sealed class PlacementTreeModel
 
     /// <summary>Whether this Activity is already placed at exactly <paramref name="path"/> - on the server or as a ghost (ADR-0046's rule, applied live; wireframe 1e-8).</summary>
     public bool IsAlreadyPlaced(PlacementPath path) => _thisActivitysPaths.Contains(path);
+
+    /// <summary>
+    /// What removing the saved Placement <paramref name="placementId"/> would do: which Tiers it empties
+    /// (ADR-0046), which ancestors survive, and how many Placements its Activity keeps (P5-12, #97).
+    /// </summary>
+    /// <param name="placementId">A saved Placement on the Event.</param>
+    /// <returns>The impact, or <see langword="null"/> if no such Placement is in the loaded tree.</returns>
+    /// <remarks>
+    /// Computed over the server's Placements only - ghosts aren't saved, so they neither keep a Tier alive
+    /// nor count toward the Activity's remaining total. Applies the same reference rules as Api's
+    /// <c>TierReaper</c> (a Tier survives while any other Placement or non-reaped child Tier names it), so
+    /// the dialog's promise matches what Api then does.
+    /// </remarks>
+    public RemovalImpact? DescribeRemoval(Guid placementId)
+    {
+        PlacementDto? removed = _server.Placements.FirstOrDefault(p => p.Id == placementId);
+        TabDto? tab = removed is null ? null : _server.Tabs.FirstOrDefault(t => t.Id == removed.TabId);
+        if (removed is null || tab is null)
+        {
+            return null;
+        }
+
+        var others = _server.Placements.Where(p => p.Id != placementId).ToList();
+        SubTabDto? subTab = removed.SubTabId is { } subTabId ? _server.SubTabs.FirstOrDefault(s => s.Id == subTabId) : null;
+        SectionDto? section = removed.SectionId is { } sectionId ? _server.Sections.FirstOrDefault(s => s.Id == sectionId) : null;
+        SubSectionDto? subSection = removed.SubSectionId is { } subSectionId ? _server.SubSections.FirstOrDefault(s => s.Id == subSectionId) : null;
+
+        bool subSectionReaped = subSection is not null && !others.Any(p => p.SubSectionId == subSection.Id);
+        bool sectionReaped = section is not null
+            && !others.Any(p => p.SectionId == section.Id)
+            && !_server.SubSections.Any(s => s.SectionId == section.Id && !(subSectionReaped && s.Id == subSection!.Id));
+        bool subTabReaped = subTab is not null
+            && !others.Any(p => p.SubTabId == subTab.Id)
+            && !_server.Sections.Any(s => s.ParentSubTabId == subTab.Id && !(sectionReaped && s.Id == section!.Id));
+        bool tabReaped = !others.Any(p => p.TabId == tab.Id)
+            && !_server.SubTabs.Any(s => s.TabId == tab.Id && !(subTabReaped && s.Id == subTab!.Id))
+            && !_server.Sections.Any(s => s.ParentTabId == tab.Id && !(sectionReaped && s.Id == section!.Id));
+
+        var reaped = new List<TierRef>();
+        var surviving = new List<TierRef>();
+        foreach ((TierKind kind, string? name, bool isReaped) in new (TierKind, string?, bool)[]
+        {
+            (TierKind.SubSection, subSection?.Name, subSectionReaped),
+            (TierKind.Section, section?.Name, sectionReaped),
+            (TierKind.SubTab, subTab?.Name, subTabReaped),
+            (TierKind.Tab, tab.Name, tabReaped)
+        })
+        {
+            if (name is null)
+            {
+                continue;
+            }
+
+            (isReaped ? reaped : surviving).Add(new TierRef(kind, name));
+        }
+
+        surviving.Reverse();
+        var path = new PlacementPath(tab.Name, subTab?.Name, section?.Name, subSection?.Name);
+        return new RemovalImpact(path, reaped, surviving, others.Count(p => p.ActivityId == removed.ActivityId));
+    }
 
     /// <summary>Each level of <paramref name="path"/> with whether saving would create it - for the NEW badges.</summary>
     public IReadOnlyList<PathLevel> Describe(PlacementPath path)

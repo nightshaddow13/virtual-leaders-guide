@@ -118,6 +118,55 @@ public sealed class ApiPlacementClient(InternalApiClient apiClient)
         return (PlacementWriteOutcome.Success, ToPlacementDto(created.Data), []);
     }
 
+    /// <summary>Deletes one Placement. Api also deletes any Tier the removal leaves empty (ADR-0046) and refuses to delete an Activity's last Placement (ADR-0050).</summary>
+    /// <param name="placementId">The Placement to remove.</param>
+    /// <param name="cancellationToken">Propagated to the underlying HTTP call.</param>
+    /// <returns>
+    /// <see cref="PlacementRemoveOutcome.Success"/>; <see cref="PlacementRemoveOutcome.Forbidden"/>;
+    /// <see cref="PlacementRemoveOutcome.NotFound"/> if it was already removed; or
+    /// <see cref="PlacementRemoveOutcome.LastPlacement"/> if it is the Activity's only one.
+    /// </returns>
+    public async Task<PlacementRemoveOutcome> DeleteAsync(Guid placementId, CancellationToken cancellationToken)
+    {
+        using var request = NewRequest(HttpMethod.Delete, $"{PlacementsPath}/{placementId}");
+        using HttpResponseMessage response = await SendAsync(request, cancellationToken);
+
+        switch (response.StatusCode)
+        {
+            case HttpStatusCode.Forbidden:
+                return PlacementRemoveOutcome.Forbidden;
+            case HttpStatusCode.NotFound:
+                return PlacementRemoveOutcome.NotFound;
+            case HttpStatusCode.UnprocessableEntity:
+                return PlacementRemoveOutcome.LastPlacement;
+        }
+
+        EnsureExpectedStatus(response, HttpStatusCode.NoContent);
+        return PlacementRemoveOutcome.Success;
+    }
+
+    /// <summary>Sets one Placement's <c>SortOrder</c> - used by Undo to put a restored Placement back where it was.</summary>
+    /// <param name="placementId">The Placement to reposition.</param>
+    /// <param name="sortOrder">Its new position among Placements sharing its exact Tier path.</param>
+    /// <param name="cancellationToken">Propagated to the underlying HTTP call.</param>
+    /// <returns>Whether Api accepted it. Never throws for a rejected PATCH: order is advisory until P5-13 (#98), so Undo treats a failure as "stayed at the end".</returns>
+    public async Task<bool> UpdateSortOrderAsync(Guid placementId, int sortOrder, CancellationToken cancellationToken)
+    {
+        var body = new TierDocument<PlacementAttributesDto>
+        {
+            Data = new TierResourceObject<PlacementAttributesDto>
+            {
+                Type = PlacementsResourceType,
+                Id = placementId.ToString(),
+                Attributes = new PlacementAttributesDto { SortOrder = sortOrder }
+            }
+        };
+        using var request = NewRequest(HttpMethod.Patch, $"{PlacementsPath}/{placementId}", body);
+        using HttpResponseMessage response = await SendAsync(request, cancellationToken);
+
+        return response.StatusCode == HttpStatusCode.NoContent;
+    }
+
     private async Task<List<TierResourceObject<TAttributes>>> ListAsync<TAttributes>(
         string path, Guid eventId, CancellationToken cancellationToken)
     {

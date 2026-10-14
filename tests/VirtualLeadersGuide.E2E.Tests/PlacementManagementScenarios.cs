@@ -166,6 +166,88 @@ public class PlacementManagementScenarios(AspireE2EFixture fixture) : E2ETestBas
             await Expect(Page.GetByText("You don't have access to this Activity")).ToBeVisibleAsync(Interactive());
         });
 
+    [Fact(DisplayName = "Given an Activity placed under two Tabs that another Activity shares, when an Admin removes one, then it goes with no dialog and Undo restores it")]
+    public async Task GivenAnActivityPlacedUnderTwoTabs_WhenAnAdminRemovesOneWhoseTabAnotherActivityShares_ThenItGoesWithNoDialogAndUndoRestoresIt() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, _) = await CreateEventAsync("Remove Host");
+            (_, Guid canoe) = await CreateActivityAsync(eventId, "Canoe Basics");
+            (_, Guid swim) = await CreateActivityAsync(eventId, "Swim Check");
+            string morning = $"e2e-Morning {Guid.NewGuid():n}";
+            string afternoon = $"e2e-Afternoon {Guid.NewGuid():n}";
+            await PlaceAndSaveAsync(eventId, swim, morning, afternoon);
+            await PlaceAndSaveAsync(eventId, canoe, morning, afternoon);
+
+            await Page.GotoAsync(ActivityUrl(eventId, canoe));
+            await Expect(Page.Locator(".ptn-lit")).ToHaveCountAsync(2, new LocatorAssertionsToHaveCountOptions { Timeout = InteractiveTimeoutMs });
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = $"Remove placement {morning}" }).ClickAsync();
+
+            await Expect(Page.Locator(".ptn-lit")).ToHaveCountAsync(1, new LocatorAssertionsToHaveCountOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(Page.GetByText($"Removed from {morning}")).ToBeVisibleAsync(Interactive());
+            await Expect(Page.Locator(".rz-dialog-title")).ToHaveCountAsync(0);
+
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Undo" }).ClickAsync();
+            await Expect(Page.Locator(".ptn-lit")).ToHaveCountAsync(2, new LocatorAssertionsToHaveCountOptions { Timeout = InteractiveTimeoutMs });
+        });
+
+    /// <remarks>The one scenario that proves the delete ordering on SQL Server (the Api suite runs on SQLite): the Placement and the Tab it alone kept alive go in a single save.</remarks>
+    [Fact(DisplayName = "Given the only Activity in a Tab, when an Admin removes that Placement and confirms, then the Tab leaves the tree and the autofill")]
+    public async Task GivenTheOnlyActivityInATab_WhenAnAdminRemovesThatPlacementAndConfirms_ThenTheTabLeavesTheTreeAndTheAutofill() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, _) = await CreateEventAsync("Reap Host");
+            (_, Guid canoe) = await CreateActivityAsync(eventId, "Canoe Basics");
+            string kept = $"e2e-Afternoon {Guid.NewGuid():n}";
+            string reaped = $"e2e-Morning {Guid.NewGuid():n}";
+            await PlaceAndSaveAsync(eventId, canoe, kept, reaped);
+
+            await Page.GotoAsync(ActivityUrl(eventId, canoe));
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = $"Remove placement {reaped}" }).ClickAsync();
+            await Expect(Page.Locator(".rz-dialog-title")).ToHaveTextAsync("Remove this placement?", new LocatorAssertionsToHaveTextOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(Page.GetByText($"This is the only activity in {reaped}")).ToBeVisibleAsync(Interactive());
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Remove", Exact = true }).ClickAsync();
+
+            await Expect(Page.Locator(".ptn-lit")).ToHaveCountAsync(1, new LocatorAssertionsToHaveCountOptions { Timeout = InteractiveTimeoutMs });
+            await Page.ReloadAsync();
+            await Page.Locator("#PlacementTab").ClickAsync();
+            await Expect(Page.Locator(".rz-autocomplete-panel").GetByText(kept)).ToBeVisibleAsync(Interactive());
+            await Expect(Page.Locator(".rz-autocomplete-panel").GetByText(reaped)).ToHaveCountAsync(0);
+        });
+
+    [Fact(DisplayName = "Given an Activity with one Placement, when an Admin tries to remove it, then they are told it needs at least one and it stays")]
+    public async Task GivenAnActivityWithOnePlacement_WhenAnAdminTriesToRemoveIt_ThenTheyAreToldItNeedsAtLeastOneAndItStays() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, _) = await CreateEventAsync("Last Placement Host");
+            (_, Guid canoe) = await CreateActivityAsync(eventId, "Canoe Basics");
+            string tab = $"e2e-Morning {Guid.NewGuid():n}";
+            await PlaceAndSaveAsync(eventId, canoe, tab);
+
+            await Page.GotoAsync(ActivityUrl(eventId, canoe));
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = $"Remove placement {tab}" }).ClickAsync();
+
+            await Expect(Page.GetByText("An activity needs at least one placement.")).ToBeVisibleAsync(Interactive());
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "OK" }).ClickAsync();
+            await Page.ReloadAsync();
+            await Expect(Page.Locator(".ptn-lit")).ToHaveCountAsync(1, new LocatorAssertionsToHaveCountOptions { Timeout = InteractiveTimeoutMs });
+        });
+
+    /// <remarks>Places and saves one Tab at a time on the Activity's page, waiting for each save to clear its ghost so the next "Place it" sees a settled tree.</remarks>
+    private async Task PlaceAndSaveAsync(Guid eventId, Guid activityId, params string[] tabs)
+    {
+        await Page.GotoAsync(ActivityUrl(eventId, activityId));
+        foreach (string tab in tabs)
+        {
+            await PlaceAsync(tab);
+        }
+
+        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" }).ClickAsync();
+        await Expect(Page.Locator(".ptn-pending")).ToHaveCountAsync(0, new LocatorAssertionsToHaveCountOptions { Timeout = InteractiveTimeoutMs });
+    }
+
     private async Task PlaceAsync(string tab)
     {
         await Page.Locator("#PlacementTab").FillAsync(tab);

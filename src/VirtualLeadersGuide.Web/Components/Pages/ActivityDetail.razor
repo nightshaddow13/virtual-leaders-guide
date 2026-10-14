@@ -50,7 +50,7 @@
                 <RadzenButton Text="Cancel" ButtonStyle="ButtonStyle.Light" ButtonType="ButtonType.Button"
                               Disabled="@isSaving" Click="NavigateToList" />
                 <RadzenButton Text="Save changes" ButtonType="ButtonType.Button"
-                              Disabled="@(isSaving || ghosts.Count == 0)" Click="SaveAsync" />
+                              Disabled="@(isSaving || isRemoving || ghosts.Count == 0)" Click="SaveAsync" />
             </RadzenStack>
         </RadzenStack>
 
@@ -64,8 +64,15 @@
                 <PlacementBuilder Model="model!" PlacedCount="@PlacedCount" OnPlace="OnPlace" />
             </RadzenColumn>
             <RadzenColumn Size="12" SizeLG="5">
-                <PlacementTree Roots="@model!.Roots" />
+                <PlacementTree Roots="@model!.Roots" IsBusy="@(isSaving || isRemoving)" OnRemove="RemoveAsync" />
             </RadzenColumn>
         </RadzenRow>
         break;
+}
+
+@code {
+    /// <summary>The Undo button inside the "Removed from …" toast (ADR-0045's Placement exception). Lives here because a Razor template can't be written in the code-behind.</summary>
+    private RenderFragment<NotificationService> UndoToast(PlacementLeaf removed) => _ =>
+        @<RadzenButton Text="Undo" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Size="ButtonSize.Small"
+                       Click="@(() => UndoRemovalAsync(removed))" />;
 }
