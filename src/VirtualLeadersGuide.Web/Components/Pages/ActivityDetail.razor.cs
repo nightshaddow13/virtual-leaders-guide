@@ -13,7 +13,8 @@ namespace VirtualLeadersGuide.Web.Components.Pages;
 /// <summary>
 /// An Activity's page (P5-11, #96): the Placement builder beside the live "Where it appears" tree
 /// (wireframe turn 2, Direction C). "Place it" adds an unsaved ghost row; <see cref="SaveAsync"/> is what
-/// makes ghosts permanent; leaving with ghosts pending asks once first.
+/// makes ghosts permanent; leaving with ghosts pending asks once first. Removing a saved row (P5-12, #97)
+/// writes immediately - see <see cref="RemoveAsync"/>.
 /// </summary>
 /// <remarks>
 /// Editing the Activity's Name and Description lives on this same page once P5-8 (#94) ships - this story

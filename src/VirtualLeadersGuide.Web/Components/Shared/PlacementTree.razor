@@ -25,11 +25,17 @@
                         }
                         else if (context.Value is PlacementLeaf { IsPending: true } ghost)
                         {
-                            <RadzenBadge BadgeStyle="BadgeStyle.Info" Variant="Variant.Outlined" class="ptn-pending">@ghost.ActivityName PENDING</RadzenBadge>
+                            <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.25rem">
+                                <RadzenBadge BadgeStyle="BadgeStyle.Info" Variant="Variant.Outlined" class="ptn-pending">@ghost.ActivityName PENDING</RadzenBadge>
+                                @RemoveButton(ghost)
+                            </RadzenStack>
                         }
                         else if (context.Value is PlacementLeaf { IsThisActivity: true } lit)
                         {
-                            <RadzenBadge BadgeStyle="BadgeStyle.Success" class="ptn-lit">@lit.ActivityName</RadzenBadge>
+                            <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.25rem">
+                                <RadzenBadge BadgeStyle="BadgeStyle.Success" class="ptn-lit">@lit.ActivityName</RadzenBadge>
+                                @RemoveButton(lit)
+                            </RadzenStack>
                         }
                         else if (context.Value is PlacementLeaf other)
                         {
@@ -43,6 +49,9 @@
 </RadzenCard>
 
 @code {
-    [Parameter, EditorRequired]
-    public IReadOnlyList<TierNode> Roots { get; set; } = [];
+    /// <summary>The icon-only × that removes <paramref name="leaf"/> (ADR-0037; wireframe turn 2a).</summary>
+    private RenderFragment RemoveButton(PlacementLeaf leaf) => @<RadzenButton Icon="close" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Text"
+                                                                              Size="ButtonSize.ExtraSmall" Disabled="@IsBusy"
+                                                                              aria-label="@($"Remove placement {leaf.Path.Display}")"
+                                                                              Click="@(() => OnRemove.InvokeAsync(leaf))" />;
 }

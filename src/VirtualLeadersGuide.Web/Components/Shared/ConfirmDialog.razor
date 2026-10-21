@@ -12,5 +12,8 @@
 
 <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.End" Gap="0.5rem" Style="margin-block-start: 1rem;">
     <RadzenButton Text="@DismissText" ButtonStyle="ButtonStyle.Light" Click="@(() => DialogService.Close(false))" />
-    <RadzenButton Text="@ConfirmText" ButtonStyle="@ConfirmButtonStyle" Click="@(() => DialogService.Close(true))" />
+    @if (ShowConfirm)
+    {
+        <RadzenButton Text="@ConfirmText" ButtonStyle="@ConfirmButtonStyle" Click="@(() => DialogService.Close(true))" />
+    }
 </RadzenStack>
