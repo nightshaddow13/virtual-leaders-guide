@@ -34,7 +34,7 @@ public class PlacementTreeShould : BunitContext
         ThisActivity, "Canoe Basics", new Dictionary<Guid, string> { [OtherActivity] = "Swim Check" },
         [new PlacementPath("Evening")]).Roots;
 
-    private IRenderedComponent<PlacementTree> RenderTree(
+    private IRenderedComponent<PlacementTree> RenderPlacementTree(
         Action<PlacementLeaf>? onRemove = null, bool isBusy = false) =>
         Render<PlacementTree>(parameters => parameters
             .Add(c => c.Roots, Roots())
@@ -44,7 +44,7 @@ public class PlacementTreeShould : BunitContext
     [Fact]
     public void OfferARemoveButtonOnlyOnThisActivitysSavedAndPendingRows_WhenRendered_ForPlacementTree()
     {
-        IRenderedComponent<PlacementTree> cut = RenderTree();
+        IRenderedComponent<PlacementTree> cut = RenderPlacementTree();
 
         Assert.Equal(
             ["Remove placement Evening", "Remove placement Morning"],
@@ -55,7 +55,7 @@ public class PlacementTreeShould : BunitContext
     public void RaiseOnRemoveWithTheSavedRow_WhenItsRemoveButtonIsClicked_ForPlacementTree()
     {
         PlacementLeaf? raised = null;
-        IRenderedComponent<PlacementTree> cut = RenderTree(leaf => raised = leaf);
+        IRenderedComponent<PlacementTree> cut = RenderPlacementTree(leaf => raised = leaf);
 
         cut.Find("button[aria-label='Remove placement Morning']").Click();
 
@@ -67,7 +67,7 @@ public class PlacementTreeShould : BunitContext
     public void RaiseOnRemoveWithThePendingRow_WhenItsRemoveButtonIsClicked_ForPlacementTree()
     {
         PlacementLeaf? raised = null;
-        IRenderedComponent<PlacementTree> cut = RenderTree(leaf => raised = leaf);
+        IRenderedComponent<PlacementTree> cut = RenderPlacementTree(leaf => raised = leaf);
 
         cut.Find("button[aria-label='Remove placement Evening']").Click();
 
@@ -78,7 +78,7 @@ public class PlacementTreeShould : BunitContext
     [Fact]
     public void DisableEveryRemoveButton_WhenBusy_ForPlacementTree()
     {
-        IRenderedComponent<PlacementTree> cut = RenderTree(isBusy: true);
+        IRenderedComponent<PlacementTree> cut = RenderPlacementTree(isBusy: true);
 
         Assert.All(cut.FindAll("button[aria-label^='Remove placement']"), b => Assert.True(b.HasAttribute("disabled")));
     }
