@@ -50,7 +50,7 @@
 
 @code {
     /// <summary>The icon-only × that removes <paramref name="leaf"/> (ADR-0037; wireframe turn 2a).</summary>
-    private RenderFragment RemoveButton(PlacementLeaf leaf) => @<RadzenButton Icon="close" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text"
+    private RenderFragment RemoveButton(PlacementLeaf leaf) => @<RadzenButton Icon="close" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Text"
                                                                               Size="ButtonSize.ExtraSmall" Disabled="@IsBusy"
                                                                               aria-label="@($"Remove placement {leaf.Path.Display}")"
                                                                               Click="@(() => OnRemove.InvokeAsync(leaf))" />;
