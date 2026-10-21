@@ -381,12 +381,204 @@ public class PlacementsResourceShould : IAsyncLifetime
         Event @event = await _factory.CreateEventAsync();
         Activity activity = await _factory.CreateActivityAsync(@event.Id);
         Tab tab = await _factory.CreateTabAsync(@event.Id);
+        Tab otherTab = await _factory.CreateTabAsync(@event.Id);
         ActivityPlacement placement = await _factory.CreateActivityPlacementAsync(@event.Id, activity.Id, tab.Id);
+        await _factory.CreateActivityPlacementAsync(@event.Id, activity.Id, otherTab.Id);
         using HttpClient client = DirectorClient(@event.Id);
 
         HttpResponseMessage response = await SendAsync(client, HttpMethod.Delete, $"/api/placements/{placement.Id}");
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RejectWithUnprocessableEntityAndKeepTheRow_WhenDeletingTheActivitysOnlyPlacement_ForDelete()
+    {
+        Event @event = await _factory.CreateEventAsync();
+        Activity activity = await _factory.CreateActivityAsync(@event.Id);
+        Tab tab = await _factory.CreateTabAsync(@event.Id);
+        ActivityPlacement placement = await _factory.CreateActivityPlacementAsync(@event.Id, activity.Id, tab.Id);
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Delete, $"/api/placements/{placement.Id}");
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        await AssertErrorPointersAsync(response, "/data");
+        using IServiceScope scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        Assert.True(await db.ActivityPlacements.AnyAsync(p => p.Id == placement.Id));
+        Assert.True(await db.Tabs.AnyAsync(t => t.Id == tab.Id));
+    }
+
+    [Fact]
+    public async Task ReapTheSubSectionButKeepItsAncestors_WhenItsOnlyPlacementIsRemoved_ForDelete()
+    {
+        Event @event = await _factory.CreateEventAsync();
+        Activity canoe = await _factory.CreateActivityAsync(@event.Id);
+        Activity kayak = await _factory.CreateActivityAsync(@event.Id);
+        Tab tab = await _factory.CreateTabAsync(@event.Id);
+        Section section = await _factory.CreateSectionUnderTabAsync(@event.Id, tab.Id);
+        SubSection kayaking = await _factory.CreateSubSectionAsync(@event.Id, section.Id);
+        await _factory.CreateActivityPlacementAsync(@event.Id, canoe.Id, tab.Id, sectionId: section.Id);
+        ActivityPlacement removed = await _factory.CreateActivityPlacementAsync(
+            @event.Id, kayak.Id, tab.Id, sectionId: section.Id, subSectionId: kayaking.Id);
+        await _factory.CreateActivityPlacementAsync(@event.Id, kayak.Id, tab.Id);
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Delete, $"/api/placements/{removed.Id}");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        using IServiceScope scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        Assert.False(await db.SubSections.AnyAsync(s => s.Id == kayaking.Id));
+        Assert.True(await db.Sections.AnyAsync(s => s.Id == section.Id));
+        Assert.True(await db.Tabs.AnyAsync(t => t.Id == tab.Id));
+    }
+
+    [Fact]
+    public async Task ReapTheWholeChain_WhenTheRemovedRowWasTheOnlyThingUnderItsTab_ForDelete()
+    {
+        Event @event = await _factory.CreateEventAsync();
+        Activity activity = await _factory.CreateActivityAsync(@event.Id);
+        Tab keptTab = await _factory.CreateTabAsync(@event.Id);
+        Tab tab = await _factory.CreateTabAsync(@event.Id);
+        SubTab subTab = await _factory.CreateSubTabAsync(@event.Id, tab.Id);
+        Section section = await _factory.CreateSectionUnderSubTabAsync(@event.Id, subTab.Id);
+        SubSection subSection = await _factory.CreateSubSectionAsync(@event.Id, section.Id);
+        await _factory.CreateActivityPlacementAsync(@event.Id, activity.Id, keptTab.Id);
+        ActivityPlacement removed = await _factory.CreateActivityPlacementAsync(
+            @event.Id, activity.Id, tab.Id, subTab.Id, section.Id, subSection.Id);
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Delete, $"/api/placements/{removed.Id}");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        using IServiceScope scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        Assert.False(await db.SubSections.AnyAsync(s => s.Id == subSection.Id));
+        Assert.False(await db.Sections.AnyAsync(s => s.Id == section.Id));
+        Assert.False(await db.SubTabs.AnyAsync(s => s.Id == subTab.Id));
+        Assert.False(await db.Tabs.AnyAsync(t => t.Id == tab.Id));
+        Assert.True(await db.Tabs.AnyAsync(t => t.Id == keptTab.Id));
+    }
+
+    [Fact]
+    public async Task KeepTheTab_WhenATabParentedSectionStillHasPlacements_ForDelete()
+    {
+        Event @event = await _factory.CreateEventAsync();
+        Activity activity = await _factory.CreateActivityAsync(@event.Id);
+        Activity other = await _factory.CreateActivityAsync(@event.Id);
+        Tab tab = await _factory.CreateTabAsync(@event.Id);
+        Section section = await _factory.CreateSectionUnderTabAsync(@event.Id, tab.Id);
+        ActivityPlacement removed = await _factory.CreateActivityPlacementAsync(@event.Id, activity.Id, tab.Id);
+        await _factory.CreateActivityPlacementAsync(@event.Id, activity.Id, (await _factory.CreateTabAsync(@event.Id)).Id);
+        await _factory.CreateActivityPlacementAsync(@event.Id, other.Id, tab.Id, sectionId: section.Id);
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Delete, $"/api/placements/{removed.Id}");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        using IServiceScope scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        Assert.True(await db.Tabs.AnyAsync(t => t.Id == tab.Id));
+        Assert.True(await db.Sections.AnyAsync(s => s.Id == section.Id));
+    }
+
+    [Fact]
+    public async Task KeepTheSection_WhenOnlyItsSubSectionStillHasPlacements_ForDelete()
+    {
+        Event @event = await _factory.CreateEventAsync();
+        Activity activity = await _factory.CreateActivityAsync(@event.Id);
+        Activity other = await _factory.CreateActivityAsync(@event.Id);
+        Tab tab = await _factory.CreateTabAsync(@event.Id);
+        Section section = await _factory.CreateSectionUnderTabAsync(@event.Id, tab.Id);
+        SubSection subSection = await _factory.CreateSubSectionAsync(@event.Id, section.Id);
+        ActivityPlacement removed = await _factory.CreateActivityPlacementAsync(@event.Id, activity.Id, tab.Id, sectionId: section.Id);
+        await _factory.CreateActivityPlacementAsync(@event.Id, activity.Id, (await _factory.CreateTabAsync(@event.Id)).Id);
+        await _factory.CreateActivityPlacementAsync(@event.Id, other.Id, tab.Id, sectionId: section.Id, subSectionId: subSection.Id);
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Delete, $"/api/placements/{removed.Id}");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        using IServiceScope scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        Assert.True(await db.Sections.AnyAsync(s => s.Id == section.Id));
+        Assert.True(await db.SubSections.AnyAsync(s => s.Id == subSection.Id));
+        Assert.True(await db.Tabs.AnyAsync(t => t.Id == tab.Id));
+    }
+
+    [Fact]
+    public async Task KeepEveryTier_WhenAnotherActivityIsPlacedAtTheSamePath_ForDelete()
+    {
+        Event @event = await _factory.CreateEventAsync();
+        Activity activity = await _factory.CreateActivityAsync(@event.Id);
+        Activity other = await _factory.CreateActivityAsync(@event.Id);
+        Tab tab = await _factory.CreateTabAsync(@event.Id);
+        SubTab subTab = await _factory.CreateSubTabAsync(@event.Id, tab.Id);
+        Section section = await _factory.CreateSectionUnderSubTabAsync(@event.Id, subTab.Id);
+        SubSection subSection = await _factory.CreateSubSectionAsync(@event.Id, section.Id);
+        ActivityPlacement removed = await _factory.CreateActivityPlacementAsync(
+            @event.Id, activity.Id, tab.Id, subTab.Id, section.Id, subSection.Id);
+        await _factory.CreateActivityPlacementAsync(@event.Id, activity.Id, (await _factory.CreateTabAsync(@event.Id)).Id);
+        await _factory.CreateActivityPlacementAsync(@event.Id, other.Id, tab.Id, subTab.Id, section.Id, subSection.Id);
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Delete, $"/api/placements/{removed.Id}");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        using IServiceScope scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        Assert.True(await db.Tabs.AnyAsync(t => t.Id == tab.Id));
+        Assert.True(await db.SubTabs.AnyAsync(s => s.Id == subTab.Id));
+        Assert.True(await db.Sections.AnyAsync(s => s.Id == section.Id));
+        Assert.True(await db.SubSections.AnyAsync(s => s.Id == subSection.Id));
+    }
+
+    [Fact]
+    public async Task ReapASubTabParentedSectionAndItsSubTabButKeepTheTab_ForDelete()
+    {
+        Event @event = await _factory.CreateEventAsync();
+        Activity activity = await _factory.CreateActivityAsync(@event.Id);
+        Activity other = await _factory.CreateActivityAsync(@event.Id);
+        Tab tab = await _factory.CreateTabAsync(@event.Id);
+        SubTab subTab = await _factory.CreateSubTabAsync(@event.Id, tab.Id);
+        Section section = await _factory.CreateSectionUnderSubTabAsync(@event.Id, subTab.Id);
+        ActivityPlacement removed = await _factory.CreateActivityPlacementAsync(@event.Id, activity.Id, tab.Id, subTab.Id, section.Id);
+        await _factory.CreateActivityPlacementAsync(@event.Id, other.Id, tab.Id);
+        await _factory.CreateActivityPlacementAsync(@event.Id, activity.Id, tab.Id);
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Delete, $"/api/placements/{removed.Id}");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        using IServiceScope scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        Assert.False(await db.Sections.AnyAsync(s => s.Id == section.Id));
+        Assert.False(await db.SubTabs.AnyAsync(s => s.Id == subTab.Id));
+        Assert.True(await db.Tabs.AnyAsync(t => t.Id == tab.Id));
+    }
+
+    [Fact]
+    public async Task ReapATabParentedSectionButKeepTheTab_ForDelete()
+    {
+        Event @event = await _factory.CreateEventAsync();
+        Activity activity = await _factory.CreateActivityAsync(@event.Id);
+        Activity other = await _factory.CreateActivityAsync(@event.Id);
+        Tab tab = await _factory.CreateTabAsync(@event.Id);
+        Section section = await _factory.CreateSectionUnderTabAsync(@event.Id, tab.Id);
+        ActivityPlacement removed = await _factory.CreateActivityPlacementAsync(@event.Id, activity.Id, tab.Id, sectionId: section.Id);
+        await _factory.CreateActivityPlacementAsync(@event.Id, other.Id, tab.Id);
+        await _factory.CreateActivityPlacementAsync(@event.Id, activity.Id, tab.Id);
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Delete, $"/api/placements/{removed.Id}");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        using IServiceScope scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        Assert.False(await db.Sections.AnyAsync(s => s.Id == section.Id));
+        Assert.True(await db.Tabs.AnyAsync(t => t.Id == tab.Id));
     }
 
     [Fact]

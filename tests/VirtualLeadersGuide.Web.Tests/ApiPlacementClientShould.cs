@@ -178,6 +178,76 @@ public class ApiPlacementClientShould
             () => client.CreateAsync(Guid.NewGuid(), "Morning", null, null, null, CancellationToken.None));
     }
 
+    [Fact]
+    public async Task SendADeleteToThePlacementAndReturnSuccess_WhenApiRespondsWithNoContent_ForDeleteAsync()
+    {
+        Guid placementId = Guid.NewGuid();
+        HttpRequestMessage? seen = null;
+        ApiPlacementClient client = CreateClient(new StubHttpMessageHandler(request =>
+        {
+            seen = request;
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
+        }));
+
+        PlacementRemoveOutcome outcome = await client.DeleteAsync(placementId, CancellationToken.None);
+
+        Assert.Equal(PlacementRemoveOutcome.Success, outcome);
+        Assert.Equal(HttpMethod.Delete, seen!.Method);
+        Assert.Equal($"/api/placements/{placementId}", seen.RequestUri!.AbsolutePath);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Forbidden, PlacementRemoveOutcome.Forbidden)]
+    [InlineData(HttpStatusCode.NotFound, PlacementRemoveOutcome.NotFound)]
+    [InlineData(HttpStatusCode.UnprocessableEntity, PlacementRemoveOutcome.LastPlacement)]
+    public async Task MapTheStatusToAnOutcome_WhenApiRefusesTheDelete_ForDeleteAsync(HttpStatusCode status, PlacementRemoveOutcome expected)
+    {
+        ApiPlacementClient client = CreateClient(StubHttpMessageHandler.RespondingWith(status));
+
+        Assert.Equal(expected, await client.DeleteAsync(Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ThrowActivityDataUnavailableException_WhenApiRespondsWithAnUnexpectedStatus_ForDeleteAsync()
+    {
+        ApiPlacementClient client = CreateClient(StubHttpMessageHandler.RespondingWith(HttpStatusCode.InternalServerError));
+
+        await Assert.ThrowsAsync<ActivityDataUnavailableException>(() => client.DeleteAsync(Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task PatchOnlyTheSortOrderAndReturnTrue_WhenApiRespondsWithNoContent_ForUpdateSortOrderAsync()
+    {
+        Guid placementId = Guid.NewGuid();
+        HttpRequestMessage? seen = null;
+        string? body = null;
+        ApiPlacementClient client = CreateClient(new StubHttpMessageHandler(request =>
+        {
+            seen = request;
+            body = request.Content!.ReadAsStringAsync().Result;
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
+        }));
+
+        bool accepted = await client.UpdateSortOrderAsync(placementId, 3, CancellationToken.None);
+
+        Assert.True(accepted);
+        Assert.Equal(HttpMethod.Patch, seen!.Method);
+        using JsonDocument document = JsonDocument.Parse(body!);
+        JsonElement data = document.RootElement.GetProperty("data");
+        Assert.Equal(placementId.ToString(), data.GetProperty("id").GetString());
+        JsonElement attributes = data.GetProperty("attributes");
+        Assert.Equal(3, attributes.GetProperty("sortOrder").GetInt32());
+        Assert.Single(attributes.EnumerateObject());
+    }
+
+    [Fact]
+    public async Task ReturnFalseWithoutThrowing_WhenApiRejectsTheReorder_ForUpdateSortOrderAsync()
+    {
+        ApiPlacementClient client = CreateClient(StubHttpMessageHandler.RespondingWith(HttpStatusCode.UnprocessableEntity));
+
+        Assert.False(await client.UpdateSortOrderAsync(Guid.NewGuid(), 3, CancellationToken.None));
+    }
+
     private static ApiPlacementClient CreateClient(HttpMessageHandler apiHandler) =>
         ApiClientTestFactory.CreatePlacementClient(apiHandler);
 

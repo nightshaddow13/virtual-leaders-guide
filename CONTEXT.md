@@ -123,7 +123,9 @@ InfoPage). A Tab/Sub Tab renders as one of two exclusive screens: either its Act
 Sections/Sub Sections) or exactly one InfoPage — never both, and never more than one InfoPage. Each Placement
 carries its own SortOrder, independent of any other Placement of the same Activity/InfoPage — the same
 Activity may be placed under more than one Tab (e.g. offered morning and afternoon), each ordered on its own.
-The same exact path can never be set twice for the same Activity or InfoPage.
+The same exact path can never be set twice for the same Activity or InfoPage. An Activity may have no Placement
+yet (just created), but once placed it can't be un-placed back to none by removing a Placement; only deleting
+the Activity takes it to zero.
 _Avoid_: Assignment, Slot (Slot reads time-based)
 
 **Facility**:

@@ -30,6 +30,9 @@ namespace VirtualLeadersGuide.Api.Data;
 /// calling <c>SaveChangesAsync</c> itself - JsonApiDotNetCore's own repository persists everything this method
 /// touched, together with the Placement itself, in the one <c>SaveChangesAsync</c> call it makes after this
 /// method returns, so a new Tab and its first Placement land in the same transaction or not at all.
+/// On <see cref="WriteOperationKind.DeleteResource"/> (P5-12, #97) the same seam refuses to remove an
+/// Activity's only Placement and has <see cref="TierReaper"/> mark every Tier the removal empties for
+/// deletion, in that same single save - see <see cref="GuardLastPlacementAndReapTiersAsync"/>.
 /// </remarks>
 public sealed class ActivityPlacementResourceDefinition : JsonApiResourceDefinition<ActivityPlacement, Guid>
 {
@@ -38,17 +41,21 @@ public sealed class ActivityPlacementResourceDefinition : JsonApiResourceDefinit
 
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly VirtualLeadersGuideDbContext _dbContext;
+    private readonly TierReaper _tierReaper;
 
     /// <summary>Constructs the definition with the services it needs to authorize and resolve Placement writes.</summary>
     /// <param name="resourceGraph">Passed through to <see cref="JsonApiResourceDefinition{TResource,TId}"/>.</param>
     /// <param name="httpContextAccessor">Resolves the current request's <see cref="System.Security.Claims.ClaimsPrincipal"/> for <see cref="CurrentPolicy"/>.</param>
     /// <param name="dbContext">Backs every resolve-or-create lookup below, and <see cref="StoredEventIdAsync"/>'s re-read.</param>
+    /// <param name="tierReaper">Marks the Tiers a deleted Placement leaves empty for removal (P5-12, #97).</param>
     public ActivityPlacementResourceDefinition(
-        IResourceGraph resourceGraph, IHttpContextAccessor httpContextAccessor, VirtualLeadersGuideDbContext dbContext)
+        IResourceGraph resourceGraph, IHttpContextAccessor httpContextAccessor, VirtualLeadersGuideDbContext dbContext,
+        TierReaper tierReaper)
         : base(resourceGraph)
     {
         _httpContextAccessor = httpContextAccessor;
         _dbContext = dbContext;
+        _tierReaper = tierReaper;
     }
 
     /// <inheritdoc/>
@@ -126,8 +133,44 @@ public sealed class ActivityPlacementResourceDefinition : JsonApiResourceDefinit
         {
             await ResolvePlacementAsync(resource, eventId, cancellationToken);
         }
+        else if (writeOperation == WriteOperationKind.DeleteResource)
+        {
+            await GuardLastPlacementAndReapTiersAsync(resource.Id, cancellationToken);
+        }
 
         await base.OnWritingAsync(resource, writeOperation, cancellationToken);
+    }
+
+    /// <summary>
+    /// Refuses to delete an Activity's only remaining Placement (ADR-0050 - deleting the Activity is the way
+    /// to zero), then marks every Tier the removal empties for deletion (ADR-0046, P5-12 #97).
+    /// </summary>
+    /// <remarks>
+    /// Loads the stored row <em>tracked</em>, on purpose: JsonApiDotNetCore hands <c>OnWritingAsync</c> an
+    /// id-only placeholder on delete, then reuses whichever instance the change tracker already holds for
+    /// that id. Tracking the real row (with its Tier foreign keys) is what lets EF order the Placement's
+    /// delete before the Tier deletes - the foreign keys are <c>Restrict</c>, so SQL Server rejects the batch
+    /// otherwise. The Tier deletes ride JsonApiDotNetCore's one <c>SaveChangesAsync</c> with the Placement's,
+    /// so the removal and its reaping land together or not at all (ADR-0072).
+    /// </remarks>
+    private async Task GuardLastPlacementAndReapTiersAsync(Guid placementId, CancellationToken cancellationToken)
+    {
+        ActivityPlacement? stored = await _dbContext.ActivityPlacements
+            .FirstOrDefaultAsync(placement => placement.Id == placementId, cancellationToken);
+        if (stored is null)
+        {
+            return;
+        }
+
+        bool hasOthers = await _dbContext.ActivityPlacements.AsNoTracking()
+            .AnyAsync(placement => placement.ActivityId == stored.ActivityId && placement.Id != placementId, cancellationToken);
+        if (!hasOthers)
+        {
+            throw UnprocessableEntity(
+                "Last placement.", "An Activity needs at least one Placement; delete the Activity instead.", "/data");
+        }
+
+        await _tierReaper.ReapEmptiedTiersAsync([stored], cancellationToken);
     }
 
     /// <remarks>
