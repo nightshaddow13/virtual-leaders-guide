@@ -17,6 +17,7 @@ internal static class PlacementRemovalConfirmation
     /// <summary>Builds the parameters for confirming a removal that empties at least one Tier.</summary>
     /// <param name="impact">What the removal does, from <see cref="PlacementTreeModel.DescribeRemoval"/>.</param>
     /// <param name="activityName">The Activity being removed, named in the "keeps its other placements" line.</param>
+    /// <returns>The parameter dictionary for <c>DialogService.OpenAsync&lt;ConfirmDialog&gt;</c>.</returns>
     public static Dictionary<string, object?> ForReap(RemovalImpact impact, string activityName)
     {
         var consequences = new List<string>();
@@ -53,6 +54,7 @@ internal static class PlacementRemovalConfirmation
 
     /// <summary>Builds the explain-only notice for an Activity's last Placement (ADR-0050).</summary>
     /// <param name="hasPendingGhosts">Whether unsaved placements are waiting - adds the "save them first" line, since the guard counts saved rows only.</param>
+    /// <returns>The parameter dictionary for <c>DialogService.OpenAsync&lt;ConfirmDialog&gt;</c>.</returns>
     public static Dictionary<string, object?> ForLastPlacement(bool hasPendingGhosts)
     {
         var consequences = new List<string> { "Add another placement first, or delete the activity instead." };

@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Rendering;
 using Radzen;
 using VirtualLeadersGuide.Web.Activities;
 using VirtualLeadersGuide.Web.Components.Shared;
@@ -69,12 +71,15 @@ public partial class ActivityDetail
                 case PlacementRemoveOutcome.LastPlacement:
                     await ShowLastPlacementNoticeAsync();
                     break;
+                case PlacementRemoveOutcome.NotFound:
+                    saveErrorMessage = "That placement was already removed.";
+                    break;
                 case PlacementRemoveOutcome.Success when impact.Reaped.Count == 0:
                     NotificationService.Notify(new NotificationMessage
                     {
                         Severity = NotificationSeverity.Info,
                         Summary = $"Removed from {impact.Path.Display}",
-                        DetailContent = UndoToast(leaf),
+                        DetailContent = UndoToastContent(leaf),
                         Duration = UndoToastDuration
                     });
                     break;
@@ -132,6 +137,14 @@ public partial class ActivityDetail
             isRemoving = false;
         }
     }
+
+    /// <summary>The "Removed from …" toast's body: an Undo button (ADR-0045's Placement exception) wired back to <see cref="UndoRemovalAsync"/>. Built with a <see cref="RenderTreeBuilder"/> because the toast renders outside this component's markup.</summary>
+    private RenderFragment<NotificationService> UndoToastContent(PlacementLeaf removed) => _ => builder =>
+    {
+        builder.OpenComponent<UndoToast>(0);
+        builder.AddComponentParameter(1, nameof(UndoToast.OnUndo), EventCallback.Factory.Create(this, () => UndoRemovalAsync(removed)));
+        builder.CloseComponent();
+    };
 
     /// <remarks>Explain-only until P5-9 (#95) gives the notice a "Delete activity" button to confirm (decision 1).</remarks>
     private async Task ShowLastPlacementNoticeAsync() =>

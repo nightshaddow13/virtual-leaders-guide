@@ -1,0 +1,10 @@
+@* The Undo button inside the "Removed from ..." toast (ADR-0045's Placement exception), opened as the toast's
+   DetailContent by ActivityDetail.Removal.cs. *@
+<RadzenButton Text="Undo" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Size="ButtonSize.Small"
+              Click="@(() => OnUndo.InvokeAsync())" />
+
+@code {
+    /// <summary>Raised when Undo is clicked.</summary>
+    [Parameter]
+    public EventCallback OnUndo { get; set; }
+}

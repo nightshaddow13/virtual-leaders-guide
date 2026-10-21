@@ -69,10 +69,3 @@
         </RadzenRow>
         break;
 }
-
-@code {
-    /// <summary>The Undo button inside the "Removed from …" toast (ADR-0045's Placement exception). Lives here because a Razor template can't be written in the code-behind.</summary>
-    private RenderFragment<NotificationService> UndoToast(PlacementLeaf removed) => _ =>
-        @<RadzenButton Text="Undo" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Size="ButtonSize.Small"
-                       Click="@(() => UndoRemovalAsync(removed))" />;
-}
