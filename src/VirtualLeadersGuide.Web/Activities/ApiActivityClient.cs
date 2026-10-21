@@ -16,7 +16,8 @@ namespace VirtualLeadersGuide.Web.Activities;
 /// <see cref="InternalApiClient"/>, not a bare <c>IHttpClientFactory.CreateClient("Api")</c>, because
 /// <c>/api/*</c> requires the internal JWT that only <see cref="InternalApiClient"/> attaches. The
 /// read/update/delete methods <c>ActivityResourceDefinition</c> already authorizes on the Api side arrive as
-/// their own UI needs them - P5-7 (#93) adds the list read; P5-8/P5-9 (#94/#95) still owe update/delete.
+/// their own UI needs them - P5-7 (#93) adds the list read, P5-8 (#94) the single read and update; P5-9
+/// (#95) still owes delete.
 /// </remarks>
 public sealed class ApiActivityClient(InternalApiClient apiClient)
 {
@@ -56,17 +57,18 @@ public sealed class ApiActivityClient(InternalApiClient apiClient)
         return (activities, document.Meta?.Total ?? activities.Count);
     }
 
-    /// <summary>Reads one Activity by id - the Activity page (P5-11, #96) needs its Name and owning Event.</summary>
-    /// <param name="activityId">The Activity to read.</param>
+    /// <summary>Reads a single Activity by id.</summary>
+    /// <param name="id">The Activity's id.</param>
     /// <param name="cancellationToken">Propagated to the underlying HTTP call.</param>
     /// <returns>
     /// <see cref="ActivityReadOutcome.Success"/> with the Activity; <see cref="ActivityReadOutcome.Forbidden"/>
-    /// for an unassigned Director (ADR-0069); or <see cref="ActivityReadOutcome.NotFound"/>.
+    /// if the caller can't read it (an unassigned Director, or the Activity doesn't exist for a non-Admin,
+    /// ADR-0069); or <see cref="ActivityReadOutcome.NotFound"/> if it doesn't exist for an Admin.
     /// </returns>
     public async Task<(ActivityReadOutcome Outcome, ActivityDto? Activity)> GetActivityAsync(
-        Guid activityId, CancellationToken cancellationToken)
+        Guid id, CancellationToken cancellationToken)
     {
-        using var request = NewRequest(HttpMethod.Get, $"{ActivitiesPath}/{activityId}");
+        using var request = NewRequest(HttpMethod.Get, $"{ActivitiesPath}/{id}");
         using HttpResponseMessage response = await SendAsync(request, cancellationToken);
 
         if (response.StatusCode == HttpStatusCode.Forbidden)
@@ -122,6 +124,43 @@ public sealed class ApiActivityClient(InternalApiClient apiClient)
         EnsureExpectedStatus(response, HttpStatusCode.Created);
         ActivityDocument created = await ReadAsync<ActivityDocument>(response, cancellationToken);
         return (ActivityWriteOutcome.Success, ToDto(created.Data), []);
+    }
+
+    /// <summary>Updates an existing Activity's Name and Description.</summary>
+    /// <param name="id">The Activity to update.</param>
+    /// <param name="name">The new Name.</param>
+    /// <param name="description">The new rich text description, as raw markdown - the empty string is legal.</param>
+    /// <param name="cancellationToken">Propagated to the underlying HTTP call.</param>
+    /// <returns>
+    /// <see cref="ActivityWriteOutcome.Success"/> (Api returns 204); or <see cref="ActivityWriteOutcome.Forbidden"/>
+    /// if the caller no longer has write access (ADR-0069).
+    /// </returns>
+    /// <remarks>
+    /// Never sends <c>eventId</c>: <c>Activity.EventId</c> carries no <c>AllowChange</c>, so including it would
+    /// be a 422 - moving an Activity between Events isn't a thing this app does.
+    /// </remarks>
+    public async Task<ActivityWriteOutcome> UpdateAsync(
+        Guid id, string name, string description, CancellationToken cancellationToken)
+    {
+        var body = new ActivityDocument
+        {
+            Data = new ActivityResourceObject
+            {
+                Type = ResourceType,
+                Id = id.ToString(),
+                Attributes = new ActivityAttributesDto { Name = name, Description = description }
+            }
+        };
+        using var request = NewRequest(HttpMethod.Patch, $"{ActivitiesPath}/{id}", body);
+        using HttpResponseMessage response = await SendAsync(request, cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            return ActivityWriteOutcome.Forbidden;
+        }
+
+        EnsureExpectedStatus(response, HttpStatusCode.NoContent);
+        return ActivityWriteOutcome.Success;
     }
 
     private static HttpRequestMessage NewRequest(HttpMethod method, string uri) => NewRequest<ActivityDocument>(method, uri, null);

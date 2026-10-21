@@ -15,14 +15,6 @@ public enum PlacementWriteOutcome
     Conflict
 }
 
-/// <summary>Outcomes <see cref="ApiActivityClient.GetActivityAsync"/> distinguishes.</summary>
-public enum ActivityReadOutcome
-{
-    Success,
-    Forbidden,
-    NotFound
-}
-
 /// <summary>Outcomes <see cref="ApiPlacementClient.DeleteAsync"/> distinguishes (P5-12, #97).</summary>
 public enum PlacementRemoveOutcome
 {

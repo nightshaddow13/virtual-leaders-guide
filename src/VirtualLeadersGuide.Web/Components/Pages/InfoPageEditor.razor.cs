@@ -7,7 +7,6 @@ using VirtualLeadersGuide.Web.Authorization;
 using VirtualLeadersGuide.Web.Components.Shared;
 using VirtualLeadersGuide.Web.Events;
 using VirtualLeadersGuide.Web.InfoPages;
-using VirtualLeadersGuide.Web.Markdown;
 
 namespace VirtualLeadersGuide.Web.Components.Pages;
 
@@ -21,9 +20,6 @@ public partial class InfoPageEditor
 
     [Inject]
     private ApiInfoPageClient InfoPageClient { get; set; } = default!;
-
-    [Inject]
-    private MarkdownRenderer MarkdownRenderer { get; set; } = default!;
 
     [Inject]
     private NotificationService NotificationService { get; set; } = default!;
@@ -43,11 +39,7 @@ public partial class InfoPageEditor
 
     private enum PageState { Loading, Denied, Unavailable, Ready }
 
-    /// <remarks>Drives the responsive Write/Preview pane switch (grilled decision) - see <c>InfoPageEditor.razor.css</c>. Only meaningful below the 64rem breakpoint; ignored above it, where both panes always show.</remarks>
-    private enum PaneView { Write, Preview }
-
     private PageState state = PageState.Loading;
-    private PaneView activePane = PaneView.Write;
     private string? eventName;
     private bool isAdmin;
     private InfoPageFormModel? model;
@@ -254,18 +246,8 @@ public partial class InfoPageEditor
         /// <remarks>
         /// No <see cref="RequiredAttribute"/> - empty content is legal at the Api layer (CONTEXT.md's InfoPage
         /// entry: "written but not yet placed" is a normal state, not a draft one). Bound in
-        /// <c>InfoPageEditor.razor</c> to a plain native <c>&lt;textarea @bind-value:event="oninput"&gt;</c>,
-        /// deliberately not the <c>InputTextArea</c> component - <c>InputTextArea</c> hard-codes its own
-        /// <c>onchange</c> binding in its own <c>BuildRenderTree</c> and has no parameter a caller's
-        /// <c>@bind-Value:event</c> can override (verified directly against ASP.NET Core's source before
-        /// relying on it - a first attempt using <c>InputTextArea</c> with <c>@bind-Value:event="oninput"</c>
-        /// silently compiled but did nothing, since Razor's <c>:event</c> customization only overrides which
-        /// DOM event a *native element* binds to, not a component's own internal wiring; the unmatched
-        /// "oninput" ended up captured into <c>InputBase&lt;T&gt;.AdditionalAttributes</c> and splatted onto
-        /// the textarea as a second, unrelated handler). The whole point of a live Preview pane is that it
-        /// reflects what's being typed, not only what was typed the last time the textarea lost focus (caught
-        /// by <c>InfoPageManagementScenarios</c>'s E2E coverage, which fills the field and checks the Preview
-        /// pane without ever blurring it, the same way a real admin glancing at Preview mid-sentence would).
+        /// <c>InfoPageEditor.razor</c> through <c>MarkdownField</c>, whose <c>Value</c> remarks explain why the
+        /// editing surface is a native <c>&lt;textarea&gt;</c> rather than <c>InputTextArea</c>.
         /// </remarks>
         public string? MarkdownContent { get; set; }
     }
