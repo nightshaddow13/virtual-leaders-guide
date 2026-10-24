@@ -24,7 +24,10 @@ public class AspireE2ETestFramework(IMessageSink messageSink) : XunitTestFramewo
         new AspireE2ETestFrameworkExecutor(assemblyName, SourceInformationProvider, DiagnosticMessageSink);
 }
 
-/// <summary>Runs the assembly's test cases through <see cref="AspireE2ETestAssemblyRunner"/> instead of xUnit's stock runner.</summary>
+/// <summary>
+/// Runs the assembly's test cases through <see cref="AspireE2ETestAssemblyRunner"/> instead of xUnit's stock
+/// runner, each wrapped in a <see cref="RerunOnFailureTestCase"/> so a failure is rerun once for evidence (ADR-0076).
+/// </summary>
 /// <param name="assemblyName">The test assembly's name.</param>
 /// <param name="sourceInformationProvider">Source-location lookup, supplied by xUnit.</param>
 /// <param name="diagnosticMessageSink">Diagnostic message sink, supplied by xUnit.</param>
@@ -40,8 +43,11 @@ public class AspireE2ETestFrameworkExecutor(
         IMessageSink executionMessageSink,
         ITestFrameworkExecutionOptions executionOptions)
     {
+        IEnumerable<IXunitTestCase> rerunnableTestCases =
+            testCases.Select(testCase => (IXunitTestCase)new RerunOnFailureTestCase(testCase));
+
         using var assemblyRunner = new AspireE2ETestAssemblyRunner(
-            TestAssembly, testCases, DiagnosticMessageSink, executionMessageSink, executionOptions);
+            TestAssembly, rerunnableTestCases, DiagnosticMessageSink, executionMessageSink, executionOptions);
         await assemblyRunner.RunAsync();
     }
 }

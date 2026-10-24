@@ -127,11 +127,27 @@ idempotently.
 
 ## 6. Where failure artifacts land
 
-Every failed test leaves `trace.zip`, `screenshot.png`, `video.webm`, `page.html`, and an `emails/` folder
-(any JSON files the file-sink email sender had written by the time the test failed) under:
+A test records **no trace and no video on its first attempt** - recording every test was the suite's biggest
+cost (about 36% of a serial run, plus heavy antivirus scanning of the files), and nearly all of it was wasted
+on tests that pass ([ADR-0076](../adr/0076-a-failed-e2e-test-is-rerun-once-with-a-trace-and-video-for-evidence.md)).
+When a test fails it is **rerun once with both on**, purely to gather evidence. The test is still reported as
+failed with its *first* attempt's error; the rerun can never turn a failure into a pass.
+
+A failed test leaves, under `artifacts/e2e/<run timestamp>/<Class>.<Method>/`:
 
 ```
-artifacts/e2e/<run timestamp>/<Class>.<Method>/
+screenshot.png, page.html, emails/     taken at the moment of the first failure
+rerun/trace.zip, rerun/video.webm      recorded by the rerun (plus its own screenshot.png / page.html)
+rerun/DID_NOT_REPRODUCE.txt            instead of a trace/video, if the rerun passed
+```
+
+`emails/` holds any JSON files the file-sink email sender had written by then. If the rerun passed, the failure
+was intermittent and there is no recording of it - rerun with `VLG_E2E_TRACE_ALL=1` to record **every** attempt
+(and skip the rerun), so the one failing attempt is captured:
+
+```powershell
+$env:VLG_E2E_TRACE_ALL = "1"
+dotnet test tests/VirtualLeadersGuide.E2E.Tests --filter "FullyQualifiedName~SomeScenarios"
 ```
 
 A passing run leaves no `artifacts/e2e/` folder at all - nothing to clean up. `artifacts/` is already
@@ -161,8 +177,9 @@ stack rather than any one test:
 
 ## 7. Viewing a trace
 
-`trace.zip` is a Playwright trace: a time-travel view of every action, a screenshot filmstrip, the
-network log, and the console log for that one test run.
+`rerun/trace.zip` is a Playwright trace: a time-travel view of every action, a screenshot filmstrip, the
+network log, and the console log for the rerun of a failed test (or for the failing attempt itself, if you set
+`VLG_E2E_TRACE_ALL=1`).
 
 Without `pwsh`, drag it onto **[trace.playwright.dev](https://trace.playwright.dev)** instead - runs
 entirely in the browser, nothing uploaded. With `pwsh` installed (Section 2), the local viewer works
@@ -178,5 +195,4 @@ pwsh tests/VirtualLeadersGuide.E2E.Tests/bin/Debug/net10.0/playwright.ps1 show-t
 
 Not currently wired up - `Allure.Xunit`'s reporter doesn't activate under `dotnet test` in this
 environment (tracked as [#71](https://github.com/nightshaddow13/virtual-leaders-guide/issues/71), with
-the full diagnostic trail). `trace.zip` plus `screenshot.png`/`video.webm`/`page.html` are the whole
-diagnostic story for now.
+the full diagnostic trail). The failure artifacts in Section 6 are the whole diagnostic story for now.

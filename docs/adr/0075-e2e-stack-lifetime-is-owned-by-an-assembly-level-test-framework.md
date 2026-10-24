@@ -66,3 +66,6 @@ The decisions that are easy to get wrong:
 - Per-test data must stay isolated from other concurrently running classes (ADR-0039's "always create your
   own"); the `emails/` copy in a failed test's artifacts can include other tests' emails, which is noisy but
   harmless.
+- The same framework wraps every test case so a failed one is rerun once for evidence, which is also how a
+  trace and video are produced without recording every test - see
+  [ADR-0076](0076-a-failed-e2e-test-is-rerun-once-with-a-trace-and-video-for-evidence.md).

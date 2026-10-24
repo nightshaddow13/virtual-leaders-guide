@@ -7,10 +7,11 @@ using VirtualLeadersGuide.Identity.Contracts;
 namespace VirtualLeadersGuide.E2E.Tests;
 
 /// <summary>
-/// Base class for every E2E test in this project. Captures <c>trace.zip</c>, <c>screenshot.png</c>,
-/// <c>video.webm</c>, <c>page.html</c>, and any <see cref="AspireE2EFixture.EmailSink"/> contents under
-/// <c>artifacts/e2e/&lt;run timestamp&gt;/&lt;Class&gt;.&lt;Method&gt;/</c> for a failed test, and leaves
-/// nothing behind for a passing one. Also deletes every User/Event a derived test tracked via
+/// Base class for every E2E test in this project. For a failed test, captures <c>screenshot.png</c>,
+/// <c>page.html</c>, and any <see cref="AspireE2EFixture.EmailSink"/> contents under
+/// <c>artifacts/e2e/&lt;run timestamp&gt;/&lt;Class&gt;.&lt;Method&gt;/</c>, plus <c>trace.zip</c> and
+/// <c>video.webm</c> from the evidence rerun in its <c>rerun/</c> subfolder (ADR-0076 - a first attempt records
+/// neither). Leaves nothing behind for a passing test. Also deletes every User/Event a derived test tracked via
 /// <see cref="TrackUser"/>/<see cref="TrackEvent"/>/<see cref="CreateTrackedUserAsync"/>/
 /// <see cref="CreateEventAsync"/>, unless <c>VLG_E2E_KEEP_DATA=1</c> is set (ADR-0039).
 /// </summary>
@@ -86,12 +87,15 @@ public abstract class E2ETestBase : PageTest
     {
         await base.InitializeAsync();
 
-        await Context.Tracing.StartAsync(new TracingStartOptions
+        if (E2ECaptureMode.Active)
         {
-            Screenshots = true,
-            Snapshots = true,
-            Sources = true,
-        });
+            await Context.Tracing.StartAsync(new TracingStartOptions
+            {
+                Screenshots = true,
+                Snapshots = true,
+                Sources = true,
+            });
+        }
     }
 
     /// <inheritdoc/>
@@ -107,20 +111,49 @@ public abstract class E2ETestBase : PageTest
     public override async Task DisposeAsync()
     {
         IVideo? video = Page.Video;
+        bool recording = E2ECaptureMode.Active;
 
         string testDir = Path.Combine(RunRoot, $"{GetType().Name}.{_testName}");
+        if (E2ECaptureMode.IsRerun)
+        {
+            testDir = Path.Combine(testDir, "rerun");
+        }
 
         if (_passed)
         {
-            await Context.Tracing.StopAsync();
+            if (recording)
+            {
+                await Context.Tracing.StopAsync();
+            }
+
+            if (E2ECaptureMode.IsRerun)
+            {
+                await TryCaptureAsync(testDir, "DID_NOT_REPRODUCE.txt", () =>
+                {
+                    string? notePath = ResolveArtifactPath(testDir, "DID_NOT_REPRODUCE.txt");
+                    if (notePath is not null)
+                    {
+                        File.WriteAllText(
+                            notePath,
+                            "This test failed on its first attempt and passed on this rerun, so it is still reported as " +
+                            "failed. The first attempt's screenshot.png and page.html are in the folder above; there is " +
+                            "no trace or video of the failure itself. Set VLG_E2E_TRACE_ALL=1 to record every attempt.");
+                    }
+
+                    return Task.CompletedTask;
+                });
+            }
         }
         else
         {
-            await TryCaptureAsync(testDir, "trace.zip", async () =>
+            if (recording)
             {
-                string? tracePath = ResolveArtifactPath(testDir, "trace.zip");
-                await Context.Tracing.StopAsync(tracePath is null ? null : new TracingStopOptions { Path = tracePath });
-            });
+                await TryCaptureAsync(testDir, "trace.zip", async () =>
+                {
+                    string? tracePath = ResolveArtifactPath(testDir, "trace.zip");
+                    await Context.Tracing.StopAsync(tracePath is null ? null : new TracingStopOptions { Path = tracePath });
+                });
+            }
 
             await TryCaptureAsync(testDir, "screenshot.png", async () =>
             {
@@ -191,9 +224,10 @@ public abstract class E2ETestBase : PageTest
 
     /// <inheritdoc/>
     /// <remarks>
-    /// Records video for every test, not just failing ones - Playwright only finalizes a video once its
-    /// context closes, so "only record on failure" isn't an option. <see cref="DisposeAsync"/> deletes the
-    /// file instead when the test passed (AC #2).
+    /// Records video only while <see cref="E2ECaptureMode.Active"/> - Playwright only finalizes a video once
+    /// its context closes, so a test can't decide to keep one after the fact. That is why a failed test is
+    /// rerun with recording on rather than recorded every time (ADR-0076). When it is recording,
+    /// <see cref="DisposeAsync"/> deletes the file instead if the test passed (AC #2).
     /// </remarks>
     /// <remarks>
     /// <c>TimezoneId = "UTC"</c> pins the browser's <c>Intl.DateTimeFormat().resolvedOptions().timeZone</c>
@@ -204,7 +238,7 @@ public abstract class E2ETestBase : PageTest
     /// </remarks>
     public override BrowserNewContextOptions ContextOptions() => new()
     {
-        RecordVideoDir = Path.GetTempPath(),
+        RecordVideoDir = E2ECaptureMode.Active ? Path.GetTempPath() : null,
         TimezoneId = "UTC"
     };
 
