@@ -51,27 +51,36 @@ public sealed class TierReaper(VirtualLeadersGuideDbContext dbContext)
 
         Guid[] CandidatesOf(Func<ActivityPlacement, Guid?> pick) => [.. removing.Select(pick).OfType<Guid>().Distinct()];
 
+        IQueryable<Guid> PlacementsAtSubSection(Guid[] ids) =>
+            surviving.Where(p => p.SubSectionId != null && ids.Contains(p.SubSectionId.Value)).Select(p => p.SubSectionId!.Value);
+        IQueryable<Guid> PlacementsAtSection(Guid[] ids) =>
+            surviving.Where(p => p.SectionId != null && ids.Contains(p.SectionId.Value)).Select(p => p.SectionId!.Value);
+        IQueryable<Guid> PlacementsAtSubTab(Guid[] ids) =>
+            surviving.Where(p => p.SubTabId != null && ids.Contains(p.SubTabId.Value)).Select(p => p.SubTabId!.Value);
+        IQueryable<Guid> PlacementsAtTab(Guid[] ids) =>
+            surviving.Where(p => p.TabId != null && ids.Contains(p.TabId.Value)).Select(p => p.TabId!.Value);
+
         Guid[] subSections = await ReapAsync(dbContext.SubSections, CandidatesOf(p => p.SubSectionId), cancellationToken,
-            ids => surviving.Where(p => p.SubSectionId != null && ids.Contains(p.SubSectionId.Value)).Select(p => p.SubSectionId!.Value));
+            PlacementsAtSubSection);
 
+        IQueryable<Guid> SectionsWithSurvivingSubSections(Guid[] ids) => dbContext.SubSections.AsNoTracking()
+            .Where(s => ids.Contains(s.SectionId) && !subSections.Contains(s.Id)).Select(s => s.SectionId);
         Guid[] sections = await ReapAsync(dbContext.Sections, CandidatesOf(p => p.SectionId), cancellationToken,
-            ids => surviving.Where(p => p.SectionId != null && ids.Contains(p.SectionId.Value)).Select(p => p.SectionId!.Value),
-            ids => dbContext.SubSections.AsNoTracking()
-                .Where(s => ids.Contains(s.SectionId) && !subSections.Contains(s.Id)).Select(s => s.SectionId));
+            PlacementsAtSection, SectionsWithSurvivingSubSections);
 
+        IQueryable<Guid> SubTabsWithSurvivingSections(Guid[] ids) => dbContext.Sections.AsNoTracking()
+            .Where(s => s.ParentSubTabId != null && ids.Contains(s.ParentSubTabId.Value) && !sections.Contains(s.Id))
+            .Select(s => s.ParentSubTabId!.Value);
         Guid[] subTabs = await ReapAsync(dbContext.SubTabs, CandidatesOf(p => p.SubTabId), cancellationToken,
-            ids => surviving.Where(p => p.SubTabId != null && ids.Contains(p.SubTabId.Value)).Select(p => p.SubTabId!.Value),
-            ids => dbContext.Sections.AsNoTracking()
-                .Where(s => s.ParentSubTabId != null && ids.Contains(s.ParentSubTabId.Value) && !sections.Contains(s.Id))
-                .Select(s => s.ParentSubTabId!.Value));
+            PlacementsAtSubTab, SubTabsWithSurvivingSections);
 
+        IQueryable<Guid> TabsWithSurvivingSubTabs(Guid[] ids) => dbContext.SubTabs.AsNoTracking()
+            .Where(s => ids.Contains(s.TabId) && !subTabs.Contains(s.Id)).Select(s => s.TabId);
+        IQueryable<Guid> TabsWithSurvivingSections(Guid[] ids) => dbContext.Sections.AsNoTracking()
+            .Where(s => s.ParentTabId != null && ids.Contains(s.ParentTabId.Value) && !sections.Contains(s.Id))
+            .Select(s => s.ParentTabId!.Value);
         await ReapAsync(dbContext.Tabs, CandidatesOf(p => p.TabId), cancellationToken,
-            ids => surviving.Where(p => p.TabId != null && ids.Contains(p.TabId.Value)).Select(p => p.TabId!.Value),
-            ids => dbContext.SubTabs.AsNoTracking()
-                .Where(s => ids.Contains(s.TabId) && !subTabs.Contains(s.Id)).Select(s => s.TabId),
-            ids => dbContext.Sections.AsNoTracking()
-                .Where(s => s.ParentTabId != null && ids.Contains(s.ParentTabId.Value) && !sections.Contains(s.Id))
-                .Select(s => s.ParentTabId!.Value));
+            PlacementsAtTab, TabsWithSurvivingSubTabs, TabsWithSurvivingSections);
     }
 
     /// <summary>

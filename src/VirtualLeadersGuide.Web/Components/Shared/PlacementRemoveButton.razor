@@ -1,0 +1,21 @@
+@using VirtualLeadersGuide.Web.Activities
+
+@* The icon-only × that removes one of this Activity's rows (ADR-0037; wireframe turn 2a). Danger style: the light
+   text variant was near-invisible on the light card and read as disabled. *@
+<RadzenButton Icon="close" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Text" Size="ButtonSize.ExtraSmall"
+              Disabled="@Disabled" aria-label="@($"Remove placement {Leaf.Path.Display}")"
+              Click="@(() => OnRemove.InvokeAsync(Leaf))" />
+
+@code {
+    /// <summary>The tree row this button removes.</summary>
+    [Parameter, EditorRequired]
+    public PlacementLeaf Leaf { get; set; } = default!;
+
+    /// <summary>Raised with <see cref="Leaf"/> when clicked.</summary>
+    [Parameter]
+    public EventCallback<PlacementLeaf> OnRemove { get; set; }
+
+    /// <summary>Whether a save or removal is in flight.</summary>
+    [Parameter]
+    public bool Disabled { get; set; }
+}

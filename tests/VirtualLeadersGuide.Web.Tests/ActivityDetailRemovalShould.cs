@@ -161,17 +161,42 @@ public class ActivityDetailRemovalShould : BunitContext
         cut.WaitForAssertion(() => Assert.Contains("You don't have access to this Activity", cut.Markup, StringComparison.Ordinal), Patience);
     }
 
+    /// <remarks>AC5: a Director on an Event they aren't assigned to. Api answers the DELETE with 403 (covered in <c>PlacementsResourceShould</c>); the page must show the denial, not an error or a stale tree.</remarks>
+    [Fact]
+    public void ShowDenied_WhenADirectorsDeleteIsForbidden_ForRemoveAsync()
+    {
+        _deleteStatus = HttpStatusCode.Forbidden;
+        IRenderedComponent<ActivityDetail> cut = RenderPage("Director");
+
+        RemoveButton(cut, "Morning").Click();
+
+        cut.WaitForAssertion(() => Assert.Contains("You don't have access to this Activity", cut.Markup, StringComparison.Ordinal), Patience);
+        Assert.Equal([_morningPlacement.ToString()], _deleted);
+    }
+
+    [Fact]
+    public void TellThemItWasAlreadyRemoved_WhenApiSaysThePlacementIsGone_ForRemoveAsync()
+    {
+        _deleteStatus = HttpStatusCode.NotFound;
+        IRenderedComponent<ActivityDetail> cut = RenderPage();
+
+        RemoveButton(cut, "Morning").Click();
+
+        cut.WaitForAssertion(() => Assert.Contains("That placement was already removed.", cut.Markup, StringComparison.Ordinal), Patience);
+        Assert.DoesNotContain("Removed from", cut.Markup, StringComparison.Ordinal);
+    }
+
     // --- helpers ----------------------------------------------------------------------------------------
 
     private static AngleSharp.Dom.IElement RemoveButton(IRenderedComponent<ActivityDetail> cut, string path) =>
         cut.Find($"button[aria-label='Remove placement {path}']");
 
-    private IRenderedComponent<ActivityDetail> RenderPage()
+    private IRenderedComponent<ActivityDetail> RenderPage(string role = "Admin")
     {
         RegisterServices();
         Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
-        auth.SetAuthorized("admin-1");
-        auth.SetRoles("Admin");
+        auth.SetAuthorized($"{role.ToLowerInvariant()}-1");
+        auth.SetRoles(role);
 
         return Render<ActivityDetail>(parameters => parameters
             .Add(c => c.EventId, _eventId)
