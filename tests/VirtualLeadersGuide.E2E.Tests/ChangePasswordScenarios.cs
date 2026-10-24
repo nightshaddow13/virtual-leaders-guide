@@ -8,8 +8,7 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// <see cref="LoginPageScenarios"/>'s remarks explain for this project (ADR-0029). Download/delete on
 /// the Personal data page live in <see cref="PersonalDataScenarios"/> instead.
 /// </remarks>
-[Collection(nameof(AspireE2ECollection))]
-public class ChangePasswordScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
+public class ChangePasswordScenarios : E2ETestBase
 {
     [Fact(DisplayName = "Given a signed-in user, when they change their password, then they can sign in with the new password but not the old one")]
     public async Task GivenASignedInUser_WhenTheyChangeTheirPassword_ThenTheyCanSignInWithTheNewPasswordButNotTheOldOne() =>

@@ -15,12 +15,8 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// precedent for why (each scenario class keeps what it needs, rather than growing a shared surface no
 /// other class asked for).
 /// </remarks>
-[Collection(nameof(AspireE2ECollection))]
-public class InfoPageManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
+public class InfoPageManagementScenarios : E2ETestBase
 {
-    /// <remarks>See <see cref="EventManagementScenarios.InteractiveTimeoutMs"/>'s identical remarks - every page here is <c>InteractiveServer</c> too.</remarks>
-    private const int InteractiveTimeoutMs = 15_000;
-
     [Fact(DisplayName = "Given an Event, when an Admin creates an InfoPage with markdown content, then it renders sanitized in Preview and appears in the list after saving")]
     public async Task GivenAnEvent_WhenAnAdminCreatesAnInfoPageWithMarkdownContent_ThenItRendersSanitizedInPreviewAndAppearsInTheListAfterSaving() =>
         await RunAsync(async () =>
@@ -43,11 +39,11 @@ public class InfoPageManagementScenarios(AspireE2EFixture fixture) : E2ETestBase
 
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create page" }).ClickAsync();
             await Expect(Page).ToHaveURLAsync(
-                new Regex(@"info-pages/[0-9a-f-]{36}$"), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                new Regex(@"info-pages/[0-9a-f-]{36}$"), InteractiveUrl());
 
             await Page.GotoAsync(InfoPageListUrl(eventId));
             await Expect(Page.GetByText(title)).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
         });
 
     [Fact(DisplayName = "Given an existing InfoPage, when an Admin edits its title and deletes it, then the change persists and the deletion removes it from the list")]
@@ -63,18 +59,18 @@ public class InfoPageManagementScenarios(AspireE2EFixture fixture) : E2ETestBase
             await Page.Locator("#Title").FillAsync(renamedTo);
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" }).ClickAsync();
             await Expect(Page).ToHaveURLAsync(
-                InfoPageListUrl(eventId), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                InfoPageListUrl(eventId), InteractiveUrl());
             await Expect(Page.GetByText(renamedTo)).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
 
             ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = renamedTo });
             await row.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Delete" }).ClickAsync();
             ILocator dialog = Page.Locator(".rz-dialog-content");
-            await Expect(dialog).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(dialog).ToBeVisibleAsync(InteractiveVisible());
             await dialog.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Delete", Exact = true }).ClickAsync();
 
             await Expect(row).Not.ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
         });
 
     /// <remarks>Pins ADR-0059: an assigned Director gets the exact same full CRUD an Admin does - unlike Event's own details, which stay Admin-only.</remarks>
@@ -93,23 +89,25 @@ public class InfoPageManagementScenarios(AspireE2EFixture fixture) : E2ETestBase
             await Page.Locator("#Title").FillAsync(title);
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create page" }).ClickAsync();
             await Expect(Page).ToHaveURLAsync(
-                new Regex(@"info-pages/[0-9a-f-]{36}$"), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                new Regex(@"info-pages/[0-9a-f-]{36}$"), InteractiveUrl());
 
             string renamedTo = $"e2e-Director Renamed {Guid.NewGuid():n}";
+            await Expect(Page.Locator("#Title")).ToHaveValueAsync(
+                title, InteractiveValue());
             await Page.Locator("#Title").FillAsync(renamedTo);
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" }).ClickAsync();
             await Expect(Page).ToHaveURLAsync(
-                InfoPageListUrl(eventId), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                InfoPageListUrl(eventId), InteractiveUrl());
 
             ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = renamedTo });
-            await Expect(row).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(row).ToBeVisibleAsync(InteractiveVisible());
             await row.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Delete" }).ClickAsync();
             ILocator dialog = Page.Locator(".rz-dialog-content");
-            await Expect(dialog).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(dialog).ToBeVisibleAsync(InteractiveVisible());
             await dialog.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Delete", Exact = true }).ClickAsync();
 
             await Expect(row).Not.ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
         });
 
     [Fact(DisplayName = "Given a Director not assigned to an Event, when navigating directly to its Info pages, then they are denied")]
@@ -126,7 +124,7 @@ public class InfoPageManagementScenarios(AspireE2EFixture fixture) : E2ETestBase
             await Page.GotoAsync(InfoPageListUrl(unassignedEventId));
 
             await Expect(Page.GetByText("You don't have access to this Event")).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
         });
 
     private string InfoPageListUrl(Guid eventId) => new Uri(Fixture.WebBaseUrl, $"dashboard/events/{eventId}/info-pages").ToString();
@@ -145,7 +143,7 @@ public class InfoPageManagementScenarios(AspireE2EFixture fixture) : E2ETestBase
         await Page.Locator("#Title").FillAsync(title);
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create page" }).ClickAsync();
         await Expect(Page).ToHaveURLAsync(
-            new Regex(@"info-pages/[0-9a-f-]{36}$"), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+            new Regex(@"info-pages/[0-9a-f-]{36}$"), InteractiveUrl());
 
         string path = new Uri(Page.Url).AbsolutePath;
         return Guid.Parse(path[(path.LastIndexOf('/') + 1)..]);

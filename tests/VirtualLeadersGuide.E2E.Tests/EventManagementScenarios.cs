@@ -41,17 +41,10 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// read directly off the source's own edit form rather than re-derived, so the "never the source's" comparison
 /// is against what the source actually has, not an assumption about what it should be.
 /// </remarks>
-[Collection(nameof(AspireE2ECollection))]
-public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
+/// <remarks>Runs alone, after the parallel classes - see <see cref="NonParallelE2ECollection"/> for why, and for when this attribute goes.</remarks>
+[Collection(nameof(NonParallelE2ECollection))]
+public class EventManagementScenarios : E2ETestBase
 {
-    /// <remarks>
-    /// Every page in this class is <c>InteractiveServer</c> (ADR-0034), so an assertion that depends on a
-    /// SignalR round trip - a click's server-side handler, a <c>RadzenDataGrid</c>'s <c>LoadData</c> after
-    /// navigating in - needs more room than Playwright's 5s assertion default, especially on a fresh
-    /// per-test browser context's first interactive page (cold circuit connect).
-    /// </remarks>
-    private const int InteractiveTimeoutMs = 15_000;
-
     [Fact(DisplayName = "Given a signed-in Admin, when creating an Event with only a name, then it appears in the Events list")]
     public async Task GivenASignedInAdmin_WhenCreatingAnEventWithOnlyAName_ThenItAppearsInTheEventsList() =>
         await RunAsync(async () =>
@@ -61,7 +54,7 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
 
             await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
             await Expect(Page.GetByText(name)).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
         });
 
     [Fact(DisplayName = "Given an existing Event, when an Admin edits its name, address, and passcode, then the changes persist")]
@@ -83,7 +76,7 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
 
             await Expect(Page).ToHaveURLAsync(
                 new Uri(Fixture.WebBaseUrl, "dashboard").ToString(),
-                new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveUrl());
 
             await Page.GotoAsync(EventEditorUrl(eventId));
             await Expect(Page.Locator("#Name")).ToHaveValueAsync(renamedTo);
@@ -105,11 +98,11 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
 
             await Expect(Page).ToHaveURLAsync(
                 new Uri(Fixture.WebBaseUrl, "dashboard").ToString(),
-                new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveUrl());
 
             ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = name });
             await Expect(row.GetByText("JUN 12")).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
         });
 
     [Fact(DisplayName = "Given an existing Event, when an Admin sets an end before the start, then the error lands on the end field")]
@@ -126,7 +119,7 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
 
             await Expect(Page).ToHaveURLAsync(EventEditorUrl(eventId));
             await Expect(FieldErrorLocator("EndsAt").GetByText("End must be after the start.")).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
         });
 
     [Fact(DisplayName = "Given an existing Event, when an Admin creates another with the same name, then the error lands on the name field")]
@@ -143,7 +136,7 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
             await Expect(Page).ToHaveURLAsync(new Uri(Fixture.WebBaseUrl, "dashboard/events/new").ToString());
 
             await Expect(FieldErrorLocator("Name").GetByText("already in use by another Event")).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
         });
 
     [Fact(DisplayName = "Given an existing Event, when an Admin deletes it and confirms, then it is removed from the Events list")]
@@ -158,11 +151,11 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
             await row.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Delete" }).ClickAsync();
 
             ILocator dialog = Page.Locator(".rz-dialog-content");
-            await Expect(dialog).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(dialog).ToBeVisibleAsync(InteractiveVisible());
             await dialog.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Delete", Exact = true }).ClickAsync();
 
             await Expect(row).Not.ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
         });
 
     [Fact(DisplayName = "Given the delete dialog is open, when an Admin cancels instead, then the Event remains listed")]
@@ -177,12 +170,12 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
             await row.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Delete" }).ClickAsync();
 
             ILocator dialog = Page.Locator(".rz-dialog-content");
-            await Expect(dialog).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(dialog).ToBeVisibleAsync(InteractiveVisible());
             await dialog.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Cancel" }).ClickAsync();
 
             await Expect(dialog).Not.ToBeVisibleAsync();
             await Expect(Page.GetByText(name)).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
         });
 
     [Fact(DisplayName = "Given a Director assigned to one Event, when viewing the dashboard, then only that Event is listed read-only with no create button")]
@@ -199,15 +192,15 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
             await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
 
             await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = "My events", Exact = true }))
-                .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                .ToBeVisibleAsync(InteractiveVisible());
             await Expect(Page.GetByText(assignedName)).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
             await Expect(Page.GetByText(unassignedName)).Not.ToBeVisibleAsync();
             await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "+ New event" })).Not.ToBeVisibleAsync();
 
             await Page.GotoAsync(EventEditorUrl(assignedEventId));
             await Expect(Page.GetByText("VIEW ONLY")).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
             await Expect(Page.Locator("#Name")).Not.ToBeVisibleAsync();
             await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" })).Not.ToBeVisibleAsync();
         });
@@ -224,12 +217,12 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
 
             await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
             ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = assignedName });
-            await Expect(row).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(row).ToBeVisibleAsync(InteractiveVisible());
             await Expect(row.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Delete" })).Not.ToBeVisibleAsync();
 
             await Page.GotoAsync(EventEditorUrl(assignedEventId));
             await Expect(Page.GetByText("VIEW ONLY")).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
             await Expect(Page.GetByText("Danger zone")).Not.ToBeVisibleAsync();
         });
 
@@ -247,7 +240,7 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
             await Page.GotoAsync(EventEditorUrl(unassignedEventId));
 
             await Expect(Page.GetByText("You don't have access to this Event")).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
         });
 
     [Fact(DisplayName = "Given a Director, when navigating directly to the new-Event page, then they are denied without a form ever rendering")]
@@ -263,7 +256,7 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
             await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard/events/new").ToString());
 
             await Expect(Page.GetByText("You don't have access to this Event")).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
             await Expect(Page.Locator("#Name")).Not.ToBeVisibleAsync();
         });
 
@@ -277,12 +270,12 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
             await Page.GotoAsync(EventEditorUrl(eventId));
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Go live" }).ClickAsync();
             await Expect(Page.GetByText("LIVE", new PageGetByTextOptions { Exact = true })).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
 
             await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
             ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = name });
             await Expect(row.GetByText("LIVE", new LocatorGetByTextOptions { Exact = true })).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
         });
 
     [Fact(DisplayName = "Given a Live Event, when an Admin cancels it through the Danger zone, then it leaves the default list but is reachable by filtering to Cancelled")]
@@ -294,31 +287,31 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
             await Page.GotoAsync(EventEditorUrl(eventId));
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Go live" }).ClickAsync();
             await Expect(Page.GetByText("LIVE", new PageGetByTextOptions { Exact = true })).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
 
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Cancel event" }).ClickAsync();
             ILocator dialog = Page.Locator(".rz-dialog-content");
-            await Expect(dialog).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(dialog).ToBeVisibleAsync(InteractiveVisible());
             await Expect(dialog.GetByText($"Cancel {name}?")).ToBeVisibleAsync();
             await dialog.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Cancel event", Exact = true }).ClickAsync();
             await Expect(Page.GetByText("CANCELLED", new PageGetByTextOptions { Exact = true })).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
 
             await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
             await Expect(Page.GetByText(name)).Not.ToBeVisibleAsync();
 
             ILocator statusFilterDropdown = Page.Locator(".rz-dropdown");
             await Expect(statusFilterDropdown).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
             await statusFilterDropdown.ClickAsync();
             ILocator cancelledOption = Page.GetByRole(AriaRole.Option, new PageGetByRoleOptions { Name = "Cancelled" });
             await Expect(cancelledOption).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
             await cancelledOption.ClickAsync();
             await Page.Keyboard.PressAsync("Escape");
 
             ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = name });
-            await Expect(row).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(row).ToBeVisibleAsync(InteractiveVisible());
             await Expect(row.GetByText("CANCELLED", new LocatorGetByTextOptions { Exact = true })).ToBeVisibleAsync();
         });
 
@@ -331,16 +324,16 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
             await Page.GotoAsync(EventEditorUrl(eventId));
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Go live" }).ClickAsync();
             await Expect(Page.GetByText("LIVE", new PageGetByTextOptions { Exact = true })).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
 
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Cancel event" }).ClickAsync();
             ILocator dialog = Page.Locator(".rz-dialog-content");
-            await Expect(dialog).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(dialog).ToBeVisibleAsync(InteractiveVisible());
             await dialog.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Keep it live" }).ClickAsync();
 
             await Expect(dialog).Not.ToBeVisibleAsync();
             await Expect(Page.GetByText("LIVE", new PageGetByTextOptions { Exact = true })).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
             await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Cancel event" })).ToBeVisibleAsync();
         });
 
@@ -357,16 +350,16 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" }).ClickAsync();
             await Expect(Page).ToHaveURLAsync(
                 new Uri(Fixture.WebBaseUrl, "dashboard").ToString(),
-                new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveUrl());
 
             await Page.GotoAsync(EventEditorUrl(eventId));
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Go live" }).ClickAsync();
             await Expect(Page.GetByText("LIVE", new PageGetByTextOptions { Exact = true })).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
 
             await Page.GotoAsync(EventEditorUrl(eventId));
             await Expect(Page.GetByText("PAST", new PageGetByTextOptions { Exact = true })).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
 
             await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
             await Expect(Page.GetByText(name)).Not.ToBeVisibleAsync();
@@ -385,12 +378,12 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" }).ClickAsync();
             await Expect(Page).ToHaveURLAsync(
                 new Uri(Fixture.WebBaseUrl, "dashboard").ToString(),
-                new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveUrl());
 
             await Page.GotoAsync(EventEditorUrl(sourceId));
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Go live" }).ClickAsync();
             await Expect(Page.GetByText("LIVE", new PageGetByTextOptions { Exact = true })).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
             string sourceSlug = await Page.Locator("#Slug").InputValueAsync();
             string sourcePasscode = await Page.Locator("#Passcode").InputValueAsync();
 
@@ -400,7 +393,7 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
 
             await Expect(Page).ToHaveURLAsync(
                 new Regex(@"dashboard/events/new\?startsAt=.*&endsAt=.*"),
-                new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveUrl());
             await Expect(Page.Locator("#Name")).ToHaveValueAsync(string.Empty);
             await Expect(Page.GetByText("Directors")).Not.ToBeVisibleAsync();
             await Expect(Page.Locator("#StartsAt")).ToHaveValueAsync("2028-06-12T09:00");
@@ -418,7 +411,7 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
 
             Assert.NotEqual(sourceId, duplicateId);
             await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Go live" })).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
             string duplicateSlug = await Page.Locator("#Slug").InputValueAsync();
             string duplicatePasscode = await Page.Locator("#Passcode").InputValueAsync();
             Assert.NotEqual(sourceSlug, duplicateSlug);
@@ -437,7 +430,7 @@ public class EventManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fi
 
             await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
             ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = assignedName });
-            await Expect(row).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(row).ToBeVisibleAsync(InteractiveVisible());
             await Expect(row.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Duplicate" })).Not.ToBeVisibleAsync();
         });
 

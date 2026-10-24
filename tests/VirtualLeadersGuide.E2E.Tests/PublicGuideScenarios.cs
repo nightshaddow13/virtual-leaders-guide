@@ -18,8 +18,7 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// cookie concerns by design (ADR-0058), so signing in/out around it never disturbs it within one test's
 /// single browser context.
 /// </remarks>
-[Collection(nameof(AspireE2ECollection))]
-public class PublicGuideScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
+public class PublicGuideScenarios : E2ETestBase
 {
     [Fact(DisplayName = "Given a Live Event's address and correct passcode, when a visitor submits them on /, then they reach the unlocked guide")]
     public async Task GivenALiveEventsAddressAndCorrectPasscode_WhenAVisitorSubmitsThemOnHome_ThenTheyReachTheUnlockedGuide() =>
@@ -31,7 +30,7 @@ public class PublicGuideScenarios(AspireE2EFixture fixture) : E2ETestBase(fixtur
             await SubmitOnHomeAsync(slug, passcode);
 
             await Expect(Page).ToHaveURLAsync(new Uri(Fixture.WebBaseUrl, $"e/{slug}").ToString());
-            await Expect(Page.GetByText("This guide is unlocked")).ToBeVisibleAsync();
+            await Expect(Page.GetByText("This guide is unlocked")).ToBeVisibleAsync(InteractiveVisible());
         });
 
     [Fact(DisplayName = "Given a Live Event's address but the wrong passcode, when a visitor submits them on /, then they see an inline error and stay on /")]
@@ -63,9 +62,9 @@ public class PublicGuideScenarios(AspireE2EFixture fixture) : E2ETestBase(fixtur
             (string slug, string passcode) = await CreateAndPublishEventAsync("Cancelled Camporee");
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Cancel event" }).ClickAsync();
             ILocator dialog = Page.Locator(".rz-dialog-content");
-            await Expect(dialog).ToBeVisibleAsync();
+            await Expect(dialog).ToBeVisibleAsync(InteractiveVisible());
             await dialog.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Cancel event", Exact = true }).ClickAsync();
-            await Expect(Page.GetByText("CANCELLED", new PageGetByTextOptions { Exact = true })).ToBeVisibleAsync();
+            await Expect(Page.GetByText("CANCELLED", new PageGetByTextOptions { Exact = true })).ToBeVisibleAsync(InteractiveVisible());
             await SignOutAsync();
 
             await SubmitOnHomeAsync(slug, passcode);
@@ -114,7 +113,7 @@ public class PublicGuideScenarios(AspireE2EFixture fixture) : E2ETestBase(fixtur
             await Page.GotoAsync(EventEditorUrl(eventId));
             await Page.Locator("#Passcode").FillAsync(newPasscode);
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" }).ClickAsync();
-            await Expect(Page).ToHaveURLAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
+            await Expect(Page).ToHaveURLAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString(), InteractiveUrl());
             await SignOutAsync();
 
             await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, $"e/{slug}").ToString());
@@ -164,7 +163,7 @@ public class PublicGuideScenarios(AspireE2EFixture fixture) : E2ETestBase(fixtur
         await Page.Locator("#Title").FillAsync(title);
         await Page.Locator("#MarkdownContent").FillAsync(markdownContent);
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create page" }).ClickAsync();
-        await Expect(Page).ToHaveURLAsync(new Regex(@"info-pages/[0-9a-f-]{36}$"));
+        await Expect(Page).ToHaveURLAsync(new Regex(@"info-pages/[0-9a-f-]{36}$"), InteractiveUrl());
 
         return title;
     }
@@ -187,7 +186,7 @@ public class PublicGuideScenarios(AspireE2EFixture fixture) : E2ETestBase(fixtur
 
         await Page.GotoAsync(EventEditorUrl(eventId));
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Go live" }).ClickAsync();
-        await Expect(Page.GetByText("LIVE", new PageGetByTextOptions { Exact = true })).ToBeVisibleAsync();
+        await Expect(Page.GetByText("LIVE", new PageGetByTextOptions { Exact = true })).ToBeVisibleAsync(InteractiveVisible());
 
         string slug = await Page.Locator("#Slug").InputValueAsync();
         string passcode = await Page.Locator("#Passcode").InputValueAsync();

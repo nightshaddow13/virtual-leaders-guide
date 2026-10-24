@@ -1,5 +1,5 @@
 ---
-status: narrows ADR-0011's one-test-project-per-src-project rule
+status: narrows ADR-0011's one-test-project-per-src-project rule; amended by P2.1-7 (#204) - fixture sharing
 ---
 
 # `VirtualLeadersGuide.E2E.Tests` lives in `tests/`, as a named exception to ADR-0011
@@ -44,3 +44,17 @@ once P2.1-6 (#64) scopes it in. A new top-level folder would overstate how diffe
   cost and very likely deadlocking on the fixed launch-profile ports and the persistent SQL data volume
   `AppHost.cs` already declares. There is no compiler or test-runner error for getting this wrong; a reviewer
   has to catch it.
+
+## Amendment (P2.1-7, #204)
+
+The Consequences above describe a single `AspireE2ECollection` that every test class must join. P2.1-7 replaces
+that mechanism, keeping the commitment behind it: the run still boots exactly one stack. An assembly-level
+test framework now owns that stack (see [ADR-0075](0075-e2e-stack-lifetime-is-owned-by-an-assembly-level-test-framework.md)),
+so no class joins a collection to share it - each class is its own collection and the classes run in parallel.
+
+- `AspireE2ECollection` is gone, replaced by a fixture-less `NonParallelE2ECollection` that only disables
+  parallelization (used by `EventManagementScenarios` until P2.1-8, #205).
+- "A reviewer has to catch a second stack" is no longer true: `AspireE2EFixture`'s constructor is `internal`,
+  so declaring it as a class or collection fixture fails at run start.
+- The remaining rule is the original one, restated: never boot a second Aspire stack, because of the fixed
+  launch-profile ports and the persistent SQL data volume.

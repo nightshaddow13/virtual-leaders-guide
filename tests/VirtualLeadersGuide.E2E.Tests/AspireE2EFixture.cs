@@ -9,11 +9,22 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// are proven to actually serve requests - not merely "started" (see <see cref="InitializeAsync"/>).
 /// </summary>
 /// <remarks>
-/// Shared across the whole run via <see cref="AspireE2ECollection"/> - see ADR-0025's Consequences for why
-/// every E2E test class must join that exact collection rather than declaring its own.
+/// Not an xUnit fixture: <see cref="AspireE2EStack"/> creates the one instance, boots it from the assembly
+/// runner before the first test, and disposes it after the last (ADR-0075). Test classes reach it through
+/// <see cref="E2ETestBase.Fixture"/>, which is what lets every class run in parallel against it.
 /// </remarks>
 public sealed class AspireE2EFixture : IAsyncLifetime
 {
+    /// <remarks>
+    /// <see langword="internal"/> on purpose: xUnit can only construct a class or collection fixture through a
+    /// public constructor, so re-adding <c>ICollectionFixture&lt;AspireE2EFixture&gt;</c> or
+    /// <c>IClassFixture&lt;AspireE2EFixture&gt;</c> fails loudly at run start instead of silently booting a
+    /// second stack (ADR-0075, which turns ADR-0025's "a reviewer has to catch it" into an enforced rule).
+    /// </remarks>
+    internal AspireE2EFixture()
+    {
+    }
+
     /// <remarks>
     /// Cold CI has to pull the mssql/azurite images before SQL Server's first-boot init even starts
     /// (<c>AppHostShould</c> observed ~40s locally with a warm cache) - this covers container start, both
@@ -107,6 +118,14 @@ public sealed class AspireE2EFixture : IAsyncLifetime
 
     private string _directorUserId = null!;
     private string _invitedUserId = null!;
+
+    /// <remarks>
+    /// Set only once <see cref="SeedFixtureDataAsync"/> has finished. <see cref="DisposeAsync"/> sweeps and
+    /// verifies retention only when this is true - a stack that failed part-way through
+    /// <see cref="InitializeAsync"/> has no API clients to sweep with (and nothing to verify), but its
+    /// containers and processes still need disposing.
+    /// </remarks>
+    private bool _seeded;
 
     /// <summary>
     /// The <c>web</c> resource's HTTPS base URL, populated once <see cref="InitializeAsync"/> has proven both
@@ -222,6 +241,7 @@ public sealed class AspireE2EFixture : IAsyncLifetime
             Facilities = new FacilitiesApiClient(_facilitiesApiHttpClient, InternalJwtKey);
 
             await SeedFixtureDataAsync(cancellationToken);
+            _seeded = true;
         }
         catch (TimeoutException ex)
         {
@@ -241,18 +261,19 @@ public sealed class AspireE2EFixture : IAsyncLifetime
     /// existing per-test teardown discipline - a backstop for a crashed or killed test's own tracked cleanup
     /// never running. <see cref="VerifyRetentionAsync"/> runs second and is deliberately allowed to throw:
     /// unlike a per-test <c>DisposeAsync</c> failure (which ADR-0028 protects from corrupting that test's own
-    /// already-decided result), a collection-fixture <c>DisposeAsync</c> exception isn't attached to any one
-    /// test - xUnit surfaces it as its own distinct run-level error. That's what makes ADR-0039's "nothing
-    /// else survives" rule an enforced fact rather than an aspiration a log file quietly ignores. An earlier
-    /// draft of this design planned a dedicated <c>[Fact]</c> for this instead, ordered to run last - dropped
-    /// because xUnit v2 doesn't actually guarantee execution order across test *classes* sharing one
-    /// collection (only that they run sequentially, not in what order), which a same-collection <c>[Fact]</c>
-    /// can't rely on. This fixture's own <c>DisposeAsync</c> has the one ordering guarantee that's real: it
-    /// runs after every test in the collection has finished, unconditionally.
+    /// already-decided result), this exception isn't attached to any one test - <see cref="AspireE2EStack"/>
+    /// calls this from the assembly runner's <c>BeforeTestAssemblyFinishedAsync</c> inside the runner's
+    /// <c>Aggregator</c>, so xUnit surfaces it as its own run-level "Test Assembly Cleanup Failure" and
+    /// <c>dotnet test</c> exits non-zero. That's what makes ADR-0039's "nothing else survives" rule an enforced
+    /// fact rather than an aspiration a log file quietly ignores. A dedicated <c>[Fact]</c> ordered to run last
+    /// was dropped because xUnit v2 doesn't guarantee execution order across test classes; the assembly
+    /// runner's end-of-run hook has the one ordering guarantee that's real: it runs once, after every
+    /// collection (parallel and non-parallel alike) has finished, unconditionally (ADR-0075).
+    /// Skipped entirely when <see cref="InitializeAsync"/> never finished seeding (<see cref="_seeded"/>).
     /// </remarks>
     public async Task DisposeAsync()
     {
-        if (!KeepData && _app is not null)
+        if (!KeepData && _seeded)
         {
             await SweepOrphanedDataAsync();
             await VerifyRetentionAsync();
@@ -300,15 +321,16 @@ public sealed class AspireE2EFixture : IAsyncLifetime
                 $"{actualEmails.Count}: [{string.Join(", ", actualEmails)}].");
         }
 
-        int directorGrantCount = (await IdentityApi.GetGrantsAsync(_directorUserId, cancellationToken)).Count;
-        int invitedGrantCount = (await IdentityApi.GetGrantsAsync(_invitedUserId, cancellationToken)).Count;
-        int totalGrantCount = directorGrantCount + invitedGrantCount;
+        IReadOnlyList<RoleGrantDto> directorGrants = await IdentityApi.GetGrantsAsync(_directorUserId, cancellationToken);
+        IReadOnlyList<RoleGrantDto> invitedGrants = await IdentityApi.GetGrantsAsync(_invitedUserId, cancellationToken);
+        int totalGrantCount = directorGrants.Count + invitedGrants.Count;
         if (totalGrantCount != 3)
         {
             throw new InvalidOperationException(
                 "ADR-0039 violation: expected exactly 3 Role grants across the fixture Director (unscoped + " +
                 $"event-scoped) and the fixture Invite (unscoped), found {totalGrantCount} " +
-                $"({directorGrantCount} + {invitedGrantCount}).");
+                $"({directorGrants.Count} + {invitedGrants.Count}). " +
+                $"Director: [{DescribeGrants(directorGrants)}]. Invite: [{DescribeGrants(invitedGrants)}].");
         }
 
         IReadOnlyList<(Guid Id, string Name)> facilities = await Facilities.ListE2EFacilitiesAsync(cancellationToken);
@@ -355,6 +377,36 @@ public sealed class AspireE2EFixture : IAsyncLifetime
         await EnsureUnscopedDirectorGrantAsync(invited.Id, cancellationToken);
         await EnsureEventGrantAsync(director.Id, RetainedEventId, cancellationToken);
     }
+
+    /// <summary>
+    /// Deletes every grant <paramref name="userId"/> holds except an unscoped Director grant and a Director grant
+    /// on one of <paramref name="retainedEventIds"/> - the only grants ADR-0039 lets a fixture account carry.
+    /// </summary>
+    /// <remarks>
+    /// The fixture accounts belong to this suite, but they are ordinary Director users to the app, so nothing
+    /// stops someone assigning one to a real Event by accident. That used to fail every later run's
+    /// <see cref="VerifyRetentionAsync"/> until someone found and removed the grant by hand.
+    /// </remarks>
+    private async Task RemoveStrayFixtureGrantsAsync(
+        string userId, IReadOnlyCollection<Guid> retainedEventIds, CancellationToken cancellationToken)
+    {
+        foreach (RoleGrantDto grant in await IdentityApi.GetGrantsAsync(userId, cancellationToken))
+        {
+            bool expected = grant.RoleId == RoleIds.Director
+                && (grant.EventId is null || retainedEventIds.Contains(grant.EventId.Value));
+
+            if (!expected)
+            {
+                await IdentityApi.DeleteGrantAsync(userId, grant.Id, cancellationToken);
+            }
+        }
+    }
+
+    /// <summary>Renders grants for <see cref="VerifyRetentionAsync"/>'s failure message, so an extra one can be traced to its Event.</summary>
+    private static string DescribeGrants(IEnumerable<RoleGrantDto> grants) =>
+        string.Join(", ", grants.Select(grant => grant.EventId is null
+            ? $"role {grant.RoleId} unscoped"
+            : $"role {grant.RoleId} on event {grant.EventId}"));
 
     private async Task<IdentityUserDto> EnsureUserAsync(string email, CancellationToken cancellationToken) =>
         await IdentityApi.TryGetByEmailAsync(email, cancellationToken)
@@ -408,8 +460,10 @@ public sealed class AspireE2EFixture : IAsyncLifetime
     /// that isn't <see cref="RetainedEventName"/>, and every <c>e2e-</c> Facility/Facility Type (P8-2, #166 -
     /// zero of either are retained). Facilities delete before Facility Types - a Facility Type's FK is
     /// <c>DeleteBehavior.Restrict</c> (ADR-0071), so an un-swept Facility would still block its Facility
-    /// Type's delete. A properly-behaved run leaves nothing for this to find - it exists for the run that
-    /// didn't (a crash, a kill, a test whose own tracked cleanup itself failed).
+    /// Type's delete. It also removes any Role grant the fixture Director or Invite holds beyond the ones
+    /// ADR-0039 lists (<see cref="RemoveStrayFixtureGrantsAsync"/>). A properly-behaved run leaves nothing for
+    /// this to find - it exists for the run that didn't (a crash, a kill, a test whose own tracked cleanup
+    /// itself failed, an Admin picking a fixture account in the "assign Director" dropdown by mistake).
     /// </remarks>
     private async Task SweepOrphanedDataAsync()
     {
@@ -438,6 +492,9 @@ public sealed class AspireE2EFixture : IAsyncLifetime
                 }
             }
 
+            await RemoveStrayFixtureGrantsAsync(_directorUserId, [RetainedEventId], cancellationToken);
+            await RemoveStrayFixtureGrantsAsync(_invitedUserId, [], cancellationToken);
+
             foreach ((Guid id, _) in await Facilities.ListE2EFacilitiesAsync(cancellationToken))
             {
                 await Facilities.DeleteFacilityAsync(id, cancellationToken);
@@ -450,10 +507,9 @@ public sealed class AspireE2EFixture : IAsyncLifetime
         }
         catch (Exception ex)
         {
-            Directory.CreateDirectory(SweepLogDirectory);
-            await File.AppendAllTextAsync(
+            E2EArtifactLog.Append(
                 Path.Combine(SweepLogDirectory, "SWEEP_ERRORS.txt"),
-                $"AspireE2EFixture's run-end sweep failed: {ex.GetType().Name}: {ex.Message}{Environment.NewLine}");
+                $"AspireE2EFixture's run-end sweep failed: {ex.GetType().Name}: {ex.Message}");
         }
     }
 

@@ -13,12 +13,8 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// <c>RadzenAutoComplete</c> is typed into with a fill followed by Tab, so the value is committed by blur
 /// rather than depending on the popup.
 /// </remarks>
-[Collection(nameof(AspireE2ECollection))]
-public class PlacementManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
+public class PlacementManagementScenarios : E2ETestBase
 {
-    /// <remarks>See <see cref="EventManagementScenarios.InteractiveTimeoutMs"/>'s identical remarks - every page here is <c>InteractiveServer</c> too.</remarks>
-    private const int InteractiveTimeoutMs = 15_000;
-
     [Fact(DisplayName = "Given an Activity with no Placements, when an Admin places it under a brand-new Tab and saves, then the Tab appears lit in the tree and as a chip on the Activities list")]
     public async Task GivenAnActivityWithNoPlacements_WhenAnAdminPlacesItUnderANewTabAndSaves_ThenTheTabAppearsLitInTheTreeAndAsAChipOnTheList() =>
         await RunAsync(async () =>
@@ -29,18 +25,18 @@ public class PlacementManagementScenarios(AspireE2EFixture fixture) : E2ETestBas
             string tab = $"e2e-Morning {Guid.NewGuid():n}";
 
             await Page.GotoAsync(ActivityUrl(eventId, activityId));
-            await Expect(Page.GetByText("Not placed anywhere yet")).ToBeVisibleAsync(Interactive());
+            await Expect(Page.GetByText("Not placed anywhere yet")).ToBeVisibleAsync(InteractiveVisible());
             await PlaceAsync(tab);
 
-            await Expect(Page.Locator(".ptn-pending")).ToBeVisibleAsync(Interactive());
+            await Expect(Page.Locator(".ptn-pending")).ToBeVisibleAsync(InteractiveVisible());
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" }).ClickAsync();
-            await Expect(Page.Locator(".ptn-pending")).ToHaveCountAsync(0, new LocatorAssertionsToHaveCountOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(Page.Locator(".ptn-pending")).ToHaveCountAsync(0, InteractiveCount());
 
             await Page.ReloadAsync();
-            await Expect(Page.Locator(".ptn-lit")).ToHaveTextAsync(activityName, new LocatorAssertionsToHaveTextOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(Page.Locator(".ptn-lit")).ToHaveTextAsync(activityName, InteractiveText());
 
             await Page.GotoAsync(ActivitiesListUrl(eventId));
-            await Expect(Page.Locator(".al-chip")).ToHaveTextAsync(tab, new LocatorAssertionsToHaveTextOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(Page.Locator(".al-chip")).ToHaveTextAsync(tab, InteractiveText());
         });
 
     [Fact(DisplayName = "Given an Activity, when an Admin places it at a Tab and Section with no Sub Tab, then the saved path shows both and skips the Sub Tab")]
@@ -58,15 +54,15 @@ public class PlacementManagementScenarios(AspireE2EFixture fixture) : E2ETestBas
             await Page.Locator("#PlacementTab").PressAsync("Tab");
             await Page.Locator("#PlacementSection").FillAsync(section);
             await Page.Locator("#PlacementSection").PressAsync("Tab");
-            await Expect(Page.Locator(".pb-path")).ToContainTextAsync(section, new LocatorAssertionsToContainTextOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(Page.Locator(".pb-path")).ToContainTextAsync(section, InteractiveContainText());
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Place it" }).ClickAsync();
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" }).ClickAsync();
 
             // Save is async - leaving before the ghost clears would navigate away mid-request.
-            await Expect(Page.Locator(".ptn-pending")).ToHaveCountAsync(0, new LocatorAssertionsToHaveCountOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(Page.Locator(".ptn-pending")).ToHaveCountAsync(0, InteractiveCount());
 
             await Page.GotoAsync(ActivitiesListUrl(eventId));
-            await Expect(Page.Locator(".al-chip")).ToHaveTextAsync($"{tab} › {section}", new LocatorAssertionsToHaveTextOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(Page.Locator(".al-chip")).ToHaveTextAsync($"{tab} › {section}", InteractiveText());
         });
 
     [Fact(DisplayName = "Given an Activity already placed under a Tab, when an Admin tries to place it there again, then the builder warns of the duplicate and disables Place it")]
@@ -83,7 +79,7 @@ public class PlacementManagementScenarios(AspireE2EFixture fixture) : E2ETestBas
             await Page.Locator("#PlacementTab").FillAsync(tab);
             await Page.Locator("#PlacementTab").PressAsync("Tab");
 
-            await Expect(Page.GetByText("This activity is already placed here")).ToBeVisibleAsync(Interactive());
+            await Expect(Page.GetByText("This activity is already placed here")).ToBeVisibleAsync(InteractiveVisible());
             await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Place it" })).ToBeDisabledAsync();
         });
 
@@ -100,13 +96,13 @@ public class PlacementManagementScenarios(AspireE2EFixture fixture) : E2ETestBas
             await Page.GotoAsync(ActivityUrl(eventId, first));
             await PlaceAsync(tab);
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" }).ClickAsync();
-            await Expect(Page.Locator(".ptn-pending")).ToHaveCountAsync(0, new LocatorAssertionsToHaveCountOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(Page.Locator(".ptn-pending")).ToHaveCountAsync(0, InteractiveCount());
 
             await Page.GotoAsync(ActivityUrl(eventId, second));
             await Page.Locator("#PlacementTab").ClickAsync();
 
-            await Expect(Page.Locator(".rz-autocomplete-panel").GetByText(tab)).ToBeVisibleAsync(Interactive());
-            await Expect(Page.Locator(".rz-autocomplete-panel")).ToContainTextAsync("1 activity", new LocatorAssertionsToContainTextOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(Page.Locator(".rz-autocomplete-panel").GetByText(tab)).ToBeVisibleAsync(InteractiveVisible());
+            await Expect(Page.Locator(".rz-autocomplete-panel")).ToContainTextAsync("1 activity", InteractiveContainText());
         });
 
     [Fact(DisplayName = "Given an Activity with an unsaved ghost row, when an Admin clicks Cancel, then they are asked once and can keep editing or discard and leave")]
@@ -120,14 +116,14 @@ public class PlacementManagementScenarios(AspireE2EFixture fixture) : E2ETestBas
             await PlaceAsync($"e2e-Evening {Guid.NewGuid():n}");
 
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Cancel" }).ClickAsync();
-            await Expect(Page.GetByText("Discard unsaved placements?")).ToBeVisibleAsync(Interactive());
+            await Expect(Page.GetByText("Discard unsaved placements?")).ToBeVisibleAsync(InteractiveVisible());
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Keep editing" }).ClickAsync();
             await Expect(Page).ToHaveURLAsync(ActivityUrl(eventId, activityId));
-            await Expect(Page.Locator(".ptn-pending")).ToBeVisibleAsync(Interactive());
+            await Expect(Page.Locator(".ptn-pending")).ToBeVisibleAsync(InteractiveVisible());
 
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Cancel" }).ClickAsync();
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Discard and leave" }).ClickAsync();
-            await Expect(Page).ToHaveURLAsync(ActivitiesListUrl(eventId), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(Page).ToHaveURLAsync(ActivitiesListUrl(eventId), InteractiveUrl());
         });
 
     /// <remarks>Pins ADR-0069's posture extended to Placement: an assigned Director places exactly as an Admin does.</remarks>
@@ -146,8 +142,8 @@ public class PlacementManagementScenarios(AspireE2EFixture fixture) : E2ETestBas
             await PlaceAsync(tab);
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" }).ClickAsync();
 
-            await Expect(Page.Locator(".ptn-pending")).ToHaveCountAsync(0, new LocatorAssertionsToHaveCountOptions { Timeout = InteractiveTimeoutMs });
-            await Expect(Page.Locator(".ptn-lit")).ToBeVisibleAsync(Interactive());
+            await Expect(Page.Locator(".ptn-pending")).ToHaveCountAsync(0, InteractiveCount());
+            await Expect(Page.Locator(".ptn-lit")).ToBeVisibleAsync(InteractiveVisible());
         });
 
     [Fact(DisplayName = "Given a Director not assigned to an Event, when navigating directly to one of its Activities, then they are denied")]
@@ -163,7 +159,7 @@ public class PlacementManagementScenarios(AspireE2EFixture fixture) : E2ETestBas
 
             await Page.GotoAsync(ActivityUrl(unassignedEventId, activityId));
 
-            await Expect(Page.GetByText("You don't have access to this Activity")).ToBeVisibleAsync(Interactive());
+            await Expect(Page.GetByText("You don't have access to this Activity")).ToBeVisibleAsync(InteractiveVisible());
         });
 
     [Fact(DisplayName = "Given an Activity placed under two Tabs that another Activity shares, when an Admin removes one, then it goes with no dialog and Undo restores it")]
@@ -180,15 +176,15 @@ public class PlacementManagementScenarios(AspireE2EFixture fixture) : E2ETestBas
             await PlaceAndSaveAsync(eventId, canoe, morning, afternoon);
 
             await Page.GotoAsync(ActivityUrl(eventId, canoe));
-            await Expect(Page.Locator(".ptn-lit")).ToHaveCountAsync(2, new LocatorAssertionsToHaveCountOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(Page.Locator(".ptn-lit")).ToHaveCountAsync(2, InteractiveCount());
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = $"Remove placement {morning}" }).ClickAsync();
 
-            await Expect(Page.Locator(".ptn-lit")).ToHaveCountAsync(1, new LocatorAssertionsToHaveCountOptions { Timeout = InteractiveTimeoutMs });
-            await Expect(Page.GetByText($"Removed from {morning}")).ToBeVisibleAsync(Interactive());
+            await Expect(Page.Locator(".ptn-lit")).ToHaveCountAsync(1, InteractiveCount());
+            await Expect(Page.GetByText($"Removed from {morning}")).ToBeVisibleAsync(InteractiveVisible());
             await Expect(Page.Locator(".rz-dialog-title")).ToHaveCountAsync(0);
 
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Undo" }).ClickAsync();
-            await Expect(Page.Locator(".ptn-lit")).ToHaveCountAsync(2, new LocatorAssertionsToHaveCountOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(Page.Locator(".ptn-lit")).ToHaveCountAsync(2, InteractiveCount());
         });
 
     /// <remarks>The one scenario that proves the delete ordering on SQL Server (the Api suite runs on SQLite): the Placement and the Tab it alone kept alive go in a single save.</remarks>
@@ -205,14 +201,14 @@ public class PlacementManagementScenarios(AspireE2EFixture fixture) : E2ETestBas
 
             await Page.GotoAsync(ActivityUrl(eventId, canoe));
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = $"Remove placement {reaped}" }).ClickAsync();
-            await Expect(Page.Locator(".rz-dialog-title")).ToHaveTextAsync("Remove this placement?", new LocatorAssertionsToHaveTextOptions { Timeout = InteractiveTimeoutMs });
-            await Expect(Page.GetByText($"This is the only activity in {reaped}")).ToBeVisibleAsync(Interactive());
+            await Expect(Page.Locator(".rz-dialog-title")).ToHaveTextAsync("Remove this placement?", InteractiveText());
+            await Expect(Page.GetByText($"This is the only activity in {reaped}")).ToBeVisibleAsync(InteractiveVisible());
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Remove", Exact = true }).ClickAsync();
 
-            await Expect(Page.Locator(".ptn-lit")).ToHaveCountAsync(1, new LocatorAssertionsToHaveCountOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(Page.Locator(".ptn-lit")).ToHaveCountAsync(1, InteractiveCount());
             await Page.ReloadAsync();
             await Page.Locator("#PlacementTab").ClickAsync();
-            await Expect(Page.Locator(".rz-autocomplete-panel").GetByText(kept)).ToBeVisibleAsync(Interactive());
+            await Expect(Page.Locator(".rz-autocomplete-panel").GetByText(kept)).ToBeVisibleAsync(InteractiveVisible());
             await Expect(Page.Locator(".rz-autocomplete-panel").GetByText(reaped)).ToHaveCountAsync(0);
         });
 
@@ -229,10 +225,10 @@ public class PlacementManagementScenarios(AspireE2EFixture fixture) : E2ETestBas
             await Page.GotoAsync(ActivityUrl(eventId, canoe));
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = $"Remove placement {tab}" }).ClickAsync();
 
-            await Expect(Page.GetByText("An activity needs at least one placement.")).ToBeVisibleAsync(Interactive());
+            await Expect(Page.GetByText("An activity needs at least one placement.")).ToBeVisibleAsync(InteractiveVisible());
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Keep it" }).ClickAsync();
             await Page.ReloadAsync();
-            await Expect(Page.Locator(".ptn-lit")).ToHaveCountAsync(1, new LocatorAssertionsToHaveCountOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(Page.Locator(".ptn-lit")).ToHaveCountAsync(1, InteractiveCount());
         });
 
     [Fact(DisplayName = "Given an Activity with one Placement, when an Admin removes it and chooses Delete activity, then they land on the list without that Activity")]
@@ -249,13 +245,13 @@ public class PlacementManagementScenarios(AspireE2EFixture fixture) : E2ETestBas
 
             await Page.GotoAsync(ActivityUrl(eventId, canoe));
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = $"Remove placement {tab}" }).ClickAsync();
-            await Expect(Page.GetByText($"Delete {name} instead?")).ToBeVisibleAsync(Interactive());
-            await Expect(Page.GetByText("Its placement is removed.")).ToBeVisibleAsync(Interactive());
+            await Expect(Page.GetByText($"Delete {name} instead?")).ToBeVisibleAsync(InteractiveVisible());
+            await Expect(Page.GetByText("Its placement is removed.")).ToBeVisibleAsync(InteractiveVisible());
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Delete activity" }).ClickAsync();
 
             await Expect(Page).ToHaveURLAsync(
-                ActivitiesListUrl(eventId), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
-            await Expect(Page.GetByText(otherName)).ToBeVisibleAsync(Interactive());
+                ActivitiesListUrl(eventId), InteractiveUrl());
+            await Expect(Page.GetByText(otherName)).ToBeVisibleAsync(InteractiveVisible());
             await Expect(Page.GetByText(name)).ToHaveCountAsync(0);
         });
 
@@ -279,12 +275,12 @@ public class PlacementManagementScenarios(AspireE2EFixture fixture) : E2ETestBas
             await Page.GotoAsync(ActivitiesListUrl(eventId));
             await Page.Locator("tr", new PageLocatorOptions { HasText = name })
                 .GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Delete" }).ClickAsync();
-            await Expect(Page.Locator(".rz-dialog-title")).ToHaveTextAsync("Delete activity?", new LocatorAssertionsToHaveTextOptions { Timeout = InteractiveTimeoutMs });
-            await Expect(Page.GetByText("Its 2 placements are removed.")).ToBeVisibleAsync(Interactive());
-            await Expect(Page.GetByText("disappear from the guide too.")).ToBeVisibleAsync(Interactive());
+            await Expect(Page.Locator(".rz-dialog-title")).ToHaveTextAsync("Delete activity?", InteractiveText());
+            await Expect(Page.GetByText("Its 2 placements are removed.")).ToBeVisibleAsync(InteractiveVisible());
+            await Expect(Page.GetByText("disappear from the guide too.")).ToBeVisibleAsync(InteractiveVisible());
             await Page.Locator(".rz-dialog").GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Delete", Exact = true }).ClickAsync();
 
-            await Expect(Page.GetByText(name)).ToHaveCountAsync(0, new LocatorAssertionsToHaveCountOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(Page.GetByText(name)).ToHaveCountAsync(0, InteractiveCount());
 
             await Page.GotoAsync(ActivityUrl(eventId, swim));
             await Page.Locator("#PlacementTab").ClickAsync();
@@ -302,7 +298,7 @@ public class PlacementManagementScenarios(AspireE2EFixture fixture) : E2ETestBas
         }
 
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" }).ClickAsync();
-        await Expect(Page.Locator(".ptn-pending")).ToHaveCountAsync(0, new LocatorAssertionsToHaveCountOptions { Timeout = InteractiveTimeoutMs });
+        await Expect(Page.Locator(".ptn-pending")).ToHaveCountAsync(0, InteractiveCount());
     }
 
     private async Task PlaceAsync(string tab)
@@ -321,13 +317,11 @@ public class PlacementManagementScenarios(AspireE2EFixture fixture) : E2ETestBas
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create activity" }).ClickAsync();
         await Expect(Page).ToHaveURLAsync(
             new System.Text.RegularExpressions.Regex($"/dashboard/events/{eventId}/activities/[0-9a-f-]{{36}}$"),
-            new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+            InteractiveUrl());
 
         string path = new Uri(Page.Url).AbsolutePath;
         return (name, Guid.Parse(path[(path.LastIndexOf('/') + 1)..]));
     }
-
-    private static LocatorAssertionsToBeVisibleOptions Interactive() => new() { Timeout = InteractiveTimeoutMs };
 
     private string ActivitiesListUrl(Guid eventId) => new Uri(Fixture.WebBaseUrl, $"dashboard/events/{eventId}/activities").ToString();
 

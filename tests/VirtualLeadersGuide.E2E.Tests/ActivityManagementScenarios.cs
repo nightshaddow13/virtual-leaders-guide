@@ -18,12 +18,8 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// "Activities" button rather than trusting the create redirect already landed on the list - that's what
 /// actually proves the new <c>EventEditor</c> entry point works, not just that create-then-redirect does.
 /// </remarks>
-[Collection(nameof(AspireE2ECollection))]
-public class ActivityManagementScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
+public class ActivityManagementScenarios : E2ETestBase
 {
-    /// <remarks>See <see cref="EventManagementScenarios.InteractiveTimeoutMs"/>'s identical remarks - every page here is <c>InteractiveServer</c> too.</remarks>
-    private const int InteractiveTimeoutMs = 15_000;
-
     [Fact(DisplayName = "Given an Event, when an Admin creates an Activity with markdown Description, then it renders sanitized in Preview and the create succeeds")]
     public async Task GivenAnEvent_WhenAnAdminCreatesAnActivityWithMarkdownDescription_ThenItRendersSanitizedInPreviewAndTheCreateSucceeds() =>
         await RunAsync(async () =>
@@ -41,11 +37,11 @@ public class ActivityManagementScenarios(AspireE2EFixture fixture) : E2ETestBase
 
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create activity" }).ClickAsync();
             await Expect(Page).ToHaveURLAsync(
-                ActivityDetailUrlPattern, new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                ActivityDetailUrlPattern, InteractiveUrl());
 
             await Page.GotoAsync(ActivitiesListUrl(eventId));
             await Expect(Page.GetByText(name)).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
         });
 
     [Fact(DisplayName = "Given an existing Activity, when an Admin edits its Name and Description, then the change persists")]
@@ -62,13 +58,13 @@ public class ActivityManagementScenarios(AspireE2EFixture fixture) : E2ETestBase
             await Page.Locator("#Description").FillAsync("Now with **portaging**.");
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" }).ClickAsync();
             await Expect(Page).ToHaveURLAsync(
-                ActivitiesListUrl(eventId), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                ActivitiesListUrl(eventId), InteractiveUrl());
             await Expect(Page.GetByText(renamedTo)).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
 
             await Page.GotoAsync(ActivityEditorUrl(eventId, activityId));
             await Expect(Page.Locator("#Name")).ToHaveValueAsync(
-                renamedTo, new LocatorAssertionsToHaveValueOptions { Timeout = InteractiveTimeoutMs });
+                renamedTo, InteractiveValue());
             await Expect(Page.Locator(".md-pane-preview strong")).ToHaveTextAsync("portaging");
         });
 
@@ -88,7 +84,7 @@ public class ActivityManagementScenarios(AspireE2EFixture fixture) : E2ETestBase
             await Page.Locator("#Name").FillAsync(name);
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create activity" }).ClickAsync();
             await Expect(Page).ToHaveURLAsync(
-                ActivityDetailUrlPattern, new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                ActivityDetailUrlPattern, InteractiveUrl());
 
             string createdPath = new Uri(Page.Url).AbsolutePath;
             Guid activityId = Guid.Parse(createdPath[(createdPath.LastIndexOf('/') + 1)..]);
@@ -98,9 +94,9 @@ public class ActivityManagementScenarios(AspireE2EFixture fixture) : E2ETestBase
             await Page.Locator("#Name").FillAsync(renamedTo);
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" }).ClickAsync();
             await Expect(Page).ToHaveURLAsync(
-                ActivitiesListUrl(eventId), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                ActivitiesListUrl(eventId), InteractiveUrl());
             await Expect(Page.GetByText(renamedTo)).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
         });
 
     [Fact(DisplayName = "Given an Event with Activities, when an Admin opens its Activities list, then each Activity appears")]
@@ -115,14 +111,14 @@ public class ActivityManagementScenarios(AspireE2EFixture fixture) : E2ETestBase
             await Page.Locator("#Name").FillAsync(name);
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create activity" }).ClickAsync();
             await Expect(Page).ToHaveURLAsync(
-                ActivityDetailUrlPattern, new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                ActivityDetailUrlPattern, InteractiveUrl());
 
             await Page.GotoAsync(EventUrl(eventId));
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Activities" }).ClickAsync();
             await Expect(Page).ToHaveURLAsync(
-                ActivitiesListUrl(eventId), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                ActivitiesListUrl(eventId), InteractiveUrl());
             await Expect(Page.GetByText(name)).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
         });
 
     [Fact(DisplayName = "Given a Director not assigned to an Event, when navigating directly to its Activities list, then they are denied")]
@@ -139,7 +135,7 @@ public class ActivityManagementScenarios(AspireE2EFixture fixture) : E2ETestBase
             await Page.GotoAsync(ActivitiesListUrl(unassignedEventId));
 
             await Expect(Page.GetByText("You don't have access to this Event")).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
         });
 
     [Fact(DisplayName = "Given a Director not assigned to an Event, when navigating directly to its new-Activity form, then they are denied")]
@@ -156,7 +152,7 @@ public class ActivityManagementScenarios(AspireE2EFixture fixture) : E2ETestBase
             await Page.GotoAsync(NewActivityUrl(unassignedEventId));
 
             await Expect(Page.GetByText("You don't have access to this Event")).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
         });
 
     [Fact(DisplayName = "Given a Director not assigned to an Event, when navigating directly to one of its Activities' editor, then they are denied")]
@@ -174,7 +170,7 @@ public class ActivityManagementScenarios(AspireE2EFixture fixture) : E2ETestBase
             await Page.GotoAsync(ActivityEditorUrl(unassignedEventId, activityId));
 
             await Expect(Page.GetByText("You don't have access to this Event")).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
         });
 
     private static Regex ActivityDetailUrlPattern { get; } = new(@"activities/[0-9a-f-]{36}$");
@@ -191,7 +187,7 @@ public class ActivityManagementScenarios(AspireE2EFixture fixture) : E2ETestBase
         await Page.Locator("#Name").FillAsync(name);
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create activity" }).ClickAsync();
         await Expect(Page).ToHaveURLAsync(
-            ActivityDetailUrlPattern, new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+            ActivityDetailUrlPattern, InteractiveUrl());
 
         string path = new Uri(Page.Url).AbsolutePath;
         return Guid.Parse(path[(path.LastIndexOf('/') + 1)..]);

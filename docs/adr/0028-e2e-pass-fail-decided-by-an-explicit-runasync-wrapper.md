@@ -1,3 +1,7 @@
+---
+status: amended by P2.1-7 (#204) - the rejected retry mechanism
+---
+
 # E2E pass/fail is decided by an explicit `RunAsync` wrapper, not `Microsoft.Playwright.Xunit`'s `ExceptionCapturer`
 
 `Microsoft.Playwright.Xunit`'s test base classes (`PageTest` → `ContextTest` → `BrowserTest` → `PlaywrightTest`
@@ -72,3 +76,17 @@ locked file handle may only ever cost captured evidence - never the correctness 
   "capture-issues" log: `TOO_LONG.txt` is a known, anticipated condition with a specific cause and fix (a
   shorter name, or enabling Windows long-path support); `CAPTURE_ERRORS.txt` is a catch-all for anything
   unanticipated. Conflating them would make the common, expected case harder to scan for.
+
+## Amendment (P2.1-7, #204)
+
+Above, retry/flaky-re-run disambiguation was rejected as premature because "no test project in this repo has a
+retry mechanism today, so there's nothing concrete to design against yet". P2.1-7 adds one, with a concrete
+driver: recording a trace and video for every test was the suite's largest cost, and almost all of it was wasted
+on passing tests. A failed test is now **rerun once, with both recording, purely to gather evidence** - see
+[ADR-0076](0076-a-failed-e2e-test-is-rerun-once-with-a-trace-and-video-for-evidence.md).
+
+This does not reopen the decision above. `RunAsync` still decides pass/fail, `_passed` still defaults to
+`false`, and the reported result is always the first attempt's - the rerun can never turn a failure into a pass.
+The `[CallerMemberName]` concern is also unchanged: both attempts share one `testName`, and the rerun's files are
+kept apart by a `rerun/` subfolder instead of a different name. "A trace of every test" is no longer true of the
+first attempt, so the `Tracing` and `RecordVideoDir` remarks in `E2ETestBase` now describe two modes.

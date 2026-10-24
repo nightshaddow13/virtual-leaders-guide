@@ -23,12 +23,8 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// <see cref="IdentityApiClient.CreateUserAsync"/>) is what creates the row - a revoked invite's own delete
 /// makes a second, tracked delete a tolerated no-op, not a double-delete failure (ADR-0039).
 /// </remarks>
-[Collection(nameof(AspireE2ECollection))]
-public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
+public class DirectorInviteScenarios : E2ETestBase
 {
-    /// <remarks>Same reasoning as <see cref="EventManagementScenarios"/>'s own constant - every page here is <c>InteractiveServer</c> (ADR-0036).</remarks>
-    private const int InteractiveTimeoutMs = 15_000;
-
     [Fact(DisplayName = "Given a signed-in Admin, when inviting a new email as a Director, then the invite email arrives and the person shows as Invited")]
     public async Task GivenASignedInAdmin_WhenInvitingANewEmailAsADirector_ThenTheInviteEmailArrivesAndThePersonShowsAsInvited() =>
         await RunAsync(async () =>
@@ -66,9 +62,9 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
             await SignInAndGoToDashboardAsync(email, TestCredentials.KnownPassword);
 
             await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = "My events", Exact = true }))
-                .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                .ToBeVisibleAsync(InteractiveVisible());
             await Expect(Page.GetByText("No Events are assigned to you yet.")).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
         });
 
     [Fact(DisplayName = "Given an activated Director, when an Admin assigns them to an Event from the Event's page, then it appears on their dashboard after signing in again")]
@@ -91,13 +87,13 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
             await Page.GotoAsync(EventEditorUrl(eventId));
             await AddDirectorToEventAsync(email);
             await Expect(Page.GetByText(email).First).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
 
             await SignOutAsync();
             await SignInAndGoToDashboardAsync(email, TestCredentials.KnownPassword);
 
             await Expect(Page.GetByText(eventName)).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
         });
 
     [Fact(DisplayName = "Given an email that already belongs to a User, when an Admin tries to invite it again, then the existing account is shown and no email is sent")]
@@ -112,7 +108,7 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Continue" }).ClickAsync();
 
             await Expect(Page.GetByText("already exists")).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
             await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Open this user" }))
                 .ToBeVisibleAsync();
 
@@ -139,7 +135,7 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
             await SignOutAsync();
             await Page.GotoAsync(firstInvite.Payload);
             await Expect(Page.GetByText("Invalid invite")).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
 
             await Page.GotoAsync(secondInvite.Payload);
             await SubmitSetupAsync(TestCredentials.KnownPassword);
@@ -162,14 +158,14 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
 
             await Expect(Page).ToHaveURLAsync(
                 new Uri(Fixture.WebBaseUrl, "dashboard/users").ToString(),
-                new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveUrl());
             await FilterUsersAsync(email);
             await Expect(Page.GetByText(email)).Not.ToBeVisibleAsync();
 
             await SignOutAsync();
             await Page.GotoAsync(inviteEmail.Payload);
             await Expect(Page.GetByText("Invalid invite")).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
         });
 
     [Fact(DisplayName = "Given an Admin viewing an Event's Directors list, when they remove a Director and confirm, then the Director disappears from that Event's list")]
@@ -186,12 +182,12 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
                 .ClickAsync();
 
             ILocator dialog = Page.Locator(".rz-dialog-content");
-            await Expect(dialog).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(dialog).ToBeVisibleAsync(InteractiveVisible());
             await Expect(dialog).ToContainTextAsync(director.Email!);
             await dialog.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Remove", Exact = true }).ClickAsync();
 
             await Expect(Page.Locator(".vlg-directors-list").GetByText(director.Email!)).Not.ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
         });
 
     [Fact(DisplayName = "Given the remove-Director dialog is open, when an Admin cancels instead, then the Director stays assigned")]
@@ -208,12 +204,12 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
                 .ClickAsync();
 
             ILocator dialog = Page.Locator(".rz-dialog-content");
-            await Expect(dialog).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(dialog).ToBeVisibleAsync(InteractiveVisible());
             await dialog.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Cancel", Exact = true }).ClickAsync();
 
             await Expect(dialog).Not.ToBeVisibleAsync();
             await Expect(Page.Locator(".vlg-directors-list").GetByText(director.Email!)).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
         });
 
     [Fact(DisplayName = "Given an Admin viewing an activated User's detail page, when they delete the User and confirm, then the User disappears from the Users screen")]
@@ -228,13 +224,13 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Delete user" }).ClickAsync();
 
             ILocator dialog = Page.Locator(".rz-dialog-content");
-            await Expect(dialog).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(dialog).ToBeVisibleAsync(InteractiveVisible());
             await Expect(dialog).ToContainTextAsync(user.Email!);
             await dialog.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Delete", Exact = true }).ClickAsync();
 
             await Expect(Page).ToHaveURLAsync(
                 new Uri(Fixture.WebBaseUrl, "dashboard/users").ToString(),
-                new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveUrl());
             await FilterUsersAsync(user.Email!);
             await Expect(Page.GetByText(user.Email!)).Not.ToBeVisibleAsync();
         });
@@ -252,12 +248,12 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Delete user" }).ClickAsync();
 
             ILocator dialog = Page.Locator(".rz-dialog-content");
-            await Expect(dialog).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(dialog).ToBeVisibleAsync(InteractiveVisible());
             await dialog.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Cancel", Exact = true }).ClickAsync();
 
             await Expect(dialog).Not.ToBeVisibleAsync();
             await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Delete user" }))
-                .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                .ToBeVisibleAsync(InteractiveVisible());
         });
 
     /// <remarks>
@@ -277,7 +273,7 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
         await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard/users").ToString());
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "+ Invite director" }).ClickAsync();
         await Expect(Page.Locator("#Email")).ToBeVisibleAsync(
-            new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            InteractiveVisible());
     }
 
     private async Task OpenInviteDialogAndSendAsync(string email, string? displayName)
@@ -287,7 +283,7 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Continue" }).ClickAsync();
 
         await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Send invitation" }))
-            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            .ToBeVisibleAsync(InteractiveVisible());
         if (displayName is not null)
         {
             await Page.Locator("#DisplayName").FillAsync(displayName);
@@ -295,7 +291,7 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
 
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Send invitation" }).ClickAsync();
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Done" }).ClickAsync(
-            new LocatorClickOptions { Timeout = InteractiveTimeoutMs });
+            InteractiveClick());
     }
 
     /// <summary>Navigates to the Users screen and filters the grid, without asserting on the result - see <see cref="SearchUsersAsync"/> for the common "and it's there" case.</summary>
@@ -317,7 +313,7 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
     {
         await FilterUsersAsync(search);
         await Expect(Page.GetByText(search)).ToBeVisibleAsync(
-            new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            InteractiveVisible());
     }
 
     /// <remarks>
@@ -330,7 +326,7 @@ public class DirectorInviteScenarios(AspireE2EFixture fixture) : E2ETestBase(fix
     /// </remarks>
     private async Task AssertUserRowStateAsync(string email, string state) =>
         await Expect(UserRowLocator(email).GetByText(state)).ToBeVisibleAsync(
-            new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            InteractiveVisible());
 
     /// <summary>Clicks the "Open" button in the one row containing <paramref name="email"/>.</summary>
     /// <remarks>
