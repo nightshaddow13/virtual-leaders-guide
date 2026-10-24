@@ -11,9 +11,9 @@ assembly-level `[assembly: TestFramework]` (`AspireE2ETestFramework`) swaps in a
 `BeforeTestAssemblyFinishedAsync`, sweeps orphaned data, verifies ADR-0039's retention table, and disposes the
 stack once, after every collection has finished. `AspireE2EStack` holds the one `AspireE2EFixture`; test
 classes read it through `E2ETestBase.Fixture` instead of having it injected, take no constructor arguments, and
-declare no `[Collection]`. Each class is therefore its own implicit collection: classes run in parallel
-(`xunit.runner.json`: `parallelizeTestCollections: true`, `maxParallelThreads: "0.5x"`), while tests inside a
-class stay serial.
+declare no `[Collection]`. Each class is therefore its own implicit collection, so classes *can* run in
+parallel (`xunit.runner.json`: `parallelizeTestCollections: true`) while tests inside a class stay serial.
+`maxParallelThreads` is **1** by default, so the suite runs serially unless a run opts in (see below).
 
 The decisions that are easy to get wrong:
 
@@ -36,8 +36,18 @@ The decisions that are easy to get wrong:
   `NonParallelE2ECollection` (`DisableParallelization = true`): its Admin-grid row lookups assume the Event it
   just made is on page 1, which other classes creating Events concurrently can break. P2.1-8 (#205) removes
   that dependence and the collection with it.
-- **The cap is CPU-relative (`0.5x`), not a fixed number.** Each concurrent test owns a Chromium, so the right
-  cap scales with the machine. Override per run with `dotnet test -- xUnit.MaxParallelThreads=N`.
+- **Parallel is opt-in; the default cap is 1.** The ticket asked for four parallel classes to be measurably
+  faster than serial. On the development machine (8 logical cores, 16 GB) they were not: with tracing off, serial
+  took 1m52s and 1m45s and the `0.5x` cap (4 threads) took 2m12s and 1m49s, all 77 tests passing; and before
+  tracing was turned off (ADR-0076), four threads were 2-4x *slower per test* and produced intermittent 30s
+  timeouts and SQL connection timeouts. A serial run already held the CPU near 91%, and only about a third of
+  the CPU in use was the test stack - Windows Defender, the developer's own browser and other background tools
+  took the rest - so extra workers had no idle cores to use. The ticket's own figure, "one Chromium per worker",
+  also assumes headroom a laptop doesn't have. The capability stays (a CI runner or workstation may well see a
+  speedup) and is switched on per run with `dotnet test -- xUnit.MaxParallelThreads=N`; the default is the
+  setting that was fastest and cleanest where it was measured. **The ticket's "4-thread run is measurably
+  lower" criterion is therefore not met on this hardware** - the PR records the numbers rather than ship a
+  default that is slower and flakier.
 - **Appends to the shared artifact logs go through one lock** (`E2EArtifactLog`). Concurrent tests can write
   `CAPTURE_ERRORS.txt` / `TOO_LONG.txt` at the same moment, and an `IOException` there would escape
   `E2ETestBase.DisposeAsync`, which ADR-0028 forbids.
@@ -55,7 +65,9 @@ The decisions that are easy to get wrong:
   sign-in neither rotates the security stamp nor ends other sessions, and there is no failed-login lockout.
   If it is ever needed, the `admin-allowlist` parameter is a delimited list set at boot, so N fixed Admin
   emails need no production change - but they must be pre-declared, and the retention check and sweep updated.
-- **A fixed cap of 4** - rejected in favour of `0.5x`: a fixed number ignores the machine.
+- **A default cap of 4, or CPU-relative (`0.5x`)** - both tried, and rejected as the default for the reasons
+  under "Parallel is opt-in" above: no speedup on the measured machine, and more flakiness. A CPU-relative cap
+  also made a run's behaviour depend on which machine it ran on, which makes a flaky test harder to reproduce.
 
 ## Consequences
 

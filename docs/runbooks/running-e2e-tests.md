@@ -83,18 +83,24 @@ disposes it after the last, whether you run everything or a single class with `-
 
 ### Parallelism
 
-Test **classes** run in parallel against that one stack; the tests *inside* a class stay serial.
-`EventManagementScenarios` is the exception that runs alone, after all the parallel classes have finished
-(until P2.1-8, #205, makes its grid lookups independent of paging).
-
-The cap is half the machine's logical cores (`"maxParallelThreads": "0.5x"` in
-`tests/VirtualLeadersGuide.E2E.Tests/xunit.runner.json`). Each concurrent test drives its own Chromium, so a
-higher cap costs CPU, memory and video-recording disk. Override it for one run - for example, back to
-fully serial to rule parallelism out when chasing a flaky test:
+The suite is **serial by default** (`"maxParallelThreads": 1` in
+`tests/VirtualLeadersGuide.E2E.Tests/xunit.runner.json`), but it is built to run test **classes** in parallel
+against that one stack - the tests *inside* a class always stay serial - and you can opt in per run:
 
 ```powershell
-dotnet test tests/VirtualLeadersGuide.E2E.Tests -- xUnit.MaxParallelThreads=1
+dotnet test tests/VirtualLeadersGuide.E2E.Tests -- xUnit.MaxParallelThreads=4
 ```
+
+`EventManagementScenarios` always runs alone, after the parallel classes have finished (until P2.1-8, #205,
+makes its grid lookups independent of paging).
+
+**Why it isn't parallel by default.** Measured on an 8-core, 16 GB developer laptop, four parallel classes were
+no faster than serial (about 1m50s either way) and, before tracing was turned off, timed out more often. The
+machine was already CPU-saturated by a single serial run - the stack, Chromium, Windows Defender and other
+background tools were competing for the same cores - so extra workers only made each test slower
+([ADR-0075](../adr/0075-e2e-stack-lifetime-is-owned-by-an-assembly-level-test-framework.md) has the numbers).
+Each concurrent test also drives its own Chromium, which costs memory. A machine with idle cores (a CI runner,
+a workstation) may see a real speedup: try a cap of 2-4 and compare.
 
 The dev AppHost must still be stopped (Section 1): parallelism changes how many tests run at once, not how
 many stacks - there is still only one, on the same fixed ports and SQL volume.
