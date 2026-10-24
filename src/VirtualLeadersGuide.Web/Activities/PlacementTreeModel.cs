@@ -219,6 +219,12 @@ public sealed class PlacementTreeModel
     /// the dialog's promise matches what Api then does. The two can't share code across the project boundary:
     /// change one, change the other, and keep their paired test cases (<c>PlacementTreeModelShould</c> /
     /// <c>PlacementsResourceShould</c>) in step.
+    /// <para>
+    /// The removed Placement's path is walked shallowest-first into a chain; a Sub Tab or Section it doesn't
+    /// set is simply absent, so the independent chains need no special-casing. The chain is then decided
+    /// deepest-first: a Tier is reaped when no other Placement uses it and every child under it is itself
+    /// reaped - and the only child that can be is the next level down this same chain.
+    /// </para>
     /// </remarks>
     public RemovalImpact? DescribeRemoval(Guid placementId)
     {
@@ -231,48 +237,47 @@ public sealed class PlacementTreeModel
 
         var others = _server.Placements.Where(p => p.Id != placementId).ToList();
 
-        // The removed Placement's path, shallowest first. A Sub Tab or Section the Placement doesn't set is
-        // simply absent, so the walk below never has to special-case the independent chains.
-        var chain = new List<(TierKind Kind, Guid Id, string Name)> { (TierKind.Tab, tab.Id, tab.Name) };
+        var chain = new List<PathLink> { new(new TierRef(TierKind.Tab, tab.Name), tab.Id) };
         if (removed.SubTabId is { } subTabId && _server.SubTabs.FirstOrDefault(s => s.Id == subTabId) is { } subTab)
         {
-            chain.Add((TierKind.SubTab, subTab.Id, subTab.Name));
+            chain.Add(new PathLink(new TierRef(TierKind.SubTab, subTab.Name), subTab.Id));
         }
 
         if (removed.SectionId is { } sectionId && _server.Sections.FirstOrDefault(s => s.Id == sectionId) is { } section)
         {
-            chain.Add((TierKind.Section, section.Id, section.Name));
+            chain.Add(new PathLink(new TierRef(TierKind.Section, section.Name), section.Id));
         }
 
         if (removed.SubSectionId is { } subSectionId && _server.SubSections.FirstOrDefault(s => s.Id == subSectionId) is { } subSection)
         {
-            chain.Add((TierKind.SubSection, subSection.Id, subSection.Name));
+            chain.Add(new PathLink(new TierRef(TierKind.SubSection, subSection.Name), subSection.Id));
         }
 
-        // Deepest first: a Tier is reaped when nothing else uses it and every child under it is itself
-        // reaped - and the only child that can be is the next level down this same chain.
         var reaped = new List<TierRef>();
         var surviving = new List<TierRef>();
         Guid? reapedChild = null;
         for (int level = chain.Count - 1; level >= 0; level--)
         {
-            (TierKind kind, Guid id, string name) = chain[level];
-            if (others.Any(p => UsesTier(p, kind, id)) || HasOtherChild(kind, id, reapedChild))
+            (TierRef tier, Guid id) = chain[level];
+            if (others.Any(p => UsesTier(p, tier.Kind, id)) || HasOtherChild(tier.Kind, id, reapedChild))
             {
-                surviving.Insert(0, new TierRef(kind, name));
+                surviving.Insert(0, tier);
                 reapedChild = null;
             }
             else
             {
-                reaped.Add(new TierRef(kind, name));
+                reaped.Add(tier);
                 reapedChild = id;
             }
         }
 
-        string? ChainName(TierKind kind) => chain.Where(c => c.Kind == kind).Select(c => c.Name).FirstOrDefault();
-        var path = new PlacementPath(tab.Name, ChainName(TierKind.SubTab), ChainName(TierKind.Section), ChainName(TierKind.SubSection));
+        string? NameAt(TierKind kind) => chain.Where(link => link.Tier.Kind == kind).Select(link => link.Tier.Name).FirstOrDefault();
+        var path = new PlacementPath(tab.Name, NameAt(TierKind.SubTab), NameAt(TierKind.Section), NameAt(TierKind.SubSection));
         return new RemovalImpact(path, reaped, surviving, others.Count(p => p.ActivityId == removed.ActivityId));
     }
+
+    /// <summary>One level of the removed Placement's path: the Tier and its server id, for matching against other Placements and child Tiers.</summary>
+    private readonly record struct PathLink(TierRef Tier, Guid Id);
 
     /// <summary>Whether <paramref name="placement"/> sits at the Tier of the given kind and id.</summary>
     private static bool UsesTier(PlacementDto placement, TierKind kind, Guid id) => kind switch

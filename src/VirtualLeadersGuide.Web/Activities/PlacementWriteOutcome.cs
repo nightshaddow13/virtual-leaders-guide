@@ -18,6 +18,7 @@ public enum PlacementWriteOutcome
 /// <summary>Outcomes <see cref="ApiPlacementClient.DeleteAsync"/> distinguishes (P5-12, #97).</summary>
 public enum PlacementRemoveOutcome
 {
+    /// <remarks>Api deleted the Placement, and any Tier it alone kept alive.</remarks>
     Success,
 
     /// <remarks>The caller isn't an Admin or an assigned Director (ADR-0069's posture, extended to Placement).</remarks>
