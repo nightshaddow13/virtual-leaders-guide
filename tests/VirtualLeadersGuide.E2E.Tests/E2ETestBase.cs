@@ -24,6 +24,40 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// </remarks>
 public abstract class E2ETestBase : PageTest
 {
+    /// <summary>
+    /// How long, in milliseconds, an assertion or click on an interactive page waits before failing - use it
+    /// through <see cref="InteractiveVisible"/>/<see cref="InteractiveUrl"/> and the other helpers below.
+    /// </summary>
+    /// <remarks>
+    /// Almost every page in this project is <c>InteractiveServer</c> (ADR-0034), so an assertion that depends on
+    /// a SignalR round trip - a click's server-side handler, a <c>RadzenDataGrid</c>'s <c>LoadData</c> after
+    /// navigating in - needs more room than Playwright's 5s assertion default, especially on a fresh per-test
+    /// browser context's first interactive page (cold circuit connect), and more still when classes are run in
+    /// parallel and several Blazor circuits share the stack (ADR-0075).
+    /// </remarks>
+    protected const int InteractiveTimeoutMs = 15_000;
+
+    /// <summary>Options for a <c>ToBeVisibleAsync</c> assertion that waits <see cref="InteractiveTimeoutMs"/>.</summary>
+    protected static LocatorAssertionsToBeVisibleOptions InteractiveVisible() => new() { Timeout = InteractiveTimeoutMs };
+
+    /// <summary>Options for a <c>ToHaveURLAsync</c> assertion that waits <see cref="InteractiveTimeoutMs"/>.</summary>
+    protected static PageAssertionsToHaveURLOptions InteractiveUrl() => new() { Timeout = InteractiveTimeoutMs };
+
+    /// <summary>Options for a <c>ToHaveCountAsync</c> assertion that waits <see cref="InteractiveTimeoutMs"/>.</summary>
+    protected static LocatorAssertionsToHaveCountOptions InteractiveCount() => new() { Timeout = InteractiveTimeoutMs };
+
+    /// <summary>Options for a <c>ToHaveTextAsync</c> assertion that waits <see cref="InteractiveTimeoutMs"/>.</summary>
+    protected static LocatorAssertionsToHaveTextOptions InteractiveText() => new() { Timeout = InteractiveTimeoutMs };
+
+    /// <summary>Options for a <c>ToHaveValueAsync</c> assertion that waits <see cref="InteractiveTimeoutMs"/>.</summary>
+    protected static LocatorAssertionsToHaveValueOptions InteractiveValue() => new() { Timeout = InteractiveTimeoutMs };
+
+    /// <summary>Options for a <c>ToContainTextAsync</c> assertion that waits <see cref="InteractiveTimeoutMs"/>.</summary>
+    protected static LocatorAssertionsToContainTextOptions InteractiveContainText() => new() { Timeout = InteractiveTimeoutMs };
+
+    /// <summary>Options for a locator click that waits <see cref="InteractiveTimeoutMs"/>.</summary>
+    protected static LocatorClickOptions InteractiveClick() => new() { Timeout = InteractiveTimeoutMs };
+
     /// <remarks>
     /// A conservative margin under Windows' 260-char <c>MAX_PATH</c>, not the literal ceiling (ADR-0028) -
     /// this machine has <c>LongPathsEnabled=0</c>, and leaving headroom means a resolved path failing this
@@ -269,9 +303,9 @@ public abstract class E2ETestBase : PageTest
     /// <remarks>
     /// <see cref="AspireE2EFixture.AdminAllowlistedEmail"/> is one value shared by every test in this run
     /// (ADR-0025, ADR-0075 - one Aspire stack, one fixture instance, even with classes running in parallel),
-    /// unlike every other account most tests create,
-    /// which is freshly guid-suffixed per call - so this checks for an existing account before creating
-    /// one, rather than assuming a fresh account the way most other seeding calls in this project do.
+    /// unlike every other account most tests create, which is freshly guid-suffixed per call - so this checks
+    /// for an existing account before creating one, rather than assuming a fresh account the way most other
+    /// seeding calls in this project do.
     /// </remarks>
     protected async Task SignInAsAdminAsync()
     {

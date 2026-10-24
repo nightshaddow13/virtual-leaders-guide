@@ -17,9 +17,6 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// </remarks>
 public class FacilityManagementScenarios : E2ETestBase
 {
-    /// <remarks>See <see cref="EventManagementScenarios.InteractiveTimeoutMs"/>'s identical remarks - every page here is <c>InteractiveServer</c> too.</remarks>
-    private const int InteractiveTimeoutMs = 15_000;
-
     [Fact(DisplayName = "Given an Admin, when they create a Facility by typing a brand-new Type name, then both the Facility and the new Type exist")]
     public async Task GivenAnAdmin_WhenTheyCreateAFacilityByTypingABrandNewTypeName_ThenBothTheFacilityAndTheNewTypeExist() =>
         await RunAsync(async () =>
@@ -34,7 +31,7 @@ public class FacilityManagementScenarios : E2ETestBase
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create facility" }).ClickAsync();
 
             await Expect(Page).ToHaveURLAsync(
-                FacilityListUrl(), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                FacilityListUrl(), InteractiveUrl());
 
             (Guid facilityId, Guid facilityTypeId) = await AssertFacilityAndTypeExistAsync(name, typeName);
             TrackFacility(facilityId);
@@ -55,7 +52,7 @@ public class FacilityManagementScenarios : E2ETestBase
             await Page.Locator("#TypeName").FillAsync(typeName);
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create facility" }).ClickAsync();
             await Expect(Page).ToHaveURLAsync(
-                FacilityListUrl(), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                FacilityListUrl(), InteractiveUrl());
 
             (Guid firstFacilityId, Guid facilityTypeId) = await AssertFacilityAndTypeExistAsync(firstName, typeName);
             TrackFacility(firstFacilityId);
@@ -66,7 +63,7 @@ public class FacilityManagementScenarios : E2ETestBase
             await Page.Locator("#TypeName").FillAsync(typeName);
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create facility" }).ClickAsync();
             await Expect(Page).ToHaveURLAsync(
-                FacilityListUrl(), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                FacilityListUrl(), InteractiveUrl());
 
             (Guid secondFacilityId, Guid reusedFacilityTypeId) = await AssertFacilityAndTypeExistAsync(secondName, typeName);
             TrackFacility(secondFacilityId);
@@ -89,7 +86,7 @@ public class FacilityManagementScenarios : E2ETestBase
             await Page.GotoAsync(NewFacilityUrl());
 
             await Expect(Page.GetByText("Only Admins can manage Facilities.")).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
         });
 
     [Fact(DisplayName = "Given a Director, when navigating directly to the Facility list, then they are denied")]
@@ -105,7 +102,7 @@ public class FacilityManagementScenarios : E2ETestBase
             await Page.GotoAsync(FacilityListUrl());
 
             await Expect(Page.GetByText("Only Admins can manage Facilities.")).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
         });
 
     /// <remarks>
@@ -127,7 +124,7 @@ public class FacilityManagementScenarios : E2ETestBase
             await Page.Locator("#TypeName").FillAsync(typeName);
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create facility" }).ClickAsync();
             await Expect(Page).ToHaveURLAsync(
-                FacilityListUrl(), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                FacilityListUrl(), InteractiveUrl());
 
             (Guid facilityId, Guid facilityTypeId) = await AssertFacilityAndTypeExistAsync(name, typeName);
             TrackFacility(facilityId);
@@ -136,10 +133,10 @@ public class FacilityManagementScenarios : E2ETestBase
             await Page.GotoAsync(DashboardUrl());
             await Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = "Facilities" }).ClickAsync();
             await Expect(Page).ToHaveURLAsync(
-                FacilityListUrl(), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                FacilityListUrl(), InteractiveUrl());
 
             await Expect(Page.GetByText(name)).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
             await Expect(Page.GetByText(typeName)).ToBeVisibleAsync();
         });
 
@@ -168,20 +165,20 @@ public class FacilityManagementScenarios : E2ETestBase
             await Page.Locator("#TypeName").FillAsync(originalTypeName);
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create facility" }).ClickAsync();
             await Expect(Page).ToHaveURLAsync(
-                FacilityListUrl(), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                FacilityListUrl(), InteractiveUrl());
 
             (Guid facilityId, Guid originalTypeId) = await AssertFacilityAndTypeExistAsync(originalName, originalTypeName);
             TrackFacility(facilityId);
             TrackFacilityType(originalTypeId);
 
             ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = originalName });
-            await Expect(row).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(row).ToBeVisibleAsync(InteractiveVisible());
             await row.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Edit" }).ClickAsync();
             await Expect(Page).ToHaveURLAsync(
-                EditFacilityUrl(facilityId), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                EditFacilityUrl(facilityId), InteractiveUrl());
 
             await Expect(Page.Locator("#Name")).ToHaveValueAsync(
-                originalName, new LocatorAssertionsToHaveValueOptions { Timeout = InteractiveTimeoutMs });
+                originalName, InteractiveValue());
             await Expect(Page.Locator("#TypeName")).ToHaveValueAsync(originalTypeName);
 
             try
@@ -190,10 +187,10 @@ public class FacilityManagementScenarios : E2ETestBase
                 await Page.Locator("#TypeName").FillAsync(newTypeName);
                 await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" }).ClickAsync();
                 await Expect(Page).ToHaveURLAsync(
-                    FacilityListUrl(), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+                    FacilityListUrl(), InteractiveUrl());
 
                 await Expect(Page.GetByText(renamedTo)).ToBeVisibleAsync(
-                    new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                    InteractiveVisible());
                 await Expect(Page.GetByText(newTypeName)).ToBeVisibleAsync();
                 await Expect(Page.GetByText(originalName)).Not.ToBeVisibleAsync();
 
@@ -224,7 +221,7 @@ public class FacilityManagementScenarios : E2ETestBase
             await Page.GotoAsync(EditFacilityUrl(Guid.NewGuid()));
 
             await Expect(Page.GetByText("Only Admins can manage Facilities.")).ToBeVisibleAsync(
-                new LocatorAssertionsToBeVisibleOptions { Timeout = InteractiveTimeoutMs });
+                InteractiveVisible());
         });
 
     private string DashboardUrl() => new Uri(Fixture.WebBaseUrl, "dashboard").ToString();

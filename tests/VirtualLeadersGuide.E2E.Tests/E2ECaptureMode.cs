@@ -15,7 +15,10 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// </remarks>
 internal static class E2ECaptureMode
 {
-    /// <remarks>An <see cref="AsyncLocal{T}"/>, not a plain static: test classes run in parallel (ADR-0075), and only the rerun's own async flow may see this as true.</remarks>
+    /// <remarks>
+    /// An <see cref="AsyncLocal{T}"/>, not a plain static: test classes can run in parallel (ADR-0075), and only
+    /// the rerun's own async flow may see this as true.
+    /// </remarks>
     private static readonly AsyncLocal<bool> RerunScope = new();
 
     /// <summary>Whether <c>VLG_E2E_TRACE_ALL=1</c> is set - record every attempt, and never rerun.</summary>
