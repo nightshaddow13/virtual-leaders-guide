@@ -378,6 +378,30 @@ public sealed class AspireE2EFixture : IAsyncLifetime
         await EnsureEventGrantAsync(director.Id, RetainedEventId, cancellationToken);
     }
 
+    /// <summary>
+    /// Deletes every grant <paramref name="userId"/> holds except an unscoped Director grant and a Director grant
+    /// on one of <paramref name="retainedEventIds"/> - the only grants ADR-0039 lets a fixture account carry.
+    /// </summary>
+    /// <remarks>
+    /// The fixture accounts belong to this suite, but they are ordinary Director users to the app, so nothing
+    /// stops someone assigning one to a real Event by accident. That used to fail every later run's
+    /// <see cref="VerifyRetentionAsync"/> until someone found and removed the grant by hand.
+    /// </remarks>
+    private async Task RemoveStrayFixtureGrantsAsync(
+        string userId, IReadOnlyCollection<Guid> retainedEventIds, CancellationToken cancellationToken)
+    {
+        foreach (RoleGrantDto grant in await IdentityApi.GetGrantsAsync(userId, cancellationToken))
+        {
+            bool expected = grant.RoleId == RoleIds.Director
+                && (grant.EventId is null || retainedEventIds.Contains(grant.EventId.Value));
+
+            if (!expected)
+            {
+                await IdentityApi.DeleteGrantAsync(userId, grant.Id, cancellationToken);
+            }
+        }
+    }
+
     /// <summary>Renders grants for <see cref="VerifyRetentionAsync"/>'s failure message, so an extra one can be traced to its Event.</summary>
     private static string DescribeGrants(IEnumerable<RoleGrantDto> grants) =>
         string.Join(", ", grants.Select(grant => grant.EventId is null
@@ -436,8 +460,10 @@ public sealed class AspireE2EFixture : IAsyncLifetime
     /// that isn't <see cref="RetainedEventName"/>, and every <c>e2e-</c> Facility/Facility Type (P8-2, #166 -
     /// zero of either are retained). Facilities delete before Facility Types - a Facility Type's FK is
     /// <c>DeleteBehavior.Restrict</c> (ADR-0071), so an un-swept Facility would still block its Facility
-    /// Type's delete. A properly-behaved run leaves nothing for this to find - it exists for the run that
-    /// didn't (a crash, a kill, a test whose own tracked cleanup itself failed).
+    /// Type's delete. It also removes any Role grant the fixture Director or Invite holds beyond the ones
+    /// ADR-0039 lists (<see cref="RemoveStrayFixtureGrantsAsync"/>). A properly-behaved run leaves nothing for
+    /// this to find - it exists for the run that didn't (a crash, a kill, a test whose own tracked cleanup
+    /// itself failed, an Admin picking a fixture account in the "assign Director" dropdown by mistake).
     /// </remarks>
     private async Task SweepOrphanedDataAsync()
     {
@@ -465,6 +491,9 @@ public sealed class AspireE2EFixture : IAsyncLifetime
                     }
                 }
             }
+
+            await RemoveStrayFixtureGrantsAsync(_directorUserId, [RetainedEventId], cancellationToken);
+            await RemoveStrayFixtureGrantsAsync(_invitedUserId, [], cancellationToken);
 
             foreach ((Guid id, _) in await Facilities.ListE2EFacilitiesAsync(cancellationToken))
             {

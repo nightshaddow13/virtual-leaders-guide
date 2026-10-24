@@ -117,3 +117,11 @@ retention check second (allowed to throw); the runner hands that exception to it
 reports as a "Test Assembly Cleanup Failure" and `dotnet test` exits non-zero. It runs exactly once per run,
 including under `--filter`. If the stack never finished seeding, the sweep and check are skipped (there is
 nothing to verify) and only disposal runs.
+
+The sweep also now removes any Role grant the fixture Director or Invite holds beyond the ones in the table
+above (the Director's unscoped grant and its grant on the retained Event; the Invite's unscoped grant). The
+fixture accounts are this suite's, but to the app they are ordinary Director users, so an Admin can pick one in
+the "assign Director" dropdown on a real Event by accident - which used to fail every later run's retention
+check ("expected exactly 3 Role grants") until someone found the grant and deleted it by hand. Removing it takes
+nothing from a real person: it is a grant on a test account, and it is exactly the state the table says must not
+exist after a run.
