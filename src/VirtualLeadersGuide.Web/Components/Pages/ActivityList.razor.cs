@@ -153,28 +153,16 @@ public partial class ActivityList
         pathsByActivity.TryGetValue(activityId, out IReadOnlyList<PlacementPath>? paths) ? paths.Select(p => p.Display) : [];
 
     /// <remarks>
-    /// Re-reads the Placement tree before opening the dialog rather than trusting the list's copy, so the
-    /// consequence bullets describe the Event as it is now. If that read fails the dialog still opens, with
-    /// its Placement/Tier bullets degraded (ADR-0045) - an Admin's ability to delete a record shouldn't depend
-    /// on advisory data. <see cref="ActivityWriteOutcome.NotFound"/> counts as success, like every other
-    /// delete in the app: the row is already gone.
+    /// The dialog's consequences come from <see cref="DescribeDeletionAsync"/>, which can come back
+    /// <see langword="null"/>; the dialog opens regardless, degraded (ADR-0045). <see cref="ActivityWriteOutcome.NotFound"/>
+    /// counts as success, like every other delete in the app: the row is already gone.
     /// </remarks>
     private async Task DeleteAsync(ActivityDto item)
     {
         deleteErrorMessage = null;
 
-        ActivityDeletionImpact? impact = null;
-        try
-        {
-            PlacementTreeDto tree = await PlacementClient.GetTreeForEventAsync(EventId, CancellationToken.None);
-            impact = new PlacementTreeModel(tree, item.Id, item.Name, new Dictionary<Guid, string>(), []).DescribeDeletion(item.Id);
-        }
-        catch (ActivityDataUnavailableException)
-        {
-        }
-
         bool? confirmed = await DialogService.OpenAsync<ConfirmDialog>(
-            "Delete activity?", ActivityDeleteConfirmation.ForList(item.Name, impact));
+            "Delete activity?", ActivityDeleteConfirmation.ForList(item.Name, await DescribeDeletionAsync(item)));
         if (confirmed is not true)
         {
             return;
@@ -194,7 +182,25 @@ public partial class ActivityList
         }
         catch (ActivityDataUnavailableException)
         {
-            deleteErrorMessage = "Something went wrong deleting this Activity. Try again.";
+            deleteErrorMessage = ActivityDeleteConfirmation.DeleteFailedMessage;
+        }
+    }
+
+    /// <summary>
+    /// What deleting <paramref name="item"/> would do, from a fresh read of the Placement tree rather than the
+    /// list's copy, so the dialog describes the Event as it is now.
+    /// </summary>
+    /// <returns>The impact, or <see langword="null"/> if the tree couldn't be read - advisory data, so the caller still opens the dialog without it.</returns>
+    private async Task<ActivityDeletionImpact?> DescribeDeletionAsync(ActivityDto item)
+    {
+        try
+        {
+            PlacementTreeDto tree = await PlacementClient.GetTreeForEventAsync(EventId, CancellationToken.None);
+            return PlacementTreeModel.DescribeDeletion(tree, item.Id);
+        }
+        catch (ActivityDataUnavailableException)
+        {
+            return null;
         }
     }
 

@@ -7,9 +7,10 @@ using VirtualLeadersGuide.Web.Components.Shared;
 namespace VirtualLeadersGuide.Web.Components.Pages;
 
 /// <summary>
-/// The removal half of <see cref="ActivityDetail"/> (P5-12, #97): removing a saved or pending row, Undo, and
-/// the last-Placement dialog that offers to delete the whole Activity instead (P5-9, #95). Split out so the page's load/save/leave-guard flow in <c>ActivityDetail.razor.cs</c>
-/// stays readable; the two halves share the page's state (<c>model</c>, <c>ghosts</c>, <c>state</c>).
+/// The removal half of <see cref="ActivityDetail"/>: removing a saved or pending row and Undo (P5-12, #97),
+/// and the last-Placement dialog that offers to delete the whole Activity instead (P5-9, #95). Split out so
+/// the page's load/save/leave-guard flow in <c>ActivityDetail.razor.cs</c> stays readable; the two halves
+/// share the page's state (<c>model</c>, <c>ghosts</c>, <c>state</c>).
 /// </summary>
 public partial class ActivityDetail
 {
@@ -183,7 +184,7 @@ public partial class ActivityDetail
         }
         catch (ActivityDataUnavailableException)
         {
-            saveErrorMessage = "Couldn't delete this activity. Try again.";
+            saveErrorMessage = ActivityDeleteConfirmation.DeleteFailedMessage;
             return false;
         }
         finally

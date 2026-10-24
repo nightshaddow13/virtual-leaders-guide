@@ -597,6 +597,23 @@ public class PlacementTreeModelShould
         Assert.Equal([TierKind.Section, TierKind.Tab], impact.Reaped.Select(t => t.Kind));
     }
 
+    /// <remarks>The Activity list has no model to build, only the tree it just read - the static form must agree with the instance one.</remarks>
+    [Fact]
+    public void AgreeWithTheInstanceForm_WhenGivenOnlyTheTree_ForDescribeDeletion()
+    {
+        var server = new PlacementTreeDto
+        {
+            Tabs = [new TabDto { Id = _morning, Name = "Morning", SortOrder = 0 }],
+            Sections = [new SectionDto { Id = _waterfront, ParentTabId = _morning, Name = "Waterfront", SortOrder = 0 }],
+            Placements = [new PlacementDto { Id = Guid.NewGuid(), ActivityId = ThisActivity, TabId = _morning, SectionId = _waterfront, SortOrder = 0 }]
+        };
+
+        ActivityDeletionImpact fromTree = PlacementTreeModel.DescribeDeletion(server, ThisActivity);
+
+        Assert.Equal(ModelOf(server).DescribeDeletion(ThisActivity).Reaped, fromTree.Reaped);
+        Assert.Equal([TierKind.Section, TierKind.Tab], fromTree.Reaped.Select(t => t.Kind));
+    }
+
     [Fact]
     public void CountNothingAndReapNothing_WhenTheActivityHasNoSavedPlacement_ForDescribeDeletion()
     {

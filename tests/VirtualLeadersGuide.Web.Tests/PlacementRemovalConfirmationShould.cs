@@ -74,7 +74,6 @@ public class PlacementRemovalConfirmationShould
             "An activity needs at least one placement. Delete Canoe Basics instead?", parameters[nameof(ConfirmDialog.Message)]);
         Assert.Equal("Delete activity", parameters[nameof(ConfirmDialog.ConfirmText)]);
         Assert.Equal("Keep it", parameters[nameof(ConfirmDialog.DismissText)]);
-        Assert.False(parameters.ContainsKey(nameof(ConfirmDialog.ShowConfirm)));
         Assert.Equal(
         [
             "Its placement is removed.",

@@ -74,13 +74,17 @@ internal static class PlacementRemovalConfirmation
     private static string Describe(IReadOnlyList<TierRef> reaped)
     {
         string[] nouns = [.. reaped.Select(tier => Noun(tier.Kind))];
-        return nouns.Length == 1
-            ? $"the {nouns[0]} disappears"
-            : $"the {string.Join(", ", nouns[..^1])} and {nouns[^1]} disappear";
+        return $"the {JoinNames(nouns)} {Disappear(nouns.Length)}";
     }
 
-    private static string JoinNames(string[] names) =>
-        $"{string.Join(", ", names[..^1])} and {names[^1]}";
+    /// <summary>Joins names as prose - "A", "A and B", "A, B and C" - the one list shape both removal dialogs' copy uses.</summary>
+    /// <param name="names">The names to join; at least one.</param>
+    internal static string JoinNames(IReadOnlyList<string> names) =>
+        names.Count == 1 ? names[0] : $"{string.Join(", ", names.Take(names.Count - 1))} and {names[^1]}";
+
+    /// <summary>The verb agreeing with <paramref name="count"/> subjects - "disappears" for one, "disappear" for more.</summary>
+    /// <param name="count">How many things are disappearing.</param>
+    internal static string Disappear(int count) => count == 1 ? "disappears" : "disappear";
 
     /// <summary>The lower-case name of a Tier level, as the dialogs say it ("sub section").</summary>
     /// <param name="kind">Which level.</param>

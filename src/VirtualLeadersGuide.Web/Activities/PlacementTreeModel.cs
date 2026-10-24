@@ -233,7 +233,7 @@ public sealed class PlacementTreeModel
             return null;
         }
 
-        HashSet<Guid> reapedIds = ReapedTierIds([removed]);
+        HashSet<Guid> reapedIds = ReapedTierIds(_server, [removed]);
         int otherPlacements = _server.Placements.Count(p => p.Id != placementId && p.ActivityId == removed.ActivityId);
 
         var chain = new List<PathLink> { new(new TierRef(TierKind.Tab, tab.Name), tab.Id) };
@@ -283,27 +283,61 @@ public sealed class PlacementTreeModel
     /// Placements at once, mirroring Api's <c>TierReaper</c> taking a collection. Reaped Tiers come back
     /// deepest level first, then by name.
     /// </remarks>
-    public ActivityDeletionImpact DescribeDeletion(Guid activityId)
+    public ActivityDeletionImpact DescribeDeletion(Guid activityId) => DescribeDeletion(_server, activityId);
+
+    /// <summary>
+    /// <see cref="DescribeDeletion(Guid)"/> for a caller holding only the Event's persisted tree - the
+    /// Activity list, which has no builder or ghost rows to build a model around.
+    /// </summary>
+    /// <param name="server">The Event's persisted Tiers and Placements.</param>
+    /// <param name="activityId">An Activity on the Event.</param>
+    /// <returns>The impact - a zero count and nothing reaped when the Activity has no saved Placement.</returns>
+    public static ActivityDeletionImpact DescribeDeletion(PlacementTreeDto server, Guid activityId)
     {
-        List<PlacementDto> removing = [.. _server.Placements.Where(p => p.ActivityId == activityId)];
-        HashSet<Guid> reapedIds = ReapedTierIds(removing);
+        List<PlacementDto> removing = [.. server.Placements.Where(p => p.ActivityId == activityId)];
+        HashSet<Guid> reapedIds = ReapedTierIds(server, removing);
 
         TierRef[] reaped =
         [
-            .. NamedTiers(_server.SubSections.Where(s => reapedIds.Contains(s.Id)).Select(s => s.Name), TierKind.SubSection),
-            .. NamedTiers(_server.Sections.Where(s => reapedIds.Contains(s.Id)).Select(s => s.Name), TierKind.Section),
-            .. NamedTiers(_server.SubTabs.Where(s => reapedIds.Contains(s.Id)).Select(s => s.Name), TierKind.SubTab),
-            .. NamedTiers(_server.Tabs.Where(s => reapedIds.Contains(s.Id)).Select(s => s.Name), TierKind.Tab)
+            .. TierLevels(server, reapedIds).SelectMany(level => level.Tiers
+                .Where(tier => reapedIds.Contains(tier.Id))
+                .Select(tier => tier.Name)
+                .Order(StringComparer.OrdinalIgnoreCase)
+                .Select(name => new TierRef(level.Kind, name)))
         ];
 
         return new ActivityDeletionImpact(removing.Count, reaped);
-
-        static IEnumerable<TierRef> NamedTiers(IEnumerable<string> names, TierKind kind) =>
-            names.Order(StringComparer.OrdinalIgnoreCase).Select(name => new TierRef(kind, name));
     }
 
     /// <summary>One level of the removed Placement's path: the Tier and its server id, for matching against other Placements and child Tiers.</summary>
     private readonly record struct PathLink(TierRef Tier, Guid Id);
+
+    /// <summary>One Tier level, described once so the reap decision and the deletion summary walk the same table.</summary>
+    /// <param name="Kind">Which level this is.</param>
+    /// <param name="IdOf">The Tier of this level a Placement sits at, or <see langword="null"/> if its path skips the level.</param>
+    /// <param name="HasLiveChild">Whether a child Tier of this level, not itself being reaped, still hangs under the given Tier.</param>
+    /// <param name="Tiers">Every persisted Tier of this level, by id and name.</param>
+    private readonly record struct TierLevel(
+        TierKind Kind, Func<PlacementDto, Guid?> IdOf, Func<Guid, bool> HasLiveChild, IEnumerable<(Guid Id, string Name)> Tiers);
+
+    /// <summary>The four Tier levels, deepest first - the order a reap has to decide them in, children before parents.</summary>
+    /// <param name="server">The Event's persisted Tiers and Placements.</param>
+    /// <param name="reaped">The Tiers already decided to be reaped; a child in this set no longer keeps its parent alive. Read lazily, so it can still be growing as the levels are walked.</param>
+    private static TierLevel[] TierLevels(PlacementTreeDto server, HashSet<Guid> reaped) =>
+    [
+        new(TierKind.SubSection, p => p.SubSectionId, _ => false,
+            server.SubSections.Select(t => (t.Id, t.Name))),
+        new(TierKind.Section, p => p.SectionId,
+            id => server.SubSections.Any(s => s.SectionId == id && !reaped.Contains(s.Id)),
+            server.Sections.Select(t => (t.Id, t.Name))),
+        new(TierKind.SubTab, p => p.SubTabId,
+            id => server.Sections.Any(s => s.ParentSubTabId == id && !reaped.Contains(s.Id)),
+            server.SubTabs.Select(t => (t.Id, t.Name))),
+        new(TierKind.Tab, p => p.TabId,
+            id => server.SubTabs.Any(s => s.TabId == id && !reaped.Contains(s.Id))
+                || server.Sections.Any(s => s.ParentTabId == id && !reaped.Contains(s.Id)),
+            server.Tabs.Select(t => (t.Id, t.Name)))
+    ];
 
     /// <summary>
     /// The ids of every Tier left unreferenced once <paramref name="removing"/> is gone - the same rules as
@@ -313,43 +347,20 @@ public sealed class PlacementTreeModel
     /// change one, change the other, and keep their paired test cases (<c>PlacementTreeModelShould</c> /
     /// <c>PlacementsResourceShould</c> / <c>ActivitiesResourceShould</c>) in step.
     /// </summary>
-    private HashSet<Guid> ReapedTierIds(IReadOnlyCollection<PlacementDto> removing)
+    private static HashSet<Guid> ReapedTierIds(PlacementTreeDto server, IReadOnlyCollection<PlacementDto> removing)
     {
         HashSet<Guid> removingIds = [.. removing.Select(p => p.Id)];
-        List<PlacementDto> others = [.. _server.Placements.Where(p => !removingIds.Contains(p.Id))];
+        List<PlacementDto> others = [.. server.Placements.Where(p => !removingIds.Contains(p.Id))];
         var reaped = new HashSet<Guid>();
 
-        foreach (Guid id in removing.Select(p => p.SubSectionId).OfType<Guid>().Distinct())
+        foreach (TierLevel level in TierLevels(server, reaped))
         {
-            if (!others.Any(p => p.SubSectionId == id))
+            foreach (Guid id in removing.Select(level.IdOf).OfType<Guid>().Distinct())
             {
-                reaped.Add(id);
-            }
-        }
-
-        foreach (Guid id in removing.Select(p => p.SectionId).OfType<Guid>().Distinct())
-        {
-            if (!others.Any(p => p.SectionId == id) && !_server.SubSections.Any(s => s.SectionId == id && !reaped.Contains(s.Id)))
-            {
-                reaped.Add(id);
-            }
-        }
-
-        foreach (Guid id in removing.Select(p => p.SubTabId).OfType<Guid>().Distinct())
-        {
-            if (!others.Any(p => p.SubTabId == id) && !_server.Sections.Any(s => s.ParentSubTabId == id && !reaped.Contains(s.Id)))
-            {
-                reaped.Add(id);
-            }
-        }
-
-        foreach (Guid id in removing.Select(p => p.TabId).Distinct())
-        {
-            if (!others.Any(p => p.TabId == id)
-                && !_server.SubTabs.Any(s => s.TabId == id && !reaped.Contains(s.Id))
-                && !_server.Sections.Any(s => s.ParentTabId == id && !reaped.Contains(s.Id)))
-            {
-                reaped.Add(id);
+                if (!others.Any(p => level.IdOf(p) == id) && !level.HasLiveChild(id))
+                {
+                    reaped.Add(id);
+                }
             }
         }
 

@@ -44,14 +44,6 @@ public partial class ConfirmDialog
     [Parameter]
     public string DismissText { get; set; } = "Cancel";
 
-    /// <summary>
-    /// Whether the confirm button is shown at all. <see langword="false"/> turns the dialog into an
-    /// explain-only notice with just the dismiss button. No caller needs that today - P5-12's (#97)
-    /// last-Placement case used it until P5-9 (#95) gave that dialog a real action to confirm.
-    /// </summary>
-    [Parameter]
-    public bool ShowConfirm { get; set; } = true;
-
     /// <summary>Style of the confirm button. Defaults to <see cref="ButtonStyle.Danger"/>.</summary>
     [Parameter]
     public ButtonStyle ConfirmButtonStyle { get; set; } = ButtonStyle.Danger;

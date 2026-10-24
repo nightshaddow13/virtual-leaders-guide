@@ -203,7 +203,7 @@ public class ActivityDetailRemovalShould : BunitContext
 
         Services.GetRequiredService<DialogService>().Close(true);
 
-        cut.WaitForAssertion(() => Assert.Contains("Couldn't delete this activity. Try again.", cut.Markup, StringComparison.Ordinal), Patience);
+        cut.WaitForAssertion(() => Assert.Contains("Something went wrong deleting this Activity. Try again.", cut.Markup, StringComparison.Ordinal), Patience);
     }
 
     [Fact]

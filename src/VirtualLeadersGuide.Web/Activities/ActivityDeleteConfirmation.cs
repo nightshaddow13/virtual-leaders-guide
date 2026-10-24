@@ -17,6 +17,9 @@ namespace VirtualLeadersGuide.Web.Activities;
 /// </remarks>
 internal static class ActivityDeleteConfirmation
 {
+    /// <summary>What both entry points tell the user when the delete call itself fails (the Activity store didn't answer), so the copy can't drift between them.</summary>
+    public const string DeleteFailedMessage = "Something went wrong deleting this Activity. Try again.";
+
     /// <summary>Builds the parameters for the list row's delete confirmation.</summary>
     /// <param name="activityName">The Activity being deleted, named in the message.</param>
     /// <param name="impact">What the deletion does, from <see cref="PlacementTreeModel.DescribeDeletion"/>, or <see langword="null"/> if the tree couldn't be loaded.</param>
@@ -69,8 +72,6 @@ internal static class ActivityDeleteConfirmation
     private static string DescribeReaped(IReadOnlyList<TierRef> reaped)
     {
         string[] named = [.. reaped.OrderBy(tier => tier.Kind).Select(tier => $"{tier.Name} {PlacementRemovalConfirmation.Noun(tier.Kind)}")];
-        return named.Length == 1
-            ? $"The {named[0]} disappears from the guide too."
-            : $"The {string.Join(", ", named[..^1])} and {named[^1]} disappear from the guide too.";
+        return $"The {PlacementRemovalConfirmation.JoinNames(named)} {PlacementRemovalConfirmation.Disappear(named.Length)} from the guide too.";
     }
 }
