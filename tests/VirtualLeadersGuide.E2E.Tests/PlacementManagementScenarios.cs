@@ -216,8 +216,8 @@ public class PlacementManagementScenarios(AspireE2EFixture fixture) : E2ETestBas
             await Expect(Page.Locator(".rz-autocomplete-panel").GetByText(reaped)).ToHaveCountAsync(0);
         });
 
-    [Fact(DisplayName = "Given an Activity with one Placement, when an Admin tries to remove it, then they are told it needs at least one and it stays")]
-    public async Task GivenAnActivityWithOnePlacement_WhenAnAdminTriesToRemoveIt_ThenTheyAreToldItNeedsAtLeastOneAndItStays() =>
+    [Fact(DisplayName = "Given an Activity with one Placement, when an Admin tries to remove it and keeps the Activity, then the Placement stays")]
+    public async Task GivenAnActivityWithOnePlacement_WhenAnAdminTriesToRemoveItAndKeepsTheActivity_ThenThePlacementStays() =>
         await RunAsync(async () =>
         {
             await SignInAsAdminAsync();
@@ -230,9 +230,66 @@ public class PlacementManagementScenarios(AspireE2EFixture fixture) : E2ETestBas
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = $"Remove placement {tab}" }).ClickAsync();
 
             await Expect(Page.GetByText("An activity needs at least one placement.")).ToBeVisibleAsync(Interactive());
-            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "OK" }).ClickAsync();
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Keep it" }).ClickAsync();
             await Page.ReloadAsync();
             await Expect(Page.Locator(".ptn-lit")).ToHaveCountAsync(1, new LocatorAssertionsToHaveCountOptions { Timeout = InteractiveTimeoutMs });
+        });
+
+    [Fact(DisplayName = "Given an Activity with one Placement, when an Admin removes it and chooses Delete activity, then they land on the list without that Activity")]
+    public async Task GivenAnActivityWithOnePlacement_WhenAnAdminRemovesItAndChoosesDeleteActivity_ThenTheyLandOnTheListWithoutIt() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, _) = await CreateEventAsync("Delete From Notice Host");
+            (string name, Guid canoe) = await CreateActivityAsync(eventId, "Canoe Basics");
+            (string otherName, Guid swim) = await CreateActivityAsync(eventId, "Swim Check");
+            string tab = $"e2e-Morning {Guid.NewGuid():n}";
+            await PlaceAndSaveAsync(eventId, canoe, tab);
+            await PlaceAndSaveAsync(eventId, swim, tab);
+
+            await Page.GotoAsync(ActivityUrl(eventId, canoe));
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = $"Remove placement {tab}" }).ClickAsync();
+            await Expect(Page.GetByText($"Delete {name} instead?")).ToBeVisibleAsync(Interactive());
+            await Expect(Page.GetByText("Its placement is removed.")).ToBeVisibleAsync(Interactive());
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Delete activity" }).ClickAsync();
+
+            await Expect(Page).ToHaveURLAsync(
+                ActivitiesListUrl(eventId), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(Page.GetByText(otherName)).ToBeVisibleAsync(Interactive());
+            await Expect(Page.GetByText(name)).ToHaveCountAsync(0);
+        });
+
+    /// <remarks>
+    /// Proves the whole-Activity delete ordering on SQL Server (the Api suite runs on SQLite): the Activity, its
+    /// Placements and the Tabs only it kept alive go in a single save. A second, unplaced Activity's autofill is
+    /// the witness that the Tabs really are gone, not just hidden from the list.
+    /// </remarks>
+    [Fact(DisplayName = "Given an Activity placed under two Tabs only it uses, when an Admin deletes it from the list and confirms, then it and both Tabs are gone")]
+    public async Task GivenAnActivityPlacedUnderTwoTabsOnlyItUses_WhenAnAdminDeletesItFromTheListAndConfirms_ThenItAndBothTabsAreGone() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, _) = await CreateEventAsync("Delete From List Host");
+            (string name, Guid canoe) = await CreateActivityAsync(eventId, "Canoe Basics");
+            (_, Guid swim) = await CreateActivityAsync(eventId, "Swim Check");
+            string morning = $"e2e-Morning {Guid.NewGuid():n}";
+            string afternoon = $"e2e-Afternoon {Guid.NewGuid():n}";
+            await PlaceAndSaveAsync(eventId, canoe, morning, afternoon);
+
+            await Page.GotoAsync(ActivitiesListUrl(eventId));
+            await Page.Locator("tr", new PageLocatorOptions { HasText = name })
+                .GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Delete" }).ClickAsync();
+            await Expect(Page.Locator(".rz-dialog-title")).ToHaveTextAsync("Delete activity?", new LocatorAssertionsToHaveTextOptions { Timeout = InteractiveTimeoutMs });
+            await Expect(Page.GetByText("Its 2 placements are removed.")).ToBeVisibleAsync(Interactive());
+            await Expect(Page.GetByText("disappear from the guide too.")).ToBeVisibleAsync(Interactive());
+            await Page.Locator(".rz-dialog").GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Delete", Exact = true }).ClickAsync();
+
+            await Expect(Page.GetByText(name)).ToHaveCountAsync(0, new LocatorAssertionsToHaveCountOptions { Timeout = InteractiveTimeoutMs });
+
+            await Page.GotoAsync(ActivityUrl(eventId, swim));
+            await Page.Locator("#PlacementTab").ClickAsync();
+            await Expect(Page.Locator(".rz-autocomplete-panel").GetByText(morning)).ToHaveCountAsync(0);
+            await Expect(Page.Locator(".rz-autocomplete-panel").GetByText(afternoon)).ToHaveCountAsync(0);
         });
 
     /// <remarks>Places and saves one Tab at a time on the Activity's page, waiting for each save to clear its ghost so the next "Place it" sees a settled tree.</remarks>
