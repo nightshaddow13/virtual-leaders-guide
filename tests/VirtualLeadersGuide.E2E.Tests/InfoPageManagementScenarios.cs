@@ -95,6 +95,8 @@ public class InfoPageManagementScenarios : E2ETestBase
                 new Regex(@"info-pages/[0-9a-f-]{36}$"), new PageAssertionsToHaveURLOptions { Timeout = InteractiveTimeoutMs });
 
             string renamedTo = $"e2e-Director Renamed {Guid.NewGuid():n}";
+            await Expect(Page.Locator("#Title")).ToHaveValueAsync(
+                title, new LocatorAssertionsToHaveValueOptions { Timeout = InteractiveTimeoutMs });
             await Page.Locator("#Title").FillAsync(renamedTo);
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" }).ClickAsync();
             await Expect(Page).ToHaveURLAsync(
