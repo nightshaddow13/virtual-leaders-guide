@@ -321,15 +321,16 @@ public sealed class AspireE2EFixture : IAsyncLifetime
                 $"{actualEmails.Count}: [{string.Join(", ", actualEmails)}].");
         }
 
-        int directorGrantCount = (await IdentityApi.GetGrantsAsync(_directorUserId, cancellationToken)).Count;
-        int invitedGrantCount = (await IdentityApi.GetGrantsAsync(_invitedUserId, cancellationToken)).Count;
-        int totalGrantCount = directorGrantCount + invitedGrantCount;
+        IReadOnlyList<RoleGrantDto> directorGrants = await IdentityApi.GetGrantsAsync(_directorUserId, cancellationToken);
+        IReadOnlyList<RoleGrantDto> invitedGrants = await IdentityApi.GetGrantsAsync(_invitedUserId, cancellationToken);
+        int totalGrantCount = directorGrants.Count + invitedGrants.Count;
         if (totalGrantCount != 3)
         {
             throw new InvalidOperationException(
                 "ADR-0039 violation: expected exactly 3 Role grants across the fixture Director (unscoped + " +
                 $"event-scoped) and the fixture Invite (unscoped), found {totalGrantCount} " +
-                $"({directorGrantCount} + {invitedGrantCount}).");
+                $"({directorGrants.Count} + {invitedGrants.Count}). " +
+                $"Director: [{DescribeGrants(directorGrants)}]. Invite: [{DescribeGrants(invitedGrants)}].");
         }
 
         IReadOnlyList<(Guid Id, string Name)> facilities = await Facilities.ListE2EFacilitiesAsync(cancellationToken);
@@ -376,6 +377,12 @@ public sealed class AspireE2EFixture : IAsyncLifetime
         await EnsureUnscopedDirectorGrantAsync(invited.Id, cancellationToken);
         await EnsureEventGrantAsync(director.Id, RetainedEventId, cancellationToken);
     }
+
+    /// <summary>Renders grants for <see cref="VerifyRetentionAsync"/>'s failure message, so an extra one can be traced to its Event.</summary>
+    private static string DescribeGrants(IEnumerable<RoleGrantDto> grants) =>
+        string.Join(", ", grants.Select(grant => grant.EventId is null
+            ? $"role {grant.RoleId} unscoped"
+            : $"role {grant.RoleId} on event {grant.EventId}"));
 
     private async Task<IdentityUserDto> EnsureUserAsync(string email, CancellationToken cancellationToken) =>
         await IdentityApi.TryGetByEmailAsync(email, cancellationToken)
