@@ -1,6 +1,9 @@
 namespace VirtualLeadersGuide.Web.Activities;
 
-/// <summary>Outcomes <see cref="ApiActivityClient.CreateAsync"/> and <see cref="ApiActivityClient.UpdateAsync"/> distinguish.</summary>
+/// <summary>
+/// Outcomes <see cref="ApiActivityClient.CreateAsync"/>, <see cref="ApiActivityClient.UpdateAsync"/>, and
+/// <see cref="ApiActivityClient.DeleteAsync"/> distinguish.
+/// </summary>
 public enum ActivityWriteOutcome
 {
     Success,
@@ -17,5 +20,11 @@ public enum ActivityWriteOutcome
     /// since <c>EventId</c> always comes from an already-verified route. Create-only: an update body carries no
     /// <c>eventId</c>, so <see cref="ApiActivityClient.UpdateAsync"/> never returns it.
     /// </remarks>
-    Invalid
+    Invalid,
+
+    /// <remarks>
+    /// <see cref="ApiActivityClient.DeleteAsync"/> only - the Activity was already gone (a stale list, or a
+    /// concurrent delete winning the race). Treated as silent success, matching <c>InfoPageWriteOutcome.NotFound</c>.
+    /// </remarks>
+    NotFound
 }

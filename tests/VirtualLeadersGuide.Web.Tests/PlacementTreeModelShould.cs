@@ -501,4 +501,127 @@ public class PlacementTreeModelShould
         Assert.Empty(impact.Reaped);
         Assert.Equal(["Morning", "Waterfront"], impact.Surviving.Select(t => t.Name));
     }
+
+    // --- DescribeDeletion (P5-9, #95) -------------------------------------------------------------------
+    // Paired with ActivitiesResourceShould's *_ForDelete cases: the same TierReaper rules, applied to every
+    // Placement of the Activity at once.
+
+    [Fact]
+    public void CountEveryPlacementAndReapTheTiersOnlyThisActivityUsed_ForDescribeDeletion()
+    {
+        (PlacementTreeModel model, _) = RemovalTree();
+
+        ActivityDeletionImpact impact = model.DescribeDeletion(ThisActivity);
+
+        Assert.Equal(2, impact.PlacementCount);
+        Assert.Equal(["Canoeing", "Waterfront", "Afternoon"], impact.Reaped.Select(t => t.Name));
+        Assert.Equal([TierKind.SubSection, TierKind.Section, TierKind.Tab], impact.Reaped.Select(t => t.Kind));
+    }
+
+    [Fact]
+    public void KeepEveryTierAnotherActivityStillUses_ForDescribeDeletion()
+    {
+        (PlacementTreeModel model, _) = RemovalTree(otherAtCanoeing: true);
+
+        ActivityDeletionImpact impact = model.DescribeDeletion(ThisActivity);
+
+        Assert.Equal(["Afternoon"], impact.Reaped.Select(t => t.Name));
+    }
+
+    [Fact]
+    public void ReapEveryLevel_WhenTheActivityIsTheOnlyThingUnderItsTab_ForDescribeDeletion()
+    {
+        PlacementTreeModel model = ModelOf(new PlacementTreeDto
+        {
+            Tabs = [new TabDto { Id = _morning, Name = "Morning", SortOrder = 0 }],
+            SubTabs = [new SubTabDto { Id = _roundRobin, TabId = _morning, Name = "Round Robin", SortOrder = 0 }],
+            Sections = [new SectionDto { Id = _waterfront, ParentSubTabId = _roundRobin, Name = "Waterfront", SortOrder = 0 }],
+            SubSections = [new SubSectionDto { Id = _canoeing, SectionId = _waterfront, Name = "Canoeing", SortOrder = 0 }],
+            Placements = [new PlacementDto { Id = Guid.NewGuid(), ActivityId = ThisActivity, TabId = _morning, SubTabId = _roundRobin, SectionId = _waterfront, SubSectionId = _canoeing, SortOrder = 0 }]
+        });
+
+        ActivityDeletionImpact impact = model.DescribeDeletion(ThisActivity);
+
+        Assert.Equal(1, impact.PlacementCount);
+        Assert.Equal([TierKind.SubSection, TierKind.Section, TierKind.SubTab, TierKind.Tab], impact.Reaped.Select(t => t.Kind));
+    }
+
+    /// <remarks>The case a one-at-a-time prediction gets wrong: the Tab survives each single removal but not both together - and the shared Tab survives because another Activity sits under it.</remarks>
+    [Fact]
+    public void ReapOnlyTheTiersNothingElseUses_WhenTwoPlacementsShareATab_ForDescribeDeletion()
+    {
+        var soleTab = Guid.NewGuid();
+        var sharedSection = Guid.NewGuid();
+        var soleSection = Guid.NewGuid();
+        PlacementTreeModel model = ModelOf(new PlacementTreeDto
+        {
+            Tabs = [new TabDto { Id = _morning, Name = "Morning", SortOrder = 0 }, new TabDto { Id = soleTab, Name = "Evening", SortOrder = 1 }],
+            Sections =
+            [
+                new SectionDto { Id = sharedSection, ParentTabId = _morning, Name = "Shared", SortOrder = 0 },
+                new SectionDto { Id = soleSection, ParentTabId = _morning, Name = "Sole", SortOrder = 1 }
+            ],
+            Placements =
+            [
+                new PlacementDto { Id = Guid.NewGuid(), ActivityId = OtherActivity, TabId = _morning, SectionId = sharedSection, SortOrder = 0 },
+                new PlacementDto { Id = Guid.NewGuid(), ActivityId = ThisActivity, TabId = _morning, SectionId = soleSection, SortOrder = 0 },
+                new PlacementDto { Id = Guid.NewGuid(), ActivityId = ThisActivity, TabId = soleTab, SortOrder = 0 }
+            ]
+        });
+
+        ActivityDeletionImpact impact = model.DescribeDeletion(ThisActivity);
+
+        Assert.Equal(["Sole", "Evening"], impact.Reaped.Select(t => t.Name));
+    }
+
+    [Fact]
+    public void ReapATabOnlyBothOfTheActivitysPlacementsUse_ForDescribeDeletion()
+    {
+        PlacementTreeModel model = ModelOf(new PlacementTreeDto
+        {
+            Tabs = [new TabDto { Id = _morning, Name = "Morning", SortOrder = 0 }],
+            Sections =
+            [
+                new SectionDto { Id = _waterfront, ParentTabId = _morning, Name = "Waterfront", SortOrder = 0 }
+            ],
+            Placements =
+            [
+                new PlacementDto { Id = Guid.NewGuid(), ActivityId = ThisActivity, TabId = _morning, SortOrder = 0 },
+                new PlacementDto { Id = Guid.NewGuid(), ActivityId = ThisActivity, TabId = _morning, SectionId = _waterfront, SortOrder = 0 }
+            ]
+        });
+
+        ActivityDeletionImpact impact = model.DescribeDeletion(ThisActivity);
+
+        Assert.Equal(2, impact.PlacementCount);
+        Assert.Equal([TierKind.Section, TierKind.Tab], impact.Reaped.Select(t => t.Kind));
+    }
+
+    [Fact]
+    public void CountNothingAndReapNothing_WhenTheActivityHasNoSavedPlacement_ForDescribeDeletion()
+    {
+        (PlacementTreeModel model, _) = RemovalTree();
+
+        ActivityDeletionImpact impact = model.DescribeDeletion(Guid.NewGuid());
+
+        Assert.Equal(0, impact.PlacementCount);
+        Assert.Empty(impact.Reaped);
+    }
+
+    [Fact]
+    public void IgnoreGhostRows_WhenCountingPlacementsAndTierUse_ForDescribeDeletion()
+    {
+        var withGhost = new PlacementTreeModel(
+            new PlacementTreeDto
+            {
+                Tabs = [new TabDto { Id = _morning, Name = "Morning", SortOrder = 0 }],
+                Placements = [new PlacementDto { Id = Guid.NewGuid(), ActivityId = ThisActivity, TabId = _morning, SortOrder = 0 }]
+            },
+            ThisActivity, "Canoe Basics", new Dictionary<Guid, string>(), [new PlacementPath("Morning"), new PlacementPath("Evening")]);
+
+        ActivityDeletionImpact impact = withGhost.DescribeDeletion(ThisActivity);
+
+        Assert.Equal(1, impact.PlacementCount);
+        Assert.Equal([TierKind.Tab], impact.Reaped.Select(t => t.Kind));
+    }
 }

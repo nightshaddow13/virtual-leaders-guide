@@ -26,7 +26,7 @@ namespace VirtualLeadersGuide.Api.Data;
 /// Activities, while a single-resource request outside the caller's access throws 403. Not ADR-0033's
 /// always-empty-set rule - a Director's Activity visibility is sometimes non-empty, the same "ordinary
 /// narrowing" case ADR-0031 already describes for Event, not the all-or-nothing case <c>UserRoleResourceDefinition</c>
-/// answers.
+/// answers. Deleting an Activity also removes its Placements and reaps the Tiers they empty (P5-9, #95).
 /// </remarks>
 public sealed class ActivityResourceDefinition : JsonApiResourceDefinition<Activity, Guid>
 {
@@ -43,17 +43,21 @@ public sealed class ActivityResourceDefinition : JsonApiResourceDefinition<Activ
 
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly VirtualLeadersGuideDbContext _dbContext;
+    private readonly TierReaper _tierReaper;
 
     /// <summary>Constructs the definition with the services it needs to authorize Activity reads and writes.</summary>
     /// <param name="resourceGraph">Passed through to <see cref="JsonApiResourceDefinition{TResource,TId}"/>.</param>
     /// <param name="httpContextAccessor">Resolves the current request's <see cref="System.Security.Claims.ClaimsPrincipal"/> for <see cref="CurrentPolicy"/>.</param>
-    /// <param name="dbContext">Backs <see cref="StoredEventId"/>/<see cref="StoredEventIdAsync"/>'s re-reads and <see cref="ValidateEventExistsAsync"/>'s pre-check.</param>
+    /// <param name="dbContext">Backs <see cref="StoredEventId"/>/<see cref="StoredEventIdAsync"/>'s re-reads, <see cref="ValidateEventExistsAsync"/>'s pre-check, and <see cref="RemovePlacementsAndReapTiersAsync"/>.</param>
+    /// <param name="tierReaper">Marks the Tiers a deleted Activity's Placements leave empty for removal (P5-9, #95).</param>
     public ActivityResourceDefinition(
-        IResourceGraph resourceGraph, IHttpContextAccessor httpContextAccessor, VirtualLeadersGuideDbContext dbContext)
+        IResourceGraph resourceGraph, IHttpContextAccessor httpContextAccessor, VirtualLeadersGuideDbContext dbContext,
+        TierReaper tierReaper)
         : base(resourceGraph)
     {
         _httpContextAccessor = httpContextAccessor;
         _dbContext = dbContext;
+        _tierReaper = tierReaper;
     }
 
     /// <inheritdoc/>
@@ -137,6 +141,8 @@ public sealed class ActivityResourceDefinition : JsonApiResourceDefinition<Activ
     /// Update technically doesn't need the re-read (<see cref="Activity.EventId"/> carries no
     /// <see cref="AttrCapabilities.AllowChange"/>, so a PATCH can never overwrite it), but sharing one helper
     /// means a future capability change can't silently turn this into "trust what the caller claimed."
+    /// On <see cref="WriteOperationKind.DeleteResource"/> (P5-9, #95), once authorized, the Activity's
+    /// Placements are removed and their emptied Tiers reaped - see <see cref="RemovePlacementsAndReapTiersAsync"/>.
     /// </remarks>
     public override async Task OnWritingAsync(
         Activity resource, WriteOperationKind writeOperation, CancellationToken cancellationToken)
@@ -160,8 +166,39 @@ public sealed class ActivityResourceDefinition : JsonApiResourceDefinition<Activ
         {
             await ValidateEventExistsAsync(resource.EventId, cancellationToken);
         }
+        else if (writeOperation == WriteOperationKind.DeleteResource)
+        {
+            await RemovePlacementsAndReapTiersAsync(resource.Id, cancellationToken);
+        }
 
         await base.OnWritingAsync(resource, writeOperation, cancellationToken);
+    }
+
+    /// <summary>
+    /// Removes every Placement of the Activity being deleted and marks each Tier they empty for deletion
+    /// (ADR-0046, P5-9 #95) - the whole-Activity counterpart of
+    /// <c>ActivityPlacementResourceDefinition.GuardLastPlacementAndReapTiersAsync</c>, minus the last-Placement
+    /// guard: going to zero Placements is exactly what deleting the Activity means (ADR-0050).
+    /// </summary>
+    /// <remarks>
+    /// Removes the Placements explicitly rather than leaving them to the database cascade, on purpose: the
+    /// Tier foreign keys are <c>Restrict</c>, so EF only orders the Placement deletes before the Tier deletes
+    /// if it is tracking both. Everything rides JsonApiDotNetCore's one <c>SaveChangesAsync</c>, so the
+    /// Activity, its Placements and the reaped Tiers land together or not at all (ADR-0072). A since-deleted
+    /// Activity has no Placements, so this is a no-op and JsonApiDotNetCore's own not-found handling runs.
+    /// </remarks>
+    private async Task RemovePlacementsAndReapTiersAsync(Guid activityId, CancellationToken cancellationToken)
+    {
+        List<ActivityPlacement> placements = await _dbContext.ActivityPlacements
+            .Where(placement => placement.ActivityId == activityId)
+            .ToListAsync(cancellationToken);
+        if (placements.Count == 0)
+        {
+            return;
+        }
+
+        _dbContext.ActivityPlacements.RemoveRange(placements);
+        await _tierReaper.ReapEmptiedTiersAsync(placements, cancellationToken);
     }
 
     /// <remarks>

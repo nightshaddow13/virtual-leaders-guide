@@ -46,8 +46,8 @@ public partial class ConfirmDialog
 
     /// <summary>
     /// Whether the confirm button is shown at all. <see langword="false"/> turns the dialog into an
-    /// explain-only notice with just the dismiss button (P5-12, #97's last-Placement case, until P5-9 gives
-    /// it a real action to confirm).
+    /// explain-only notice with just the dismiss button. No caller needs that today - P5-12's (#97)
+    /// last-Placement case used it until P5-9 (#95) gave that dialog a real action to confirm.
     /// </summary>
     [Parameter]
     public bool ShowConfirm { get; set; } = true;

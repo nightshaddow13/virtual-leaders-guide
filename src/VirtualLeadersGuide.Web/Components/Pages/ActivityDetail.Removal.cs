@@ -8,7 +8,7 @@ namespace VirtualLeadersGuide.Web.Components.Pages;
 
 /// <summary>
 /// The removal half of <see cref="ActivityDetail"/> (P5-12, #97): removing a saved or pending row, Undo, and
-/// the last-Placement notice. Split out so the page's load/save/leave-guard flow in <c>ActivityDetail.razor.cs</c>
+/// the last-Placement dialog that offers to delete the whole Activity instead (P5-9, #95). Split out so the page's load/save/leave-guard flow in <c>ActivityDetail.razor.cs</c>
 /// stays readable; the two halves share the page's state (<c>model</c>, <c>ghosts</c>, <c>state</c>).
 /// </summary>
 public partial class ActivityDetail
@@ -21,7 +21,7 @@ public partial class ActivityDetail
     /// <remarks>
     /// A ghost row just leaves the list - it was never saved, so there's no Api call, dialog or toast. A saved
     /// row writes immediately (decision 2), after whichever guard its <see cref="RemovalImpact"/> calls for:
-    /// the last-Placement notice when the Activity has no other saved row, the reap confirm when a Tier would
+    /// the offer to delete the Activity when it has no other saved row, the reap confirm when a Tier would
     /// disappear, otherwise a plain remove with Undo in the toast (ADR-0045's exception). The choice is made
     /// from the loaded tree; Api reaps regardless, so a stale tree can at worst skip a dialog it should have
     /// shown - and Undo re-creates the Tiers by name.
@@ -46,7 +46,7 @@ public partial class ActivityDetail
 
         if (impact.OtherPlacementsOfThisActivity == 0)
         {
-            await ShowLastPlacementNoticeAsync();
+            await OfferActivityDeletionAsync();
             return;
         }
 
@@ -68,8 +68,9 @@ public partial class ActivityDetail
                 case PlacementRemoveOutcome.Forbidden:
                     state = PageState.Denied;
                     return;
+                case PlacementRemoveOutcome.LastPlacement when await OfferActivityDeletionAsync():
+                    return;
                 case PlacementRemoveOutcome.LastPlacement:
-                    await ShowLastPlacementNoticeAsync();
                     break;
                 case PlacementRemoveOutcome.NotFound:
                     saveErrorMessage = "That placement was already removed.";
@@ -146,10 +147,50 @@ public partial class ActivityDetail
         builder.CloseComponent();
     };
 
-    /// <remarks>Explain-only until P5-9 (#95) gives the notice a "Delete activity" button to confirm (decision 1).</remarks>
-    private async Task ShowLastPlacementNoticeAsync() =>
-        await DialogService.OpenAsync<ConfirmDialog>(
-            "Last placement", PlacementRemovalConfirmation.ForLastPlacement(hasPendingGhosts: ghosts.Count > 0));
+    /// <summary>
+    /// The last-Placement dialog (ADR-0050): removing an Activity's final row would strand it at zero, so this
+    /// offers to delete the whole Activity instead and, if confirmed, does (P5-9, #95).
+    /// </summary>
+    /// <returns><see langword="true"/> when the page is finished - the Activity was deleted, or the caller turned out to have no access - and the caller should stop touching it.</returns>
+    /// <remarks>
+    /// The dialog's consequences come from the loaded tree, like the reap dialog's; Api reaps regardless, so a
+    /// stale tree can at worst under-describe the deletion. Pending ghosts are named in the dialog and
+    /// discarded with the Activity - cleared first so leaving doesn't prompt a second time.
+    /// </remarks>
+    private async Task<bool> OfferActivityDeletionAsync()
+    {
+        bool? confirmed = await DialogService.OpenAsync<ConfirmDialog>(
+            "Last placement",
+            PlacementRemovalConfirmation.ForLastPlacement(activity!.Name, model!.DescribeDeletion(ActivityId), ghosts.Count));
+        if (confirmed is not true)
+        {
+            return false;
+        }
+
+        isRemoving = true;
+        try
+        {
+            if (await ActivityClient.DeleteAsync(ActivityId, CancellationToken.None) == ActivityWriteOutcome.Forbidden)
+            {
+                state = PageState.Denied;
+                return true;
+            }
+
+            ghosts.Clear();
+            NotificationService.Notify(NotificationSeverity.Success, "Activity deleted");
+            NavigateToList();
+            return true;
+        }
+        catch (ActivityDataUnavailableException)
+        {
+            saveErrorMessage = "Couldn't delete this activity. Try again.";
+            return false;
+        }
+        finally
+        {
+            isRemoving = false;
+        }
+    }
 
     /// <summary>Reloads the tree from Api after a removal or undo, keeping any pending ghosts.</summary>
     private async Task RefreshTreeAsync()

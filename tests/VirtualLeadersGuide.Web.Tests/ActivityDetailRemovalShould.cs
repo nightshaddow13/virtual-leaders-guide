@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Bunit;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Radzen;
 using VirtualLeadersGuide.Web.Components.Pages;
@@ -10,7 +11,8 @@ namespace VirtualLeadersGuide.Web.Tests;
 
 /// <remarks>
 /// Covers removing a Placement from <c>ActivityDetail.razor.cs</c> (P5-12, #97): the plain remove with an
-/// Undo toast, the reap confirm, the last-Placement notice, ghost rows, and a refused delete. Separate from
+/// Undo toast, the reap confirm, the last-Placement dialog that offers to delete the Activity (P5-9, #95),
+/// ghost rows, and a refused delete. Separate from
 /// <see cref="ActivityDetailShould"/> because it needs a stateful fake Api - one that serves Placements with
 /// ids and records DELETE/POST/PATCH - where that suite's static tree is Tab-only. The fixture: this Activity
 /// ("Canoe Basics") sits at Morning and Afternoon, and "Swim Check" shares both Tabs, so removing either row
@@ -32,7 +34,9 @@ public class ActivityDetailRemovalShould : BunitContext
     private readonly List<string> _deleted = [];
     private readonly List<string> _posted = [];
     private readonly List<string> _patched = [];
+    private readonly List<string> _deletedActivities = [];
     private HttpStatusCode _deleteStatus = HttpStatusCode.NoContent;
+    private HttpStatusCode _activityDeleteStatus = HttpStatusCode.NoContent;
 
     public ActivityDetailRemovalShould()
     {
@@ -109,20 +113,54 @@ public class ActivityDetailRemovalShould : BunitContext
     }
 
     [Fact]
-    public void ExplainInsteadOfDeleting_WhenItIsTheActivitysOnlySavedPlacement_ForRemoveAsync()
+    public void OfferToDeleteTheActivityInstead_WhenItIsTheActivitysOnlySavedPlacement_ForRemoveAsync()
     {
         _placements.RemoveAll(p => p.Id == _afternoonPlacement);
         IRenderedComponent<ActivityDetail> cut = RenderPage();
 
         RemoveButton(cut, "Morning").Click();
 
-        cut.WaitForAssertion(() => Assert.Contains("An activity needs at least one placement.", cut.Markup, StringComparison.Ordinal), Patience);
+        cut.WaitForAssertion(() => Assert.Contains("Delete Canoe Basics instead?", cut.Markup, StringComparison.Ordinal), Patience);
+        Assert.Contains("Its placement is removed.", cut.Markup, StringComparison.Ordinal);
         Assert.Empty(_deleted);
-        Assert.DoesNotContain("Save your pending placements first", cut.Markup, StringComparison.Ordinal);
+        Assert.Empty(_deletedActivities);
+        Assert.DoesNotContain("unsaved", cut.Markup, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void AddTheSaveFirstHint_WhenTheOnlySavedRowHasPendingGhosts_ForRemoveAsync()
+    public void SendNothing_WhenTheUserKeepsTheActivityAtTheLastPlacementDialog_ForRemoveAsync()
+    {
+        _placements.RemoveAll(p => p.Id == _afternoonPlacement);
+        IRenderedComponent<ActivityDetail> cut = RenderPage();
+        RemoveButton(cut, "Morning").Click();
+        cut.WaitForAssertion(() => Assert.Contains("Delete Canoe Basics instead?", cut.Markup, StringComparison.Ordinal), Patience);
+
+        Services.GetRequiredService<DialogService>().Close(false);
+
+        cut.WaitForAssertion(() => Assert.DoesNotContain("Delete Canoe Basics instead?", cut.Markup, StringComparison.Ordinal), Patience);
+        Assert.Empty(_deleted);
+        Assert.Empty(_deletedActivities);
+        Assert.DoesNotContain("Activity deleted", cut.Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DeleteTheActivityNotThePlacementAndGoToTheList_WhenTheUserConfirmsTheLastPlacementDialog_ForRemoveAsync()
+    {
+        _placements.RemoveAll(p => p.Id == _afternoonPlacement);
+        IRenderedComponent<ActivityDetail> cut = RenderPage();
+        RemoveButton(cut, "Morning").Click();
+        cut.WaitForAssertion(() => Assert.Contains("Delete Canoe Basics instead?", cut.Markup, StringComparison.Ordinal), Patience);
+
+        Services.GetRequiredService<DialogService>().Close(true);
+
+        cut.WaitForAssertion(() => Assert.Equal([_activityId.ToString()], _deletedActivities), Patience);
+        Assert.Empty(_deleted);
+        cut.WaitForAssertion(() => Assert.EndsWith(
+            $"dashboard/events/{_eventId}/activities", Services.GetRequiredService<NavigationManager>().Uri, StringComparison.Ordinal), Patience);
+    }
+
+    [Fact]
+    public void WarnThatPendingPlacementsAreDiscardedAndLeaveWithoutAPrompt_WhenTheOnlySavedRowHasPendingGhosts_ForRemoveAsync()
     {
         _placements.RemoveAll(p => p.Id == _afternoonPlacement);
         IRenderedComponent<ActivityDetail> cut = RenderPage();
@@ -131,8 +169,41 @@ public class ActivityDetailRemovalShould : BunitContext
 
         RemoveButton(cut, "Morning").Click();
 
-        cut.WaitForAssertion(() => Assert.Contains("Save your pending placements first, then remove this one.", cut.Markup, StringComparison.Ordinal), Patience);
-        Assert.Empty(_deleted);
+        cut.WaitForAssertion(() => Assert.Contains("Your unsaved placement is discarded.", cut.Markup, StringComparison.Ordinal), Patience);
+        Services.GetRequiredService<DialogService>().Close(true);
+
+        cut.WaitForAssertion(() => Assert.Equal([_activityId.ToString()], _deletedActivities), Patience);
+        cut.WaitForAssertion(() => Assert.EndsWith(
+            $"dashboard/events/{_eventId}/activities", Services.GetRequiredService<NavigationManager>().Uri, StringComparison.Ordinal), Patience);
+        Assert.DoesNotContain("Discard unsaved placements?", cut.Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShowDenied_WhenTheActivityDeleteIsForbidden_ForRemoveAsync()
+    {
+        _placements.RemoveAll(p => p.Id == _afternoonPlacement);
+        _activityDeleteStatus = HttpStatusCode.Forbidden;
+        IRenderedComponent<ActivityDetail> cut = RenderPage();
+        RemoveButton(cut, "Morning").Click();
+        cut.WaitForAssertion(() => Assert.Contains("Delete Canoe Basics instead?", cut.Markup, StringComparison.Ordinal), Patience);
+
+        Services.GetRequiredService<DialogService>().Close(true);
+
+        cut.WaitForAssertion(() => Assert.Contains("You don't have access to this Activity", cut.Markup, StringComparison.Ordinal), Patience);
+    }
+
+    [Fact]
+    public void StayOnThePageWithAnError_WhenTheActivityStoreFailsTheDelete_ForRemoveAsync()
+    {
+        _placements.RemoveAll(p => p.Id == _afternoonPlacement);
+        _activityDeleteStatus = HttpStatusCode.InternalServerError;
+        IRenderedComponent<ActivityDetail> cut = RenderPage();
+        RemoveButton(cut, "Morning").Click();
+        cut.WaitForAssertion(() => Assert.Contains("Delete Canoe Basics instead?", cut.Markup, StringComparison.Ordinal), Patience);
+
+        Services.GetRequiredService<DialogService>().Close(true);
+
+        cut.WaitForAssertion(() => Assert.Contains("Couldn't delete this activity. Try again.", cut.Markup, StringComparison.Ordinal), Patience);
     }
 
     [Fact]
@@ -225,6 +296,12 @@ public class ActivityDetailRemovalShould : BunitContext
             {
                 type = "activities", id = id.ToString(), attributes = new { eventId = _eventId, name, description = "content" }
             };
+
+            if (request.Method == HttpMethod.Delete)
+            {
+                _deletedActivities.Add(request.RequestUri!.AbsolutePath[(request.RequestUri.AbsolutePath.LastIndexOf('/') + 1)..]);
+                return new HttpResponseMessage(_activityDeleteStatus);
+            }
 
             return request.RequestUri!.AbsolutePath.EndsWith(_activityId.ToString(), StringComparison.Ordinal)
                 ? new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new { data = Activity(_activityId, "Canoe Basics") }) }

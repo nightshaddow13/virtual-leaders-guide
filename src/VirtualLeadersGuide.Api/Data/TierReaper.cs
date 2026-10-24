@@ -18,14 +18,16 @@ namespace VirtualLeadersGuide.Api.Data;
 /// <para>
 /// Only ever adds removals to the <see cref="VirtualLeadersGuideDbContext"/> change tracker and never calls
 /// <c>SaveChangesAsync</c> - the caller's own save deletes the Placements and the emptied Tiers together, in
-/// one transaction (ADR-0072's single write path). Takes a collection so deleting a whole Activity (P5-9,
-/// #95) can pass every one of its Placements through the same logic.
+/// one transaction (ADR-0072's single write path). Takes a collection so deleting a whole Activity
+/// (<see cref="ActivityResourceDefinition"/>, P5-9 #95) passes every one of its Placements through the same
+/// logic that <see cref="ActivityPlacementResourceDefinition"/> applies to one.
 /// </para>
 /// <para>
-/// The Web project predicts this outcome to decide whether a removal needs a confirm dialog
-/// (<c>PlacementTreeModel.DescribeRemoval</c>) and cannot share this code across the project boundary. The two
-/// must apply the same reference rules: change one, change the other, and keep their paired test cases
-/// (<c>PlacementsResourceShould</c> / <c>PlacementTreeModelShould</c>) in step.
+/// The Web project predicts this outcome to decide what a removal's or an Activity deletion's confirm dialog
+/// says (<c>PlacementTreeModel.DescribeRemoval</c> / <c>DescribeDeletion</c>) and cannot share this code across
+/// the project boundary. The two must apply the same reference rules: change one, change the other, and keep
+/// their paired test cases (<c>PlacementsResourceShould</c> / <c>ActivitiesResourceShould</c> /
+/// <c>PlacementTreeModelShould</c>) in step.
 /// </para>
 /// </remarks>
 public sealed class TierReaper(VirtualLeadersGuideDbContext dbContext)
