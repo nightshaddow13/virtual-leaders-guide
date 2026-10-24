@@ -10,8 +10,7 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// <c>ForgotPassword.razor</c> and <c>ResetPassword.razor</c> - rather than either page alone, the same
 /// concern-scoped naming <see cref="LoginPageScenarios"/>'s remarks explain for this project (ADR-0029).
 /// </remarks>
-[Collection(nameof(AspireE2ECollection))]
-public class PasswordResetScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
+public class PasswordResetScenarios : E2ETestBase
 {
     [Fact(DisplayName = "Given a confirmed user, when they complete the forgot-password flow, then they can sign in with the new password but not the old one")]
     public async Task GivenAConfirmedUser_WhenTheyCompleteTheForgotPasswordFlow_ThenTheyCanSignInWithTheNewPasswordButNotTheOldOne() =>

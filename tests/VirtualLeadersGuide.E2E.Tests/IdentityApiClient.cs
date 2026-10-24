@@ -247,6 +247,27 @@ public sealed class IdentityApiClient(HttpClient httpClient)
         }
     }
 
+    /// <summary>
+    /// Deletes one Role grant held by <paramref name="userId"/> - what <see cref="AspireE2EFixture"/>'s run-end
+    /// sweep uses to remove a grant a fixture account was never meant to hold (ADR-0039), e.g. one an Admin
+    /// picked by accident from the "assign Director" dropdown, which lists the fixture Director like any other.
+    /// </summary>
+    /// <param name="userId">The <c>ApplicationUser.Id</c> that holds the grant.</param>
+    /// <param name="grantId">The <see cref="RoleGrantDto.Id"/> to delete.</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
+    /// <remarks>Tolerates 404, like <see cref="DeleteUserAsync"/>: a grant already gone is the state the caller wanted.</remarks>
+    /// <exception cref="InvalidOperationException">The delete request failed for a reason other than "already gone."</exception>
+    public async Task DeleteGrantAsync(string userId, Guid grantId, CancellationToken cancellationToken)
+    {
+        using HttpResponseMessage response = await httpClient.DeleteAsync(
+            InternalAuthorizationRoutes.ForUserGrantById(userId, grantId), cancellationToken);
+
+        if (!response.IsSuccessStatusCode && response.StatusCode is not HttpStatusCode.NotFound)
+        {
+            await ThrowForFailureAsync("delete a Role grant from", userId, response, cancellationToken);
+        }
+    }
+
     private static async Task ThrowForFailureAsync(
         string action, string subject, HttpResponseMessage response, CancellationToken cancellationToken)
     {

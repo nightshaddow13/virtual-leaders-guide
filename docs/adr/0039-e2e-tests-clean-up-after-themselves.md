@@ -1,3 +1,7 @@
+---
+status: amended by P2.1-7 (#204) - where the run-end sweep and retention check run
+---
+
 # E2E tests clean up after themselves
 
 `VirtualLeadersGuide.E2E.Tests` runs against a real SQL Server container with `.WithDataVolume()`
@@ -100,3 +104,24 @@ row here in the same change that introduces the concept.
   and deterministic enough to assert against page 1 directly.
 - `VLG_E2E_KEEP_DATA=1` is a documented, deliberate way to violate this policy for local debugging - not a bug
   if data is found sitting around after a run made with it set.
+
+## Amendment (P2.1-7, #204)
+
+Above, the run-end sweep and retention check live in `AspireE2EFixture.DisposeAsync` as a *collection
+fixture's* teardown, and "runs after every test in the collection" is the ordering guarantee. P2.1-7 makes the
+test classes run in parallel, with no shared collection, so that guarantee moves rather than weakens: the same
+`DisposeAsync` is now called once by the assembly-level test runner in `BeforeTestAssemblyFinishedAsync`
+([ADR-0075](0075-e2e-stack-lifetime-is-owned-by-an-assembly-level-test-framework.md)), after every collection
+- parallel and non-parallel - has finished. It still runs the sweep first (best-effort, logged) and the
+retention check second (allowed to throw); the runner hands that exception to its `Aggregator`, which xUnit
+reports as a "Test Assembly Cleanup Failure" and `dotnet test` exits non-zero. It runs exactly once per run,
+including under `--filter`. If the stack never finished seeding, the sweep and check are skipped (there is
+nothing to verify) and only disposal runs.
+
+The sweep also now removes any Role grant the fixture Director or Invite holds beyond the ones in the table
+above (the Director's unscoped grant and its grant on the retained Event; the Invite's unscoped grant). The
+fixture accounts are this suite's, but to the app they are ordinary Director users, so an Admin can pick one in
+the "assign Director" dropdown on a real Event by accident - which used to fail every later run's retention
+check ("expected exactly 3 Role grants") until someone found the grant and deleted it by hand. Removing it takes
+nothing from a real person: it is a grant on a test account, and it is exactly the state the table says must not
+exist after a run.

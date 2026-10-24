@@ -8,8 +8,7 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// as the fixture no-role account (<see cref="AspireE2EFixture.NoRoleEmail"/>) rather than a throwaway one -
 /// signing in and out mutates no account state, so there's nothing this test needs isolated (ADR-0039).
 /// </remarks>
-[Collection(nameof(AspireE2ECollection))]
-public class NavMenuScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
+public class NavMenuScenarios : E2ETestBase
 {
     [Fact(DisplayName = "Given a signed-in user, when the sign-out form is submitted, then the NavMenu shows a Sign in link")]
     public async Task GivenASignedInUser_WhenSignOutIsSubmitted_ThenTheNavMenuShowsSignIn() =>

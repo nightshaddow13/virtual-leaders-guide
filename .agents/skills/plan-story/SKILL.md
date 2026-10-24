@@ -91,7 +91,8 @@ Write to the plan file, following the shape your existing plans already use:
 # P4-2 (#72): <title, prefix stripped>
 
 ## Context
-  What shipped already, dependency states from step 2, the branch to cut and its base branch. For an
+  What shipped already, dependency states from step 2, the branch to cut and its base branch, and the
+  sibling worktree it gets cut into (`../vlg-<story-id>`, e.g. `../vlg-p2.1-7`). For an
   existing backlog ticket, state the story-scoping.md new-stories-only exemption outright rather than
   gating on it — the vertical-slice rule doesn't retroactively apply.
 
@@ -159,5 +160,15 @@ a TBD.
 
 ### 8. Hand off
 
-Call `ExitPlanMode`. Leave the branch uncut — cutting it is the implementer's first act, not this
-skill's.
+Call `ExitPlanMode`. Leave the branch and worktree uncreated — that is the implementer's first act, not this
+skill's. The implementer cuts the branch into a new sibling worktree, never by switching the branch checked
+out in the main working directory, since the user is often mid-work on another branch there:
+
+```bash
+git fetch origin
+git worktree add -b uow/<issue>-<slug> ../vlg-<story-id> origin/main
+```
+
+All implementation, builds and test runs for the story then happen inside that worktree. Tests that need the
+dev AppHost's fixed ports or SQL volume (the E2E suite) can't run while the user has the AppHost up — ask
+before running them.

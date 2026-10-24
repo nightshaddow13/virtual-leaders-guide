@@ -5,15 +5,14 @@ namespace VirtualLeadersGuide.E2E.Tests;
 
 /// <remarks>
 /// The smoke test proving the whole arrangement works (P2.1-1, #59) - see <see cref="E2ETestBase"/>'s
-/// remarks for why <see cref="AspireE2ECollection"/>'s constructor injection and
+/// remarks for why the shared <see cref="AspireE2EStack"/> and
 /// <c>Microsoft.Playwright.Xunit</c>'s own <see cref="IAsyncLifetime"/> chain don't conflict. Scoped to the
 /// Login form's own behavior (P2.1-2, #60) - what happens after <c>/dashboard</c> is reached, and what a
 /// signed-in session can do from there, live in <see cref="DashboardAuthorizationScenarios"/>/
 /// <see cref="NavMenuScenarios"/> instead (ADR-0029 narrows ADR-0012 for this project: a test class should
 /// be named for what it actually exercises).
 /// </remarks>
-[Collection(nameof(AspireE2ECollection))]
-public class LoginPageScenarios(AspireE2EFixture fixture) : E2ETestBase(fixture)
+public class LoginPageScenarios : E2ETestBase
 {
     [Fact(DisplayName = "Given the Login page, when navigating to Account/Login, then the Log in heading is visible")]
     public async Task GivenTheLoginPage_WhenNavigatingToAccountLogin_ThenTheLogInHeadingIsVisible() =>

@@ -30,6 +30,11 @@
     <AssemblyMetadata Include="E2EArtifactRoot" Value="$(E2EArtifactRoot)" />
   </ItemGroup>
 
+  <!-- Class-level parallelism and its cap (P2.1-7, #204; ADR-0075). Override per run with the xUnit.MaxParallelThreads=N runner argument (see docs/runbooks/running-e2e-tests.md). -->
+  <ItemGroup>
+    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <ItemGroup>
     <Using Include="System.Net" />
     <Using Include="Microsoft.Extensions.DependencyInjection" />

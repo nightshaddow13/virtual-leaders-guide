@@ -7,23 +7,57 @@ using VirtualLeadersGuide.Identity.Contracts;
 namespace VirtualLeadersGuide.E2E.Tests;
 
 /// <summary>
-/// Base class for every E2E test in this project. Captures <c>trace.zip</c>, <c>screenshot.png</c>,
-/// <c>video.webm</c>, <c>page.html</c>, and any <see cref="AspireE2EFixture.EmailSink"/> contents under
-/// <c>artifacts/e2e/&lt;run timestamp&gt;/&lt;Class&gt;.&lt;Method&gt;/</c> for a failed test, and leaves
-/// nothing behind for a passing one. Also deletes every User/Event a derived test tracked via
+/// Base class for every E2E test in this project. For a failed test, captures <c>screenshot.png</c>,
+/// <c>page.html</c>, and any <see cref="AspireE2EFixture.EmailSink"/> contents under
+/// <c>artifacts/e2e/&lt;run timestamp&gt;/&lt;Class&gt;.&lt;Method&gt;/</c>, plus <c>trace.zip</c> and
+/// <c>video.webm</c> from the evidence rerun in its <c>rerun/</c> subfolder (ADR-0076 - a first attempt records
+/// neither). Leaves nothing behind for a passing test. Also deletes every User/Event a derived test tracked via
 /// <see cref="TrackUser"/>/<see cref="TrackEvent"/>/<see cref="CreateTrackedUserAsync"/>/
 /// <see cref="CreateEventAsync"/>, unless <c>VLG_E2E_KEEP_DATA=1</c> is set (ADR-0039).
 /// </summary>
 /// <remarks>
-/// Extends <see cref="PageTest"/> directly rather than wrapping it, so xUnit's constructor-injection of
-/// <see cref="AspireE2EFixture"/> via <see cref="AspireE2ECollection"/> keeps working unchanged on every
-/// derived test class - it's resolved purely by matching the concrete class's own constructor parameter type,
-/// independently of this base class's <see cref="IAsyncLifetime"/> chain. See ADR-0028 for why this class
-/// decides pass/fail itself via <see cref="RunAsync"/> rather than
-/// <c>Microsoft.Playwright.Xunit</c>'s own <c>ExceptionCapturer</c>.
+/// Extends <see cref="PageTest"/> directly rather than wrapping it. A derived class takes no constructor
+/// arguments: the one shared <see cref="AspireE2EFixture"/> is read from <see cref="AspireE2EStack"/> via
+/// <see cref="Fixture"/> instead of being injected, so each class can be its own xUnit collection and run in
+/// parallel with the others (ADR-0075). See ADR-0028 for why this class decides pass/fail itself via
+/// <see cref="RunAsync"/> rather than <c>Microsoft.Playwright.Xunit</c>'s own <c>ExceptionCapturer</c>.
 /// </remarks>
-public abstract class E2ETestBase(AspireE2EFixture fixture) : PageTest
+public abstract class E2ETestBase : PageTest
 {
+    /// <summary>
+    /// How long, in milliseconds, an assertion or click on an interactive page waits before failing - use it
+    /// through <see cref="InteractiveVisible"/>/<see cref="InteractiveUrl"/> and the other helpers below.
+    /// </summary>
+    /// <remarks>
+    /// Almost every page in this project is <c>InteractiveServer</c> (ADR-0034), so an assertion that depends on
+    /// a SignalR round trip - a click's server-side handler, a <c>RadzenDataGrid</c>'s <c>LoadData</c> after
+    /// navigating in - needs more room than Playwright's 5s assertion default, especially on a fresh per-test
+    /// browser context's first interactive page (cold circuit connect), and more still when classes are run in
+    /// parallel and several Blazor circuits share the stack (ADR-0075).
+    /// </remarks>
+    protected const int InteractiveTimeoutMs = 15_000;
+
+    /// <summary>Options for a <c>ToBeVisibleAsync</c> assertion that waits <see cref="InteractiveTimeoutMs"/>.</summary>
+    protected static LocatorAssertionsToBeVisibleOptions InteractiveVisible() => new() { Timeout = InteractiveTimeoutMs };
+
+    /// <summary>Options for a <c>ToHaveURLAsync</c> assertion that waits <see cref="InteractiveTimeoutMs"/>.</summary>
+    protected static PageAssertionsToHaveURLOptions InteractiveUrl() => new() { Timeout = InteractiveTimeoutMs };
+
+    /// <summary>Options for a <c>ToHaveCountAsync</c> assertion that waits <see cref="InteractiveTimeoutMs"/>.</summary>
+    protected static LocatorAssertionsToHaveCountOptions InteractiveCount() => new() { Timeout = InteractiveTimeoutMs };
+
+    /// <summary>Options for a <c>ToHaveTextAsync</c> assertion that waits <see cref="InteractiveTimeoutMs"/>.</summary>
+    protected static LocatorAssertionsToHaveTextOptions InteractiveText() => new() { Timeout = InteractiveTimeoutMs };
+
+    /// <summary>Options for a <c>ToHaveValueAsync</c> assertion that waits <see cref="InteractiveTimeoutMs"/>.</summary>
+    protected static LocatorAssertionsToHaveValueOptions InteractiveValue() => new() { Timeout = InteractiveTimeoutMs };
+
+    /// <summary>Options for a <c>ToContainTextAsync</c> assertion that waits <see cref="InteractiveTimeoutMs"/>.</summary>
+    protected static LocatorAssertionsToContainTextOptions InteractiveContainText() => new() { Timeout = InteractiveTimeoutMs };
+
+    /// <summary>Options for a locator click that waits <see cref="InteractiveTimeoutMs"/>.</summary>
+    protected static LocatorClickOptions InteractiveClick() => new() { Timeout = InteractiveTimeoutMs };
+
     /// <remarks>
     /// A conservative margin under Windows' 260-char <c>MAX_PATH</c>, not the literal ceiling (ADR-0028) -
     /// this machine has <c>LongPathsEnabled=0</c>, and leaving headroom means a resolved path failing this
@@ -41,18 +75,18 @@ public abstract class E2ETestBase(AspireE2EFixture fixture) : PageTest
 
     /// <remarks>
     /// One folder per *run*, not per test: a static field initializer runs exactly once per test-assembly
-    /// load, and every E2E test class shares that one process via <see cref="AspireE2ECollection"/>
-    /// (ADR-0025) - so every failure in a run lands under the same timestamp. Not created here (see
+    /// load, and every E2E test class shares that one process and one <see cref="AspireE2EStack"/>
+    /// (ADR-0025, ADR-0075) - so every failure in a run lands under the same timestamp. Not created here (see
     /// <see cref="ResolveArtifactPath"/>) - a run where every test passes must leave no <c>artifacts/e2e/</c>
     /// folder behind at all (AC #2).
     /// </remarks>
     private static readonly string RunRoot = Path.Combine(ArtifactRoot, DateTime.Now.ToString("yyyyMMdd-HHmmss"));
 
     /// <summary>
-    /// The running Aspire stack, hoisted here so every derived test class gets it without redeclaring its own
-    /// constructor-injected field.
+    /// The running Aspire stack, shared by every test class in the run.
     /// </summary>
-    protected AspireE2EFixture Fixture { get; } = fixture;
+    /// <exception cref="InvalidOperationException">The stack failed to boot - see <see cref="AspireE2EStack.Current"/>.</exception>
+    protected AspireE2EFixture Fixture => AspireE2EStack.Current;
 
     /// <remarks>Defaults to <see langword="false"/> on purpose - see ADR-0028.</remarks>
     private bool _passed;
@@ -87,12 +121,15 @@ public abstract class E2ETestBase(AspireE2EFixture fixture) : PageTest
     {
         await base.InitializeAsync();
 
-        await Context.Tracing.StartAsync(new TracingStartOptions
+        if (E2ECaptureMode.Active)
         {
-            Screenshots = true,
-            Snapshots = true,
-            Sources = true,
-        });
+            await Context.Tracing.StartAsync(new TracingStartOptions
+            {
+                Screenshots = true,
+                Snapshots = true,
+                Sources = true,
+            });
+        }
     }
 
     /// <inheritdoc/>
@@ -108,20 +145,49 @@ public abstract class E2ETestBase(AspireE2EFixture fixture) : PageTest
     public override async Task DisposeAsync()
     {
         IVideo? video = Page.Video;
+        bool recording = E2ECaptureMode.Active;
 
         string testDir = Path.Combine(RunRoot, $"{GetType().Name}.{_testName}");
+        if (E2ECaptureMode.IsRerun)
+        {
+            testDir = Path.Combine(testDir, "rerun");
+        }
 
         if (_passed)
         {
-            await Context.Tracing.StopAsync();
+            if (recording)
+            {
+                await Context.Tracing.StopAsync();
+            }
+
+            if (E2ECaptureMode.IsRerun)
+            {
+                await TryCaptureAsync(testDir, "DID_NOT_REPRODUCE.txt", () =>
+                {
+                    string? notePath = ResolveArtifactPath(testDir, "DID_NOT_REPRODUCE.txt");
+                    if (notePath is not null)
+                    {
+                        File.WriteAllText(
+                            notePath,
+                            "This test failed on its first attempt and passed on this rerun, so it is still reported as " +
+                            "failed. The first attempt's screenshot.png and page.html are in the folder above; there is " +
+                            "no trace or video of the failure itself. Set VLG_E2E_TRACE_ALL=1 to record every attempt.");
+                    }
+
+                    return Task.CompletedTask;
+                });
+            }
         }
         else
         {
-            await TryCaptureAsync(testDir, "trace.zip", async () =>
+            if (recording)
             {
-                string? tracePath = ResolveArtifactPath(testDir, "trace.zip");
-                await Context.Tracing.StopAsync(tracePath is null ? null : new TracingStopOptions { Path = tracePath });
-            });
+                await TryCaptureAsync(testDir, "trace.zip", async () =>
+                {
+                    string? tracePath = ResolveArtifactPath(testDir, "trace.zip");
+                    await Context.Tracing.StopAsync(tracePath is null ? null : new TracingStopOptions { Path = tracePath });
+                });
+            }
 
             await TryCaptureAsync(testDir, "screenshot.png", async () =>
             {
@@ -192,9 +258,10 @@ public abstract class E2ETestBase(AspireE2EFixture fixture) : PageTest
 
     /// <inheritdoc/>
     /// <remarks>
-    /// Records video for every test, not just failing ones - Playwright only finalizes a video once its
-    /// context closes, so "only record on failure" isn't an option. <see cref="DisposeAsync"/> deletes the
-    /// file instead when the test passed (AC #2).
+    /// Records video only while <see cref="E2ECaptureMode.Active"/> - Playwright only finalizes a video once
+    /// its context closes, so a test can't decide to keep one after the fact. That is why a failed test is
+    /// rerun with recording on rather than recorded every time (ADR-0076). When it is recording,
+    /// <see cref="DisposeAsync"/> deletes the file instead if the test passed (AC #2).
     /// </remarks>
     /// <remarks>
     /// <c>TimezoneId = "UTC"</c> pins the browser's <c>Intl.DateTimeFormat().resolvedOptions().timeZone</c>
@@ -205,7 +272,7 @@ public abstract class E2ETestBase(AspireE2EFixture fixture) : PageTest
     /// </remarks>
     public override BrowserNewContextOptions ContextOptions() => new()
     {
-        RecordVideoDir = Path.GetTempPath(),
+        RecordVideoDir = E2ECaptureMode.Active ? Path.GetTempPath() : null,
         TimezoneId = "UTC"
     };
 
@@ -235,9 +302,10 @@ public abstract class E2ETestBase(AspireE2EFixture fixture) : PageTest
 
     /// <remarks>
     /// <see cref="AspireE2EFixture.AdminAllowlistedEmail"/> is one value shared by every test in this run
-    /// (ADR-0025 - one Aspire stack, one fixture instance), unlike every other account most tests create,
-    /// which is freshly guid-suffixed per call - so this checks for an existing account before creating
-    /// one, rather than assuming a fresh account the way most other seeding calls in this project do.
+    /// (ADR-0025, ADR-0075 - one Aspire stack, one fixture instance, even with classes running in parallel),
+    /// unlike every other account most tests create, which is freshly guid-suffixed per call - so this checks
+    /// for an existing account before creating one, rather than assuming a fresh account the way most other
+    /// seeding calls in this project do.
     /// </remarks>
     protected async Task SignInAsAdminAsync()
     {
@@ -414,10 +482,9 @@ public abstract class E2ETestBase(AspireE2EFixture fixture) : PageTest
         }
         catch (Exception ex)
         {
-            Directory.CreateDirectory(RunRoot);
-            await File.AppendAllTextAsync(
+            E2EArtifactLog.Append(
                 Path.Combine(RunRoot, "CAPTURE_ERRORS.txt"),
-                $"{fileName} for {Path.GetFileName(testDir)} failed: {ex.GetType().Name}: {ex.Message}{Environment.NewLine}");
+                $"{fileName} for {Path.GetFileName(testDir)} failed: {ex.GetType().Name}: {ex.Message}");
         }
     }
 
@@ -481,10 +548,9 @@ public abstract class E2ETestBase(AspireE2EFixture fixture) : PageTest
             return path;
         }
 
-        Directory.CreateDirectory(RunRoot);
-        File.AppendAllText(
+        E2EArtifactLog.Append(
             Path.Combine(RunRoot, "TOO_LONG.txt"),
-            $"{fileName} for {Path.GetFileName(testDir)} would exceed the path-length limit: {path}{Environment.NewLine}");
+            $"{fileName} for {Path.GetFileName(testDir)} would exceed the path-length limit: {path}");
         return null;
     }
 }

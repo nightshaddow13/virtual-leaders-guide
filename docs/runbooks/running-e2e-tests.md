@@ -76,9 +76,38 @@ becomes `../../../../../artifacts/e2e` (five levels back up to the repo root).
 dotnet test tests/VirtualLeadersGuide.E2E.Tests
 ```
 
-Expect this to take a couple of minutes - `AspireE2EFixture` boots the whole stack once for the entire
-run (container pulls on a cold cache add more). Every test shares that one boot via
-`AspireE2ECollection`, so they run sequentially, not in parallel.
+Expect the boot to take a couple of minutes (container pulls on a cold cache add more). The whole stack boots
+exactly **once** per run - `AspireE2ETestFramework` starts it before the first test and sweeps, verifies and
+disposes it after the last, whether you run everything or a single class with `--filter`
+([ADR-0075](../adr/0075-e2e-stack-lifetime-is-owned-by-an-assembly-level-test-framework.md)).
+
+### Parallelism
+
+The suite is **serial by default** (`"maxParallelThreads": 1` in
+`tests/VirtualLeadersGuide.E2E.Tests/xunit.runner.json`), but it is built to run test **classes** in parallel
+against that one stack - the tests *inside* a class always stay serial - and you can opt in per run:
+
+```powershell
+dotnet test tests/VirtualLeadersGuide.E2E.Tests -- xUnit.MaxParallelThreads=4
+```
+
+`EventManagementScenarios` always runs alone, after the parallel classes have finished (until P2.1-8, #205,
+makes its grid lookups independent of paging).
+
+**Why it isn't parallel by default.** Measured on an 8-core, 16 GB developer laptop, four parallel classes were
+no faster than serial (about 1m50s either way) and, before tracing was turned off, timed out more often. The
+machine was already CPU-saturated by a single serial run - the stack, Chromium, Windows Defender and other
+background tools were competing for the same cores - so extra workers only made each test slower
+([ADR-0075](../adr/0075-e2e-stack-lifetime-is-owned-by-an-assembly-level-test-framework.md) has the numbers).
+Each concurrent test also drives its own Chromium, which costs memory. A machine with idle cores (a CI runner,
+a workstation) may see a real speedup: try a cap of 2-4 and compare.
+
+The dev AppHost must still be stopped (Section 1): parallelism changes how many tests run at once, not how
+many stacks - there is still only one, on the same fixed ports and SQL volume.
+
+If the end-of-run retention check (ADR-0039) finds leftover data, the run fails with a **Test Assembly
+Cleanup Failure** and `dotnet test` exits non-zero. The summary line can still read `Passed!` - trust the exit
+code and the failure message, not the summary.
 
 ## 5. Test data
 
@@ -104,18 +133,35 @@ idempotently.
 
 ## 6. Where failure artifacts land
 
-Every failed test leaves `trace.zip`, `screenshot.png`, `video.webm`, `page.html`, and an `emails/` folder
-(any JSON files the file-sink email sender had written by the time the test failed) under:
+A test records **no trace and no video on its first attempt** - recording every test was the suite's biggest
+cost (about 36% of a serial run, plus heavy antivirus scanning of the files), and nearly all of it was wasted
+on tests that pass ([ADR-0076](../adr/0076-a-failed-e2e-test-is-rerun-once-with-a-trace-and-video-for-evidence.md)).
+When a test fails it is **rerun once with both on**, purely to gather evidence. The test is still reported as
+failed with its *first* attempt's error; the rerun can never turn a failure into a pass.
+
+A failed test leaves, under `artifacts/e2e/<run timestamp>/<Class>.<Method>/`:
 
 ```
-artifacts/e2e/<run timestamp>/<Class>.<Method>/
+screenshot.png, page.html, emails/     taken at the moment of the first failure
+rerun/trace.zip, rerun/video.webm      recorded by the rerun (plus its own screenshot.png / page.html)
+rerun/DID_NOT_REPRODUCE.txt            instead of a trace/video, if the rerun passed
+```
+
+`emails/` holds any JSON files the file-sink email sender had written by then. If the rerun passed, the failure
+was intermittent and there is no recording of it - rerun with `VLG_E2E_TRACE_ALL=1` to record **every** attempt
+(and skip the rerun), so the one failing attempt is captured:
+
+```powershell
+$env:VLG_E2E_TRACE_ALL = "1"
+dotnet test tests/VirtualLeadersGuide.E2E.Tests --filter "FullyQualifiedName~SomeScenarios"
 ```
 
 A passing run leaves no `artifacts/e2e/` folder at all - nothing to clean up. `artifacts/` is already
 gitignored.
 
 Two fallback markers can appear at the `artifacts/e2e/<run timestamp>/` level instead of a per-test
-folder, if something about capturing a specific file didn't go to plan:
+folder, if something about capturing a specific file didn't go to plan (concurrent tests append to them
+safely, one line at a time):
 
 - **`TOO_LONG.txt`** - one or more resolved artifact paths would have exceeded a safe length under
   Windows' `MAX_PATH` (260 characters; this is a real constraint unless [Windows long-path support]
@@ -124,12 +170,22 @@ folder, if something about capturing a specific file didn't go to plan:
   error, a locked file handle). The test's own reported pass/fail result is never affected either way -
   a capture problem only ever costs evidence, never correctness of the result.
 
+Two more markers live directly in `artifacts/e2e/`, not under a run timestamp, because they belong to the
+stack rather than any one test:
+
+- **`BOOT_ERROR.txt`** - the stack failed to come up (Docker not running, dev certs untrusted, another
+  AppHost holding the ports). Every test then fails with the same Docker/dev-certs/AppHost checklist; the run-end
+  sweep is skipped, since there is nothing to sweep.
+- **`SWEEP_ERRORS.txt`** - the best-effort run-end sweep itself threw. The retention check that follows is
+  what actually fails the run.
+
 [Windows long-path support]: https://learn.microsoft.com/windows/win32/fileio/maximum-file-path-limitation
 
 ## 7. Viewing a trace
 
-`trace.zip` is a Playwright trace: a time-travel view of every action, a screenshot filmstrip, the
-network log, and the console log for that one test run.
+`rerun/trace.zip` is a Playwright trace: a time-travel view of every action, a screenshot filmstrip, the
+network log, and the console log for the rerun of a failed test (or for the failing attempt itself, if you set
+`VLG_E2E_TRACE_ALL=1`).
 
 Without `pwsh`, drag it onto **[trace.playwright.dev](https://trace.playwright.dev)** instead - runs
 entirely in the browser, nothing uploaded. With `pwsh` installed (Section 2), the local viewer works
@@ -145,5 +201,4 @@ pwsh tests/VirtualLeadersGuide.E2E.Tests/bin/Debug/net10.0/playwright.ps1 show-t
 
 Not currently wired up - `Allure.Xunit`'s reporter doesn't activate under `dotnet test` in this
 environment (tracked as [#71](https://github.com/nightshaddow13/virtual-leaders-guide/issues/71), with
-the full diagnostic trail). `trace.zip` plus `screenshot.png`/`video.webm`/`page.html` are the whole
-diagnostic story for now.
+the full diagnostic trail). The failure artifacts in Section 6 are the whole diagnostic story for now.
