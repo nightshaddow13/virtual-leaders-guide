@@ -115,23 +115,8 @@ public class ConfirmDialogShould : BunitContext
         Assert.Contains(cut.FindAll("button"), button => button.TextContent.Contains("Remove", StringComparison.Ordinal));
     }
 
-    /// <remarks>P5-12 (#97): the explain-only last-Placement notice shows just its dismiss button.</remarks>
     [Fact]
-    public void RenderOnlyTheDismissButton_WhenShowConfirmIsFalse_ForConfirmDialog()
-    {
-        RadzenTestServices.RegisterRadzenComponentsHost(Services);
-
-        IRenderedComponent<ConfirmDialog> cut = Render<ConfirmDialog>(parameters => parameters
-            .Add(component => component.Message, "An activity needs at least one placement.")
-            .Add(component => component.ShowConfirm, false)
-            .Add(component => component.DismissText, "OK"));
-
-        IElement button = Assert.Single(cut.FindAll("button"));
-        Assert.Equal("OK", button.TextContent.Trim());
-    }
-
-    [Fact]
-    public void RenderBothButtons_WhenShowConfirmIsNotSet_ForConfirmDialog()
+    public void RenderBothButtons_WhenRendered_ForConfirmDialog()
     {
         RadzenTestServices.RegisterRadzenComponentsHost(Services);
 

@@ -338,6 +338,67 @@ public class ApiActivityClientShould
             () => client.UpdateAsync(Guid.NewGuid(), "Canoe Basics", "content", CancellationToken.None));
     }
 
+    [Fact]
+    public async Task SendADeleteToTheActivitysUrl_WhenDeleting_ForDeleteAsync()
+    {
+        var activityId = Guid.NewGuid();
+        HttpRequestMessage? capturedRequest = null;
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            capturedRequest = request;
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
+        });
+        ApiActivityClient client = CreateClient(handler);
+
+        await client.DeleteAsync(activityId, CancellationToken.None);
+
+        Assert.Equal(HttpMethod.Delete, capturedRequest!.Method);
+        Assert.EndsWith($"/api/activities/{activityId}", capturedRequest.RequestUri!.AbsolutePath, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ReturnSuccess_WhenApiRespondsWithNoContent_ForDeleteAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.NoContent));
+        ApiActivityClient client = CreateClient(handler);
+
+        ActivityWriteOutcome outcome = await client.DeleteAsync(Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal(ActivityWriteOutcome.Success, outcome);
+    }
+
+    [Fact]
+    public async Task ReturnForbidden_WhenApiRespondsWithForbidden_ForDeleteAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.Forbidden));
+        ApiActivityClient client = CreateClient(handler);
+
+        ActivityWriteOutcome outcome = await client.DeleteAsync(Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal(ActivityWriteOutcome.Forbidden, outcome);
+    }
+
+    [Fact]
+    public async Task ReturnNotFound_WhenApiRespondsWithNotFound_ForDeleteAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
+        ApiActivityClient client = CreateClient(handler);
+
+        ActivityWriteOutcome outcome = await client.DeleteAsync(Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal(ActivityWriteOutcome.NotFound, outcome);
+    }
+
+    [Fact]
+    public async Task ThrowActivityDataUnavailableException_WhenApiRespondsWithAnUnexpectedStatus_ForDeleteAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        ApiActivityClient client = CreateClient(handler);
+
+        await Assert.ThrowsAsync<ActivityDataUnavailableException>(
+            () => client.DeleteAsync(Guid.NewGuid(), CancellationToken.None));
+    }
+
     private static ApiActivityClient CreateClient(HttpMessageHandler apiHandler) =>
         ApiClientTestFactory.CreateActivityClient(apiHandler);
 

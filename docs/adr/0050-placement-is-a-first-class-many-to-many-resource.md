@@ -1,3 +1,7 @@
+---
+status: amended by P5-9 (#95) - deleting the Activity is the way to zero Placements, and reaps their Tiers
+---
+
 # Placement is a first-class many-to-many resource, not a bare relationship
 
 An Activity or InfoPage can appear under more than one Tab (e.g. offered both morning and afternoon), each
@@ -34,3 +38,12 @@ the Tab's Event rather than resolved through either relationship at query time â
   "at least one Placement."
 - Denormalized `EventId` is kept consistent by the same write-time pre-check that enforces every other
   Placement rule (uniqueness, exclusivity, the last-Placement guard).
+
+## Amendment (P5-9, #95)
+
+Deleting the Activity is the sanctioned way to take it to zero Placements - the last-Placement guard above
+blocks removing the final *row*, not deleting the *Activity*. `ActivityResourceDefinition` removes every one
+of the Activity's Placements explicitly (not via the database cascade alone) and has `TierReaper` reap every
+Tier they empty (ADR-0046), all in JsonApiDotNetCore's one `SaveChangesAsync` (ADR-0072). The explicit removal
+matters: the Tier foreign keys are `Restrict`, so EF must see the Placement deletes to order them before the
+Tier deletes. The guard deliberately does not run on this path.

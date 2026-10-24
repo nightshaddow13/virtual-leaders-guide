@@ -16,8 +16,8 @@ namespace VirtualLeadersGuide.Web.Activities;
 /// <see cref="InternalApiClient"/>, not a bare <c>IHttpClientFactory.CreateClient("Api")</c>, because
 /// <c>/api/*</c> requires the internal JWT that only <see cref="InternalApiClient"/> attaches. The
 /// read/update/delete methods <c>ActivityResourceDefinition</c> already authorizes on the Api side arrive as
-/// their own UI needs them - P5-7 (#93) adds the list read, P5-8 (#94) the single read and update; P5-9
-/// (#95) still owes delete.
+/// their own UI needs them - P5-7 (#93) adds the list read, P5-8 (#94) the single read and update, P5-9
+/// (#95) delete.
 /// </remarks>
 public sealed class ApiActivityClient(InternalApiClient apiClient)
 {
@@ -157,6 +157,33 @@ public sealed class ApiActivityClient(InternalApiClient apiClient)
         if (response.StatusCode == HttpStatusCode.Forbidden)
         {
             return ActivityWriteOutcome.Forbidden;
+        }
+
+        EnsureExpectedStatus(response, HttpStatusCode.NoContent);
+        return ActivityWriteOutcome.Success;
+    }
+
+    /// <summary>Deletes an Activity permanently, along with all its Placements and any Tiers they leave empty - hard delete, no recovery path (ADR-0045).</summary>
+    /// <param name="id">The Activity to delete.</param>
+    /// <param name="cancellationToken">Propagated to the underlying HTTP call.</param>
+    /// <returns>
+    /// <see cref="ActivityWriteOutcome.Success"/> (Api returns 204); <see cref="ActivityWriteOutcome.Forbidden"/>
+    /// if the caller no longer has write access (ADR-0069); or <see cref="ActivityWriteOutcome.NotFound"/> if
+    /// it was already gone.
+    /// </returns>
+    public async Task<ActivityWriteOutcome> DeleteAsync(Guid id, CancellationToken cancellationToken)
+    {
+        using var request = NewRequest(HttpMethod.Delete, $"{ActivitiesPath}/{id}");
+        using HttpResponseMessage response = await SendAsync(request, cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            return ActivityWriteOutcome.Forbidden;
+        }
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return ActivityWriteOutcome.NotFound;
         }
 
         EnsureExpectedStatus(response, HttpStatusCode.NoContent);

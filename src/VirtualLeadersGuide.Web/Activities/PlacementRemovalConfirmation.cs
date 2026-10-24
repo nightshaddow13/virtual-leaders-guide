@@ -5,8 +5,9 @@ namespace VirtualLeadersGuide.Web.Activities;
 /// <summary>
 /// Builds the <see cref="ConfirmDialog"/> parameters for removing a Placement (P5-12, #97; wireframe turn 2c)
 /// - the one destructive action that doesn't always confirm (ADR-0045's exception). The caller opens the
-/// reap dialog only when <see cref="RemovalImpact.Reaped"/> is non-empty, and the last-Placement notice only
-/// when <see cref="RemovalImpact.OtherPlacementsOfThisActivity"/> is zero.
+/// reap dialog only when <see cref="RemovalImpact.Reaped"/> is non-empty, and the last-Placement dialog (which
+/// offers to delete the Activity, P5-9 #95) only when <see cref="RemovalImpact.OtherPlacementsOfThisActivity"/>
+/// is zero.
 /// </summary>
 /// <remarks>
 /// Every bullet is conditional (ADR-0045): a removal that keeps no ancestor alive carries no "stay" line, and
@@ -52,38 +53,42 @@ internal static class PlacementRemovalConfirmation
         };
     }
 
-    /// <summary>Builds the explain-only notice for an Activity's last Placement (ADR-0050).</summary>
-    /// <param name="hasPendingGhosts">Whether unsaved placements are waiting - adds the "save them first" line, since the guard counts saved rows only.</param>
+    /// <summary>
+    /// Builds the dialog for an Activity's last Placement (ADR-0050, P5-9 #95): a flat refusal would strand the
+    /// user, so it offers to delete the whole Activity instead, carrying the same consequence bullets as the
+    /// list's delete confirmation.
+    /// </summary>
+    /// <param name="activityName">The Activity, named in the question.</param>
+    /// <param name="impact">What deleting the Activity does, from <see cref="PlacementTreeModel.DescribeDeletion"/>.</param>
+    /// <param name="pendingGhosts">How many unsaved placements are waiting - they're discarded along with the Activity, and the bullet says so.</param>
     /// <returns>The parameter dictionary for <c>DialogService.OpenAsync&lt;ConfirmDialog&gt;</c>.</returns>
-    public static Dictionary<string, object?> ForLastPlacement(bool hasPendingGhosts)
+    public static Dictionary<string, object?> ForLastPlacement(
+        string activityName, ActivityDeletionImpact impact, int pendingGhosts) => new()
     {
-        var consequences = new List<string> { "Add another placement first, or delete the activity instead." };
-        if (hasPendingGhosts)
-        {
-            consequences.Add("Save your pending placements first, then remove this one.");
-        }
-
-        return new Dictionary<string, object?>
-        {
-            [nameof(ConfirmDialog.Message)] = "An activity needs at least one placement.",
-            [nameof(ConfirmDialog.Consequences)] = (IReadOnlyList<string>)consequences,
-            [nameof(ConfirmDialog.ShowConfirm)] = false,
-            [nameof(ConfirmDialog.DismissText)] = "OK"
-        };
-    }
+        [nameof(ConfirmDialog.Message)] = $"An activity needs at least one placement. Delete {activityName} instead?",
+        [nameof(ConfirmDialog.Consequences)] = ActivityDeleteConfirmation.Consequences(impact, pendingGhosts),
+        [nameof(ConfirmDialog.ConfirmText)] = "Delete activity",
+        [nameof(ConfirmDialog.DismissText)] = "Keep it"
+    };
 
     private static string Describe(IReadOnlyList<TierRef> reaped)
     {
         string[] nouns = [.. reaped.Select(tier => Noun(tier.Kind))];
-        return nouns.Length == 1
-            ? $"the {nouns[0]} disappears"
-            : $"the {string.Join(", ", nouns[..^1])} and {nouns[^1]} disappear";
+        return $"the {JoinNames(nouns)} {Disappear(nouns.Length)}";
     }
 
-    private static string JoinNames(string[] names) =>
-        $"{string.Join(", ", names[..^1])} and {names[^1]}";
+    /// <summary>Joins names as prose - "A", "A and B", "A, B and C" - the one list shape both removal dialogs' copy uses.</summary>
+    /// <param name="names">The names to join; at least one.</param>
+    internal static string JoinNames(IReadOnlyList<string> names) =>
+        names.Count == 1 ? names[0] : $"{string.Join(", ", names.Take(names.Count - 1))} and {names[^1]}";
 
-    private static string Noun(TierKind kind) => kind switch
+    /// <summary>The verb agreeing with <paramref name="count"/> subjects - "disappears" for one, "disappear" for more.</summary>
+    /// <param name="count">How many things are disappearing.</param>
+    internal static string Disappear(int count) => count == 1 ? "disappears" : "disappear";
+
+    /// <summary>The lower-case name of a Tier level, as the dialogs say it ("sub section").</summary>
+    /// <param name="kind">Which level.</param>
+    internal static string Noun(TierKind kind) => kind switch
     {
         TierKind.Tab => "tab",
         TierKind.SubTab => "sub tab",

@@ -65,21 +65,29 @@ public class PlacementRemovalConfirmationShould
     }
 
     [Fact]
-    public void ExplainOnlyWithNoConfirmButton_WhenTheActivityHasNoOtherPlacement_ForForLastPlacement()
+    public void OfferToDeleteTheActivityInstead_WhenTheActivityHasNoOtherPlacement_ForForLastPlacement()
     {
-        Dictionary<string, object?> parameters = PlacementRemovalConfirmation.ForLastPlacement(hasPendingGhosts: false);
+        Dictionary<string, object?> parameters = PlacementRemovalConfirmation.ForLastPlacement(
+            "Canoe Basics", new ActivityDeletionImpact(1, [new TierRef(TierKind.Tab, "Morning")]), pendingGhosts: 0);
 
-        Assert.Equal("An activity needs at least one placement.", parameters[nameof(ConfirmDialog.Message)]);
-        Assert.Equal(false, parameters[nameof(ConfirmDialog.ShowConfirm)]);
-        Assert.Equal("OK", parameters[nameof(ConfirmDialog.DismissText)]);
-        Assert.Equal(["Add another placement first, or delete the activity instead."], Bullets(parameters));
+        Assert.Equal(
+            "An activity needs at least one placement. Delete Canoe Basics instead?", parameters[nameof(ConfirmDialog.Message)]);
+        Assert.Equal("Delete activity", parameters[nameof(ConfirmDialog.ConfirmText)]);
+        Assert.Equal("Keep it", parameters[nameof(ConfirmDialog.DismissText)]);
+        Assert.Equal(
+        [
+            "Its placement is removed.",
+            "The Morning tab disappears from the guide too.",
+            "This can't be undone."
+        ], Bullets(parameters));
     }
 
     [Fact]
-    public void TellThemToSaveFirst_WhenGhostRowsArePending_ForForLastPlacement()
+    public void WarnThatPendingPlacementsAreDiscarded_WhenGhostRowsArePending_ForForLastPlacement()
     {
-        IReadOnlyList<string> bullets = Bullets(PlacementRemovalConfirmation.ForLastPlacement(hasPendingGhosts: true));
+        IReadOnlyList<string> bullets = Bullets(PlacementRemovalConfirmation.ForLastPlacement(
+            "Canoe Basics", new ActivityDeletionImpact(1, []), pendingGhosts: 2));
 
-        Assert.Contains("Save your pending placements first, then remove this one.", bullets);
+        Assert.Contains("Your 2 unsaved placements are discarded.", bullets);
     }
 }
