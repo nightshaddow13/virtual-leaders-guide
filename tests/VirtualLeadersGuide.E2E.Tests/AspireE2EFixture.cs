@@ -1,4 +1,5 @@
 using Aspire.Hosting;
+using Aspire.Hosting.Dotnet;
 using VirtualLeadersGuide.Identity.Contracts;
 
 namespace VirtualLeadersGuide.E2E.Tests;
@@ -522,7 +523,7 @@ public sealed class AspireE2EFixture : IAsyncLifetime
     /// </remarks>
     private void ConfigureWebEmailSink(IDistributedApplicationTestingBuilder appHost)
     {
-        ProjectResource webResource = appHost.Resources.OfType<ProjectResource>().Single(r => r.Name == "web");
+        DotnetProjectResource webResource = appHost.Resources.OfType<DotnetProjectResource>().Single(r => r.Name == "web");
 
         appHost.CreateResourceBuilder(webResource)
             .WithEnvironment("Email__Provider", "FileSink")

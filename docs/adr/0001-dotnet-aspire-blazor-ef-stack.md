@@ -7,5 +7,8 @@ stay supported. On top of that, **.NET Aspire** orchestrates the solution (servi
 first-class Azure deployment tooling), **Blazor Web App** (Interactive Server) is the frontend, a separate
 **ASP.NET Core Web API** project is the backend, and **EF Core** is the data-access layer against Azure SQL.
 
+The .NET 10 target was superseded by ADR-0077, which moves the solution to .NET 11. The rest of this stack
+choice stands.
+
 This ADR was silent on a UI component library — the `dotnet new blazor` scaffold's Bootstrap was a template
 default, never a decision. ADR-0034 fills that gap: Radzen.Blazor replaces it.

@@ -14,3 +14,5 @@ with the `Aspire.Hosting.*` packages with no error, surfacing later as inconsist
 As of the "Verify hand-synced version pairs" step in `.github/workflows/build.yml`, this pair (and the
 EF Core / `dotnet-ef` pair — see ADR-0060) is CI-enforced: a divergence fails the build immediately instead
 of drifting. Keep the two numbers in sync by hand on every Aspire bump; CI now catches it if you don't.
+
+**Superseded by ADR-0078:** the AppHost no longer uses Aspire.AppHost.Sdk, so this pin and its CI check are gone.
