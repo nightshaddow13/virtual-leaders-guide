@@ -1,3 +1,4 @@
+using Aspire.Hosting.Dotnet;
 using Azure.Provisioning.Sql;
 using Azure.Provisioning.Storage;
 
@@ -49,7 +50,7 @@ var storage = builder.AddAzureStorage("storage")
 var blobs = storage.AddBlobs("blobs");
 var dataProtectionKeysContainer = storage.AddBlobContainer("dataprotection-keys");
 
-var api = builder.AddProject<Projects.VirtualLeadersGuide_Api>("api")
+var api = builder.AddDotnetProject("api", "../VirtualLeadersGuide.Api/VirtualLeadersGuide.Api.csproj")
     .WithReference(database)
     .WaitFor(database)
     .WithReference(blobs)
@@ -58,7 +59,7 @@ var api = builder.AddProject<Projects.VirtualLeadersGuide_Api>("api")
     .WithEnvironment("InternalApi__Key", internalApiKey)
     .WithEnvironment("InternalJwt__SigningKey", internalJwtKey);
 
-var web = builder.AddProject<Projects.VirtualLeadersGuide_Web>("web")
+var web = builder.AddDotnetProject("web", "../VirtualLeadersGuide.Web/VirtualLeadersGuide.Web.csproj")
     .WithExternalHttpEndpoints()
     .WithReference(api)
     .WithReference(blobs)
@@ -81,5 +82,5 @@ builder.Build().Run();
 /// One of two layers <c>EmailSenderRegistration</c> requires before Web will select the file sink - see
 /// ADR-0032.
 /// </remarks>
-void AllowFileSinkEmailProvider(IResourceBuilder<ProjectResource> webBuilder) =>
+void AllowFileSinkEmailProvider(IResourceBuilder<DotnetProjectResource> webBuilder) =>
     webBuilder.WithEnvironment("Email__FileSinkAllowed", "true");
