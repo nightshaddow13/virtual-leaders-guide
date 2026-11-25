@@ -83,24 +83,34 @@ disposes it after the last, whether you run everything or a single class with `-
 
 ### Parallelism
 
-The suite is **serial by default** (`"maxParallelThreads": 1` in
-`tests/VirtualLeadersGuide.E2E.Tests/xunit.runner.json`), but it is built to run test **classes** in parallel
-against that one stack - the tests *inside* a class always stay serial - and you can opt in per run:
+The suite runs test **classes** in parallel against that one stack, capped at **4** threads
+(`"maxParallelThreads": 4` in `tests/VirtualLeadersGuide.E2E.Tests/xunit.runner.json`). The tests *inside* a
+class always stay serial. Override the cap for one run, e.g. back to serial:
 
 ```powershell
-dotnet test tests/VirtualLeadersGuide.E2E.Tests -- xUnit.MaxParallelThreads=4
+dotnet test tests/VirtualLeadersGuide.E2E.Tests -- xUnit.MaxParallelThreads=1
 ```
 
 `EventManagementScenarios` always runs alone, after the parallel classes have finished (until P2.1-8, #205,
 makes its grid lookups independent of paging).
 
-**Why it isn't parallel by default.** Measured on an 8-core, 16 GB developer laptop, four parallel classes were
-no faster than serial (about 1m50s either way) and, before tracing was turned off, timed out more often. The
-machine was already CPU-saturated by a single serial run - the stack, Chromium, Windows Defender and other
-background tools were competing for the same cores - so extra workers only made each test slower
-([ADR-0075](../adr/0075-e2e-stack-lifetime-is-owned-by-an-assembly-level-test-framework.md) has the numbers).
-Each concurrent test also drives its own Chromium, which costs memory. A machine with idle cores (a CI runner,
-a workstation) may see a real speedup: try a cap of 2-4 and compare.
+**Why 4.** Measured on the current 24-core, 31 GB laptop: a full run took 1:31 serial, 1:04 at cap 2, 0:58 at
+cap 4 and 0:54 at cap 8. Caps 8 and 12 were within a second of each other, so there is nothing to gain past 8.
+Cap 8 is only about 2s faster than 4, and 2 of 11 later runs at 8 had a single failed test against 0 of 9 at 4.
+That is too few runs to prove the cap was the cause. About 28s of every run is fixed stack boot.
+
+Don't let the machine sleep during a run: standby fails tests with `net::ERR_NETWORK_IO_SUSPENDED`.
+
+**If the stack times out only when launched from Git Bash,** run it from PowerShell instead. In an elevated
+session, Aspire's DCP can exit with `state.elevated' has invalid ownership` under Git Bash, and the only visible
+symptom is the two-minute boot timeout. Set `DCP_DIAGNOSTICS_LOG_LEVEL=debug` and
+`DCP_DIAGNOSTICS_LOG_FOLDER=<dir>` to see DCP's own error.
+
+**On a smaller machine this may not hold.** On the earlier 8-core, 16 GB laptop, four parallel classes were no
+faster than serial (about 1m50s either way) and, before tracing was turned off, timed out more often - the
+machine was already CPU-saturated by one serial run
+([ADR-0075](../adr/0075-e2e-stack-lifetime-is-owned-by-an-assembly-level-test-framework.md) has both sets of
+numbers). If runs start timing out on weaker hardware, drop the cap with the argument above.
 
 The dev AppHost must still be stopped (Section 1): parallelism changes how many tests run at once, not how
 many stacks - there is still only one, on the same fixed ports and SQL volume.

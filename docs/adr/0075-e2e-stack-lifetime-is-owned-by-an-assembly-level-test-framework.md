@@ -13,7 +13,7 @@ stack once, after every collection has finished. `AspireE2EStack` holds the one 
 classes read it through `E2ETestBase.Fixture` instead of having it injected, take no constructor arguments, and
 declare no `[Collection]`. Each class is therefore its own implicit collection, so classes *can* run in
 parallel (`xunit.runner.json`: `parallelizeTestCollections: true`) while tests inside a class stay serial.
-`maxParallelThreads` is **1** by default, so the suite runs serially unless a run opts in (see below).
+`maxParallelThreads` was **1** by default when this was decided; it is now **4** (see "Update 2026-11-24" below).
 
 The decisions that are easy to get wrong:
 
@@ -48,6 +48,17 @@ The decisions that are easy to get wrong:
   setting that was fastest and cleanest where it was measured. **The ticket's "4-thread run is measurably
   lower" criterion is therefore not met on this hardware** - the PR records the numbers rather than ship a
   default that is slower and flakier.
+- **Update 2026-11-24: the default cap is now 4.** The suite now runs on a 24-core, 31 GB laptop (Core Ultra 9
+  290HX Plus), where the 8-core conclusion above (including rejecting a default of 4, below) does not hold. 79
+  tests, wall clock including a ~28s fixed stack boot, one run per cap: cap 1 1:31, cap 2 1:04, cap 4 0:58,
+  cap 8 0:54. Repeated three times interleaved: cap 4 averaged 56.7s, cap 8 55s, cap 12 55.7s, all passing - there
+  is nothing past 8 to gain (only 12 classes can run in parallel). In later runs, 2 of 11 at cap 8 each had one
+  failure, in two different tests (a 30s timeout waiting for `#Name`, and a table row that did not appear within
+  15s); 0 of 9 at cap 4 did (a tenth run was discarded because the laptop entered standby). 4 was chosen as the
+  cautious option for about 2s per run. **The evidence is thin:** that difference could easily be chance, so if
+  either test fails at 4, suspect the test, not the cap. The remaining speed levers are the serial
+  `EventManagementScenarios` tail (#205) and the stack boot. This machine is the only one the suite is expected to
+  run on; on a smaller one, pass `-- xUnit.MaxParallelThreads=1` to go back to serial.
 - **Appends to the shared artifact logs go through one lock** (`E2EArtifactLog`). Concurrent tests can write
   `CAPTURE_ERRORS.txt` / `TOO_LONG.txt` at the same moment, and an `IOException` there would escape
   `E2ETestBase.DisposeAsync`, which ADR-0028 forbids.
