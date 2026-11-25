@@ -1,6 +1,12 @@
 using Aspire.Hosting.Dotnet;
 using Azure.Provisioning.Sql;
 using Azure.Provisioning.Storage;
+using VirtualLeadersGuide.AppHost;
+
+var portOffset = WorktreePorts.OffsetFor(
+    AppContext.BaseDirectory, Environment.GetEnvironmentVariable(WorktreePorts.OverrideVariable));
+
+ShiftDashboardPorts();
 
 var builder = DistributedApplication.CreateBuilder(args);
 
@@ -74,9 +80,46 @@ if (!builder.ExecutionContext.IsPublishMode)
 {
     api.WithEnvironment("Migrations__ApplyAutomatically", "true");
     AllowFileSinkEmailProvider(web);
+
+    if (portOffset != 0)
+    {
+        ShiftEndpointPorts(api);
+        ShiftEndpointPorts(web);
+        web.WithEnvironment("Cookies__NameSuffix", "." + portOffset);
+    }
 }
 
 builder.Build().Run();
+
+/// <remarks>
+/// Has to run before the builder is created, which is when Aspire reads these variables.
+/// </remarks>
+void ShiftDashboardPorts()
+{
+    if (portOffset == 0)
+    {
+        return;
+    }
+
+    string[] variables =
+        ["ASPNETCORE_URLS", "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL", "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"];
+
+    foreach (var variable in variables)
+    {
+        if (Environment.GetEnvironmentVariable(variable) is { } urls)
+        {
+            Environment.SetEnvironmentVariable(variable, WorktreePorts.Shift(urls, portOffset));
+        }
+    }
+}
+
+void ShiftEndpointPorts(IResourceBuilder<DotnetProjectResource> resource)
+{
+    foreach (var name in (string[])["http", "https"])
+    {
+        resource.WithEndpoint(name, endpoint => endpoint.Port += portOffset, createIfNotExists: false);
+    }
+}
 
 /// <remarks>
 /// One of two layers <c>EmailSenderRegistration</c> requires before Web will select the file sink - see

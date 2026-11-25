@@ -38,6 +38,15 @@ builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
     .AddIdentityCookies(options =>
         options.ApplicationCookie?.Configure(cookie => cookie.AccessDeniedPath = "/Account/NoAccess"));
 
+// Browsers scope cookies by host, not port, so copies of the app on localhost need distinct names.
+// AppHost sets the suffix only for local runs from a git worktree.
+if (builder.Configuration["Cookies:NameSuffix"] is { Length: > 0 } cookieSuffix)
+{
+    builder.Services.ConfigureApplicationCookie(options =>
+        options.Cookie.Name = $".AspNetCore.{IdentityConstants.ApplicationScheme}{cookieSuffix}");
+    builder.Services.AddAntiforgery(options => options.Cookie.Name = $".AspNetCore.Antiforgery{cookieSuffix}");
+}
+
 builder.Services.AddIdentityCore<ApplicationUser>(options => options.SignIn.RequireConfirmedAccount = false)
     .AddUserStore<ApiUserStore>()
     .AddSignInManager()
