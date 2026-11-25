@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Radzen;
@@ -30,11 +29,12 @@ public partial class Dashboard
     private BrowserTimeZoneAccessor TimeZoneAccessor { get; set; } = default!;
 
     /// <remarks>
-    /// <see cref="ClaimTypes.Role"/> claims come from <c>ApplicationUserClaimsPrincipalFactory</c> (P2-5,
-    /// #14), stamped at sign-in from P2-3's <c>UserRole</c> grants. A user holding no grant still redirects
-    /// to <c>NoAccess</c>. <see cref="EventAccessView"/> then decides Admin vs. Director rendering from the
-    /// same claims - a hint the grid honors, not the authority (ADR-0031); <see cref="ApiEventClient"/>'s
-    /// collection call is itself scoped server-side regardless of what this page assumes.
+    /// Role claims come from <c>ApplicationUserClaimsPrincipalFactory</c> (P2-5, #14), stamped at sign-in from
+    /// P2-3's <c>UserRole</c> grants. A user who isn't Staff
+    /// (<see cref="ClaimsPrincipalStaffExtensions.IsStaff"/>) redirects to <c>NoAccess</c>.
+    /// <see cref="EventAccessView"/> then decides Admin vs. Director rendering from the same claims - a hint the
+    /// grid honors, not the authority (ADR-0031); <see cref="ApiEventClient"/>'s collection call is itself
+    /// scoped server-side regardless of what this page assumes.
     /// </remarks>
     [CascadingParameter]
     private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
@@ -110,9 +110,9 @@ public partial class Dashboard
         }
 
         AuthenticationState state = await AuthenticationStateTask;
-        bool hasAnyRole = state.User.Claims.Any(c => c.Type == ClaimTypes.Role);
+        bool isStaff = state.User.IsStaff();
 
-        if (!hasAnyRole)
+        if (!isStaff)
         {
             NavigationManager.NavigateTo("Account/NoAccess");
             return;

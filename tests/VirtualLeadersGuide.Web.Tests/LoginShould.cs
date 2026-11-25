@@ -19,20 +19,19 @@ namespace VirtualLeadersGuide.Web.Tests;
 public class LoginShould : BunitContext
 {
     [Fact]
-    public void NavigateAway_WhenCredentialsAreValid_ForLoginUser()
+    public void NavigateToTheDashboard_WhenCredentialsAreValidAndThereIsNoReturnUrl_ForLoginUser()
     {
-        SignInManager<ApplicationUser> signInManager = RegisterServices();
-        signInManager.PasswordSignInAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<bool>())
-            .Returns(Task.FromResult(SignInResult.Success));
+        BunitNavigationManager navigation = SubmitValidCredentials("Account/Login");
 
-        IRenderedComponent<Login> cut = Render<Login>(parameters => parameters
-            .AddCascadingValue(new DefaultHttpContext { Request = { Method = "POST" } }));
-        cut.Find("#Input\\.Email").Change("director@example.org");
-        cut.Find("#Input\\.Password").Change("P@ssw0rd123!");
-        cut.Find("form").Submit();
+        Assert.EndsWith("dashboard", navigation.History.First().Uri, StringComparison.Ordinal);
+    }
 
-        var navigation = (BunitNavigationManager)Services.GetRequiredService<NavigationManager>();
-        Assert.NotEmpty(navigation.History);
+    [Fact]
+    public void NavigateToTheReturnUrl_WhenCredentialsAreValidAndAReturnUrlIsSet_ForLoginUser()
+    {
+        BunitNavigationManager navigation = SubmitValidCredentials("Account/Login?ReturnUrl=Account%2FManage");
+
+        Assert.EndsWith("Account/Manage", navigation.History.First().Uri, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -68,6 +67,24 @@ public class LoginShould : BunitContext
 
         var navigation = (BunitNavigationManager)Services.GetRequiredService<NavigationManager>();
         Assert.Contains("Account/Lockout", navigation.History.Last().Uri, StringComparison.Ordinal);
+    }
+
+    /// <summary>Submits the form, as rendered at <paramref name="loginUrl"/>, with a sign-in that succeeds.</summary>
+    private BunitNavigationManager SubmitValidCredentials(string loginUrl)
+    {
+        SignInManager<ApplicationUser> signInManager = RegisterServices();
+        signInManager.PasswordSignInAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<bool>())
+            .Returns(Task.FromResult(SignInResult.Success));
+        var navigation = (BunitNavigationManager)Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(loginUrl);
+
+        IRenderedComponent<Login> cut = Render<Login>(parameters => parameters
+            .AddCascadingValue(new DefaultHttpContext { Request = { Method = "POST" } }));
+        cut.Find("#Input\\.Email").Change("director@example.org");
+        cut.Find("#Input\\.Password").Change("P@ssw0rd123!");
+        cut.Find("form").Submit();
+
+        return navigation;
     }
 
     private SignInManager<ApplicationUser> RegisterServices()

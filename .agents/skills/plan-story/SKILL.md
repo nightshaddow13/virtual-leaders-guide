@@ -120,7 +120,8 @@ existing test infra (`RadzenTestServices`, `ApiClientTestFactory`, `FakeUserMana
 `IdentityTestServices`) where the story touches Blazor. Verification names real commands — `dotnet
 build`, `dotnet test <project>`, an `ef migrations has-pending-model-changes` check where the schema
 changes, `/run` under Aspire — and always ends on running `/code-review` against `main` before
-opening the PR.
+opening the PR. It opens by stating that the tests must be run, and pass, before the story is reported done
+(step 8).
 
 Completion: every section above is present, and every file path is real or explicitly marked `(new)`.
 
@@ -169,6 +170,14 @@ git fetch origin
 git worktree add -b uow/<issue>-<slug> ../vlg-<story-id> origin/main
 ```
 
-All implementation, builds and test runs for the story then happen inside that worktree. Tests that need the
-dev AppHost's fixed ports or SQL volume (the E2E suite) can't run while the user has the AppHost up — ask
-before running them.
+All implementation, builds and test runs for the story then happen inside that worktree.
+
+**Run the tests before reporting the story done.** That means every test project the change touches,
+including the E2E suite whenever the story adds or changes E2E tests or a flow they drive. Compiling them
+is not running them. The E2E suite needs Docker running and no other AppHost up (it shares the dev
+AppHost's fixed ports and SQL volume — see `docs/runbooks/running-e2e-tests.md`): check for both, and if
+the user's AppHost is up, ask them to stop it. If a suite still can't run, say the story is **not done**
+and why — never report it as finished with the run left as a follow-up.
+
+The plan file must carry this rule into its `## Verification` section, since the implementer reads the plan,
+not this skill.

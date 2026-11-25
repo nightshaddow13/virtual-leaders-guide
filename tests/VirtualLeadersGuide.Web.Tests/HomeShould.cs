@@ -1,4 +1,5 @@
 using System.Net;
+using System.Security.Claims;
 using Bunit;
 using Bunit.TestDoubles;
 using Microsoft.AspNetCore.Components;
@@ -31,6 +32,32 @@ public class HomeShould : BunitContext
 
         Assert.Contains("Find your event", cut.Markup, StringComparison.Ordinal);
         Assert.DoesNotContain("rz-alert-danger", cut.Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RedirectToTheDashboard_WhenTheUserIsStaff_ForInitialRender()
+    {
+        RegisterEventClient(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
+        var adminClaim = new Claim(
+            ClaimTypes.Role, RoleClaimValue.Format(new RoleGrantDto { Id = Guid.NewGuid(), RoleId = RoleIds.Admin, RoleName = RoleNames.Admin }));
+
+        Render<Home>(Parameters(SignedInContext(adminClaim)));
+
+        var navigation = (BunitNavigationManager)Services.GetRequiredService<NavigationManager>();
+        Assert.EndsWith("dashboard", navigation.History.Last().Uri, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RenderTheEntryForm_WhenSignedInWithNoRoleClaim_ForInitialRender()
+    {
+        RegisterEventClient(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
+
+        IRenderedComponent<Home> cut = Render<Home>(
+            Parameters(SignedInContext(new Claim(ClaimTypes.NameIdentifier, "test-user-id"))));
+
+        var navigation = (BunitNavigationManager)Services.GetRequiredService<NavigationManager>();
+        Assert.Empty(navigation.History);
+        Assert.Contains("Find your event", cut.Markup, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -105,6 +132,12 @@ public class HomeShould : BunitContext
 
     private static Action<ComponentParameterCollectionBuilder<Home>> Parameters(DefaultHttpContext? httpContext = null) =>
         parameters => parameters.AddCascadingValue(httpContext ?? new DefaultHttpContext { Request = { Method = "POST" } });
+
+    private static DefaultHttpContext SignedInContext(Claim claim) => new()
+    {
+        Request = { Method = "GET" },
+        User = new ClaimsPrincipal(new ClaimsIdentity([claim], "Test"))
+    };
 
     private static void Submit(IRenderedComponent<Home> cut, string address, string passcode)
     {
