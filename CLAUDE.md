@@ -24,6 +24,11 @@ belongs now that bare `//` comments don't survive. Also covers Blazor components
 requiring a `.razor.cs` code-behind, component-scoped `.razor.css` over global CSS, and bUnit for component
 tests. See `docs/agents/coding-standards.md` (also at `CODING_STANDARDS.md` for tools that look there).
 
+### Running tests
+
+PowerShell (not Git Bash), one test project at a time, one AppHost stack per checkout. See
+`docs/agents/testing.md`.
+
 ### Code search
 
 Prefer `codebase-memory-mcp` over `Grep`/`Glob` for finding code definitions, implementations, and call chains. See `docs/agents/code-search.md`.

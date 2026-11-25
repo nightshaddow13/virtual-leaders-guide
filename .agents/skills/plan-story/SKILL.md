@@ -169,6 +169,5 @@ git fetch origin
 git worktree add -b uow/<issue>-<slug> ../vlg-<story-id> origin/main
 ```
 
-All implementation, builds and test runs for the story then happen inside that worktree. Tests that need the
-dev AppHost's fixed ports or SQL volume (the E2E suite) can't run while the user has the AppHost up — ask
-before running them.
+All implementation, builds and test runs for the story then happen inside that worktree. Run tests as
+`docs/agents/testing.md` describes, and name its per-project commands in the plan's `## Verification`.
