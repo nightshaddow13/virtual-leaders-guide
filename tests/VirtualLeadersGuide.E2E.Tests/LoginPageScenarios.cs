@@ -44,6 +44,19 @@ public class LoginPageScenarios : E2ETestBase
                 new Uri(Fixture.WebBaseUrl, AuthorizeOnlyNoRoleCheckPath.TrimStart('/')).ToString());
         });
 
+    [Fact(DisplayName = "Given a returnUrl pointing at another host, when submitting the Login form, then the browser stays on this site")]
+    public async Task GivenAReturnUrlPointingAtAnotherHost_WhenSubmittingTheLoginForm_ThenItStaysOnThisSite() =>
+        await RunAsync(async () =>
+        {
+            IdentityUserDto user = await CreateTrackedUserAsync("e2e-offsite-return-url", CancellationToken.None);
+
+            await new LoginPage(Page).SignInAsync(
+                Fixture.WebBaseUrl, user.Email!, TestCredentials.KnownPassword,
+                returnUrl: "//elsewhere.invalid/landing");
+
+            await Expect(Page).ToHaveURLAsync(Fixture.WebBaseUrl.ToString());
+        });
+
     /// <remarks>
     /// [Authorize]-only, no role check - landing here after sign-in proves <c>ReturnUrl</c> was honored on
     /// its own. A <c>/dashboard</c> target would immediately redirect again (every fresh account holds no
