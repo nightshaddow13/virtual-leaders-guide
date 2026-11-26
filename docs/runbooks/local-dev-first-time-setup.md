@@ -55,6 +55,21 @@ subsequent runs are fast. The Aspire dashboard (URL printed to the console) show
 assigned ports - `api` and `web` default to the ports in their own `launchSettings.json` (`5058`/`7223` and
 `5257`/`7186` respectively) unless Aspire assigns different ones for your session.
 
+### Running from several git worktrees
+
+Each checkout can run at the same time as the others:
+
+- **Data** is separate already. Aspire names the SQL Server and Azurite volumes from a hash of the AppHost
+  path, so a new worktree starts with an empty database. Seed an account in it (step 3). Removing a worktree
+  leaves its volumes behind; delete them with `docker volume rm`.
+- **Ports** are the `launchSettings.json` ones in the main checkout. A linked worktree adds its own offset
+  (10 to 900) to the dashboard, `api` and `web` ports. Read the real URLs from the console and the Aspire
+  dashboard, and pass the `api` one to `SeedUser` as `--api-url`.
+- **Cookies** get the offset as a name suffix, so signing in to one copy doesn't sign you out of another.
+- **Overriding:** set `VLG_PORT_OFFSET` if two worktrees land on the same offset or a port is taken.
+
+User-secrets are shared by every worktree, so step 1 is only needed once.
+
 ## 3. Create your first account
 
 There is no Register page. `tools/VirtualLeadersGuide.Tools.SeedUser` is a small checked-in dev tool (kept

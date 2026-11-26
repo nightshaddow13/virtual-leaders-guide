@@ -172,12 +172,7 @@ git worktree add -b uow/<issue>-<slug> ../vlg-<story-id> origin/main
 
 All implementation, builds and test runs for the story then happen inside that worktree.
 
-**Run the tests before reporting the story done.** That means every test project the change touches,
-including the E2E suite whenever the story adds or changes E2E tests or a flow they drive. Compiling them
-is not running them. The E2E suite needs Docker running and no other AppHost up (it shares the dev
-AppHost's fixed ports and SQL volume — see `docs/runbooks/running-e2e-tests.md`): check for both, and if
-the user's AppHost is up, ask them to stop it. If a suite still can't run, say the story is **not done**
-and why — never report it as finished with the run left as a follow-up.
-
-The plan file must carry this rule into its `## Verification` section, since the implementer reads the plan,
-not this skill.
+**Run the tests before reporting the story done** — compiling them is not running them. Run them as
+`docs/agents/testing.md` describes. The implementer reads the plan, not this skill, so the plan's
+`## Verification` carries both: that doc's per-project commands, and the rule that they pass before the story
+is reported done.
