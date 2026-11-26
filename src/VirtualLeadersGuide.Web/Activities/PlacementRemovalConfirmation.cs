@@ -71,6 +71,18 @@ internal static class PlacementRemovalConfirmation
         [nameof(ConfirmDialog.DismissText)] = "Keep it"
     };
 
+    /// <summary>Builds the parameters for removing an InfoPage's Placement when that empties at least one Tier (P5-24, #208).</summary>
+    /// <param name="path">Where the InfoPage is placed.</param>
+    /// <param name="reaped">The Tiers the removal empties, from <see cref="PlacementTreeModel.DescribeInfoPagePlacementRemoval"/>.</param>
+    /// <returns>The parameter dictionary for <c>DialogService.OpenAsync&lt;ConfirmDialog&gt;</c>.</returns>
+    public static Dictionary<string, object?> ForInfoPage(PlacementPath path, IReadOnlyList<TierRef> reaped) => new()
+    {
+        [nameof(ConfirmDialog.Message)] = $"Remove this placement? {path.Display}",
+        [nameof(ConfirmDialog.Consequences)] = (IReadOnlyList<string>)[$"Nothing else is placed there, so {Describe(reaped)} from the guide too."],
+        [nameof(ConfirmDialog.ConfirmText)] = "Remove",
+        [nameof(ConfirmDialog.DismissText)] = "Keep it"
+    };
+
     private static string Describe(IReadOnlyList<TierRef> reaped)
     {
         string[] nouns = [.. reaped.Select(tier => Noun(tier.Kind))];

@@ -183,6 +183,7 @@ public partial class ActivityDetail : IDisposable
         isSaving = true;
         saveErrorMessage = null;
         var alreadyPlaced = new List<string>();
+        var onInfoPageScreens = new List<string>();
 
         try
         {
@@ -208,16 +209,17 @@ public partial class ActivityDetail : IDisposable
                 {
                     alreadyPlaced.Add(ghost.Display);
                 }
+                else if (outcome == PlacementWriteOutcome.SlotHasInfoPage)
+                {
+                    onInfoPageScreens.Add(ghost.Display);
+                }
             }
 
             await LoadTreeAsync();
             RebuildModel();
 
-            if (alreadyPlaced.Count > 0 && saveErrorMessage is null)
-            {
-                saveErrorMessage = $"Already placed, so skipped: {string.Join(", ", alreadyPlaced)}.";
-            }
-            else if (saveErrorMessage is null)
+            saveErrorMessage ??= DescribeSkipped(alreadyPlaced, onInfoPageScreens);
+            if (saveErrorMessage is null)
             {
                 NotificationService.Notify(NotificationSeverity.Success, "Placements saved");
             }
@@ -231,6 +233,22 @@ public partial class ActivityDetail : IDisposable
         {
             isSaving = false;
         }
+    }
+
+    private static string? DescribeSkipped(List<string> alreadyPlaced, List<string> onInfoPageScreens)
+    {
+        var messages = new List<string>();
+        if (alreadyPlaced.Count > 0)
+        {
+            messages.Add($"Already placed, so skipped: {string.Join(", ", alreadyPlaced)}.");
+        }
+
+        if (onInfoPageScreens.Count > 0)
+        {
+            messages.Add($"Skipped, because an Info page is shown there: {string.Join(", ", onInfoPageScreens)}.");
+        }
+
+        return messages.Count == 0 ? null : string.Join(" ", messages);
     }
 
     private async Task LoadTreeAsync()

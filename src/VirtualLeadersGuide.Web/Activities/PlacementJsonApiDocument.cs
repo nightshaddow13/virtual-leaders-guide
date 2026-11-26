@@ -65,3 +65,17 @@ internal sealed class PlacementAttributesDto
 
     public int? SortOrder { get; init; }
 }
+
+/// <summary>An InfoPage Placement's attributes, as read back (resolved ids) and as sent on create or move (names - ADR-0072).</summary>
+internal sealed class InfoPagePlacementAttributesDto
+{
+    public Guid? InfoPageId { get; init; }
+
+    public Guid? TabId { get; init; }
+
+    public Guid? SubTabId { get; init; }
+
+    public string? TabName { get; init; }
+
+    public string? SubTabName { get; init; }
+}

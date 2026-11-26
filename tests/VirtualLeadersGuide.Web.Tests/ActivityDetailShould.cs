@@ -25,6 +25,7 @@ public class ActivityDetailShould : BunitContext
     private readonly Guid _activityId = Guid.NewGuid();
     private readonly List<string> _postedBodies = [];
     private HttpStatusCode _postStatus = HttpStatusCode.Created;
+    private string? _postErrorCode;
 
     /// <remarks>Generous on purpose: the solution-level test run executes this project alongside the Api suite, and bUnit's 1 s default is too tight when the machine is busy.</remarks>
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
@@ -217,6 +218,22 @@ public class ActivityDetailShould : BunitContext
             $"Still at {navigation.Uri}.");
     }
 
+    [Fact]
+    public void SayAnInfoPageFillsTheScreen_WhenApiRejectsWithThatCode_ForSaveAsync()
+    {
+        _postStatus = HttpStatusCode.Conflict;
+        _postErrorCode = "slot-has-infopage";
+        Register();
+        IRenderedComponent<ActivityDetail> cut = RenderPage("Admin");
+        PlaceTab(cut, "Evening");
+
+        SaveButton(cut).Click();
+
+        cut.WaitForAssertion(
+            () => Assert.Contains("an Info page is shown there", cut.Markup, StringComparison.Ordinal), Patience);
+        Assert.DoesNotContain("Already placed", cut.Markup, StringComparison.Ordinal);
+    }
+
     // --- helpers ----------------------------------------------------------------------------------------
 
     private static AngleSharp.Dom.IElement SaveButton(IRenderedComponent<ActivityDetail> cut) =>
@@ -300,7 +317,7 @@ public class ActivityDetailShould : BunitContext
                     {
                         Content = JsonContent.Create(new
                         {
-                            errors = new[] { new { title = "x", source = new { pointer = "/data/attributes/tabId" } } }
+                            errors = new[] { new { code = _postErrorCode, title = "x", source = new { pointer = "/data/attributes/tabId" } } }
                         })
                     };
             }

@@ -31,6 +31,9 @@ internal sealed class ErrorDocument
 /// </summary>
 internal sealed class ErrorObject
 {
+    /// <summary>A stable, machine-readable reason - what distinguishes Placement's several 409s.</summary>
+    public string? Code { get; init; }
+
     public string? Title { get; init; }
 
     public string? Detail { get; init; }

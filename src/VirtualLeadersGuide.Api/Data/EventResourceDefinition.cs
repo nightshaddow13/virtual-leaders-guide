@@ -193,7 +193,7 @@ public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, G
 
     /// <remarks>
     /// <see cref="Tab"/>/<see cref="SubTab"/>/<see cref="Section"/>/<see cref="SubSection"/>/
-    /// <see cref="ActivityPlacement"/> deliberately carry no cascading FK to <see cref="Event"/> (P5-11,
+    /// <see cref="ActivityPlacement"/>/<see cref="InfoPagePlacement"/> deliberately carry no cascading FK to <see cref="Event"/> (P5-11,
     /// #96) - see <see cref="VirtualLeadersGuideDbContext.ConfigureTabs"/>'s remarks for why a cascading one
     /// is unimplementable here without SQL Server rejecting it or SQLite hitting an ordering conflict. This
     /// method is the explicit substitute: a bulk, bottom-up delete of this Event's whole Tier+Placement
@@ -206,6 +206,8 @@ public sealed class EventResourceDefinition : JsonApiResourceDefinition<Event, G
     /// </remarks>
     private async Task DeleteTierAndPlacementSubtreeAsync(Guid eventId, CancellationToken cancellationToken)
     {
+        await _dbContext.InfoPagePlacements.Where(placement => placement.EventId == eventId)
+            .ExecuteDeleteAsync(cancellationToken);
         await _dbContext.ActivityPlacements.Where(placement => placement.EventId == eventId)
             .ExecuteDeleteAsync(cancellationToken);
         await _dbContext.SubSections.Where(subSection => subSection.EventId == eventId)

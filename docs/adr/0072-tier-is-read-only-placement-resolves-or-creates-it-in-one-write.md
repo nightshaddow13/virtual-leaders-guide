@@ -52,3 +52,11 @@ in-session pending-ghost list against what it already loaded from the Tier `Quer
   row. Deleting an Event therefore cleans up its Tier+Placement subtree explicitly, bottom-up, in
   `EventResourceDefinition.DeleteTierAndPlacementSubtreeAsync` - code the Event delete flow (P2-17, #112)
   gained as a consequence of this ADR, filtered on each table's denormalized `EventId`.
+
+## Amendment (P5-24, #208)
+
+InfoPage Placement (`InfoPagePlacement`, ADR-0047) is a second write path onto Tabs and Sub Tabs, so
+`ActivityPlacementResourceDefinition` is no longer the only one. The "one write path" rule now reads: a Tier is
+created only by a Placement write - Tab and Sub Tab through the shared `TierPathResolver`, Section and Sub Section
+in `ActivityPlacementResourceDefinition` - and deleted only through `TierReaper` (or the bulk cleanup on Event
+delete), which a Placement write or its owner's delete calls. Tier resources stay read-only.

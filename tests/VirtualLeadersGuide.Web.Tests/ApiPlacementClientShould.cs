@@ -31,6 +31,7 @@ public class ApiPlacementClientShould
             {
                 eventId, activityId, tabId, subTabId, sectionId, subSectionId, sortOrder = 4
             })),
+            "/api/infoPagePlacements" => Collection(Resource("infoPagePlacements", subTabId, new { eventId, infoPageId = activityId, tabId })),
             _ => new HttpResponseMessage(HttpStatusCode.NotFound)
         });
         ApiPlacementClient client = CreateClient(handler);
@@ -49,6 +50,7 @@ public class ApiPlacementClientShould
         Assert.Equal(activityId, placement.ActivityId);
         Assert.Equal(subSectionId, placement.SubSectionId);
         Assert.Equal(4, placement.SortOrder);
+        Assert.Equal(activityId, Assert.Single(tree.InfoPagePlacements).InfoPageId);
     }
 
     [Fact]
@@ -69,7 +71,7 @@ public class ApiPlacementClientShould
 
         await client.GetTreeForEventAsync(eventId, CancellationToken.None);
 
-        Assert.Equal(5, requests.Count);
+        Assert.Equal(6, requests.Count);
         Assert.All(requests, uri =>
         {
             string decoded = Uri.UnescapeDataString(uri.Query);
@@ -141,6 +143,18 @@ public class ApiPlacementClientShould
             await client.CreateAsync(Guid.NewGuid(), "Morning", null, null, null, CancellationToken.None);
 
         Assert.Equal(PlacementWriteOutcome.Conflict, outcome);
+    }
+
+    [Fact]
+    public async Task ReturnSlotHasInfoPage_WhenTheConflictCarriesThatCode_ForCreateAsync()
+    {
+        ApiPlacementClient client = CreateClient(StubHttpMessageHandler.RespondingWithJson(
+            HttpStatusCode.Conflict, new { errors = new[] { new { code = "slot-has-infopage" } } }));
+
+        (PlacementWriteOutcome outcome, _, _) =
+            await client.CreateAsync(Guid.NewGuid(), "Morning", null, null, null, CancellationToken.None);
+
+        Assert.Equal(PlacementWriteOutcome.SlotHasInfoPage, outcome);
     }
 
     [Fact]

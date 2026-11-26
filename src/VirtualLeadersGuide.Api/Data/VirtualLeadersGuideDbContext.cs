@@ -80,6 +80,9 @@ public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDb
     /// <summary>Every <see cref="ActivityPlacement"/> row (P5-11, #96; ADR-0050).</summary>
     public DbSet<ActivityPlacement> ActivityPlacements => Set<ActivityPlacement>();
 
+    /// <summary>Every <see cref="InfoPagePlacement"/> row (P5-24, #208; ADR-0047).</summary>
+    public DbSet<InfoPagePlacement> InfoPagePlacements => Set<InfoPagePlacement>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -98,6 +101,7 @@ public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDb
         builder.Entity<Section>(ConfigureSections);
         builder.Entity<SubSection>(ConfigureSubSections);
         builder.Entity<ActivityPlacement>(ConfigureActivityPlacements);
+        builder.Entity<InfoPagePlacement>(ConfigureInfoPagePlacements);
     }
 
     private static void ConfigureRoles(EntityTypeBuilder<Role> entity)
@@ -615,6 +619,47 @@ public class VirtualLeadersGuideDbContext(DbContextOptions<VirtualLeadersGuideDb
     /// </remarks>
     private static void ConfigureActivityPlacementCheckConstraints(TableBuilder<ActivityPlacement> table) =>
         table.HasCheckConstraint("CK_ActivityPlacements_SubSectionRequiresSection", "[SubSectionId] IS NULL OR [SectionId] IS NOT NULL");
+
+    /// <remarks>
+    /// Tier foreign keys <c>Restrict</c> and there is no foreign key to <see cref="Event"/>, for the same reasons
+    /// as <see cref="ConfigureActivityPlacements"/>; the InfoPage one cascades. The unique indexes backstop the
+    /// resource definition's pre-checks (ADR-0014): one Placement per InfoPage, and one InfoPage per screen - two
+    /// filtered indexes because a plain one treats every NULL Sub Tab as distinct.
+    /// </remarks>
+    private static void ConfigureInfoPagePlacements(EntityTypeBuilder<InfoPagePlacement> entity)
+    {
+        entity.ToTable("InfoPagePlacements");
+
+        entity.Ignore(p => p.TabName);
+        entity.Ignore(p => p.SubTabName);
+        entity.Property(p => p.TabId).IsRequired();
+
+        entity.HasOne(p => p.InfoPage)
+            .WithMany()
+            .HasForeignKey(p => p.InfoPageId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        entity.HasOne(p => p.Tab)
+            .WithMany()
+            .HasForeignKey(p => p.TabId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        entity.HasOne(p => p.SubTab)
+            .WithMany()
+            .HasForeignKey(p => p.SubTabId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        entity.HasIndex(p => p.EventId);
+        entity.HasIndex(p => p.InfoPageId).IsUnique();
+        entity.HasIndex(p => p.TabId)
+            .IsUnique()
+            .HasDatabaseName("IX_InfoPagePlacements_TabOnly")
+            .HasFilter("[SubTabId] IS NULL");
+        entity.HasIndex(p => new { p.TabId, p.SubTabId })
+            .IsUnique()
+            .HasDatabaseName("IX_InfoPagePlacements_TabSubTab")
+            .HasFilter("[SubTabId] IS NOT NULL");
+    }
 
     /// <remarks>
     /// <see cref="Event.Passcode"/>'s <see cref="IDataProtector"/> can't be constructor-injected:

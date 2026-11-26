@@ -49,6 +49,7 @@ After any completed run, the database holds exactly this and nothing else:
 | Facility Type (P8-2, #166) | 0 | Same reasoning as Facility above (`TrackFacilityType`+`FacilitiesApiClient.DeleteFacilityTypeAsync`) - deleted after every Facility in the same teardown/sweep pass, since its FK is `DeleteBehavior.Restrict` (ADR-0071) |
 | Tab / Sub Tab / Section / Sub Section (P5-11, #96) | 0 | Unlike Facility, a Tier row has an owning Event - but no cascading FK to it (ADR-0072); `EventResourceDefinition.DeleteTierAndPlacementSubtreeAsync` explicitly deletes a deleted Event's whole Tier tree bottom-up, so the standard `TrackEvent`+`DisposeAsync` teardown every throwaway Event already gets still takes it with it. No dedicated `TrackTier`+sweep leg, unlike Facility/Facility Type above |
 | Activity Placement (P5-11, #96) | 0 | Same as the Tier row above - removed by the same explicit Event-delete cleanup (and, independently, cascades from its `Activity`), so `TrackEvent` alone is sufficient; no dedicated `TrackPlacement`+sweep leg |
+| InfoPage Placement (P5-24, #208) | 0 | Removed by the same explicit Event-delete cleanup (and cascades from its InfoPage), so `TrackEvent` alone is sufficient; no dedicated sweep leg |
 | Anything else | 0 | Deleted by the owning test or the run-end sweep, and confirmed by `AspireE2EFixture.DisposeAsync`'s own verification step |
 
 An Invite is a full `AspNetUsers` row (see `CONTEXT.md`'s Invite entry), not a lighter-weight thing - the

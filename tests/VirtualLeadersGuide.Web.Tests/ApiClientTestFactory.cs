@@ -37,6 +37,10 @@ internal static class ApiClientTestFactory
     public static ApiPlacementClient CreatePlacementClient(HttpMessageHandler apiHandler) =>
         new(CreateInternalApiClient(apiHandler));
 
+    /// <summary>An <see cref="ApiInfoPagePlacementClient"/> answered by <paramref name="apiHandler"/>.</summary>
+    public static ApiInfoPagePlacementClient CreateInfoPagePlacementClient(HttpMessageHandler apiHandler) =>
+        new(CreateInternalApiClient(apiHandler));
+
     public static ApiFacilityClient CreateFacilityClient(HttpMessageHandler apiHandler) =>
         new(CreateInternalApiClient(apiHandler));
 

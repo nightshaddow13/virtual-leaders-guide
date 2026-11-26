@@ -35,8 +35,8 @@ A Page subtype holding free-form markdown content (About, Packing List, FAQ, etc
 through the dashboard — not checked-in `.md` files, so updates don't require a redeploy — via the same
 markdown mechanism Activity's Description shares. The only Page subtype that exists today — the Page/InfoPage
 split exists specifically to leave room for future subtypes (e.g. a map page, a schedule page) without
-renaming the base concept later. Placed via a Placement under a Tab (optionally a Sub Tab) — never a Section
-or Sub Section, since an InfoPage is a whole page, not a heading-level item within one; see Placement. May
+renaming the base concept later. Placed at most once, via a Placement under a Tab (optionally a Sub Tab) — never
+a Section or Sub Section, since an InfoPage is a whole page, not a heading-level item within one; see Placement. May
 exist with no Placement at all — "written but not yet placed" is a normal state, not a draft one. No title is
 unique, even within one Event — an InfoPage is reached by picking its Placement's Tab, not by its title, so
 two InfoPages on the same Event may share a title (e.g. a per-Tab "Schedule").
@@ -119,13 +119,12 @@ Section, and never separately authored — purely the absence of a Station on a 
 An Activity's or InfoPage's appearance under a specific Tab and, optionally, a Sub Tab. An Activity's
 Placement may go two levels deeper still — a Section and, under that, a Sub Section — but an InfoPage's
 Placement never does, since an InfoPage is a whole page, not a heading-level item sitting within one (see
-InfoPage). A Tab/Sub Tab renders as one of two exclusive screens: either its Activities (organized by their
-Sections/Sub Sections) or exactly one InfoPage — never both, and never more than one InfoPage. Each Placement
-carries its own SortOrder, independent of any other Placement of the same Activity/InfoPage — the same
-Activity may be placed under more than one Tab (e.g. offered morning and afternoon), each ordered on its own.
-The same exact path can never be set twice for the same Activity or InfoPage. An Activity may have no Placement
-yet (just created), but once placed it can't be un-placed back to none by removing a Placement; only deleting
-the Activity takes it to zero.
+InfoPage). A Tab, or a Tab › Sub Tab, renders as one of two exclusive screens: either its Activities (organized
+by their Sections/Sub Sections) or exactly one InfoPage — never both, and never more than one InfoPage. The bare
+Tab is its own screen, separate from each of its Sub Tabs. An InfoPage has at most one Placement. An Activity may
+have several (e.g. offered morning and afternoon), each carrying its own SortOrder, and never the same exact path
+twice. An Activity may have no Placement yet (just created), but once placed it can't be un-placed back to none by
+removing a Placement; only deleting the Activity takes it to zero. An InfoPage can be un-placed again.
 _Avoid_: Assignment, Slot (Slot reads time-based)
 
 **Facility**:

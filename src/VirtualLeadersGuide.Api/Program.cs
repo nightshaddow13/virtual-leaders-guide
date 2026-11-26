@@ -48,7 +48,9 @@ builder.Services.AddResourceDefinition<SubTabResourceDefinition>();
 builder.Services.AddResourceDefinition<SectionResourceDefinition>();
 builder.Services.AddResourceDefinition<SubSectionResourceDefinition>();
 builder.Services.AddScoped<TierReaper>();
+builder.Services.AddScoped<TierPathResolver>();
 builder.Services.AddResourceDefinition<ActivityPlacementResourceDefinition>();
+builder.Services.AddResourceDefinition<InfoPagePlacementResourceDefinition>();
 
 var app = builder.Build();
 
