@@ -365,13 +365,12 @@ public class DirectorInviteScenarios : E2ETestBase
     }
 
     /// <remarks>
-    /// <see cref="LoginPage.SignInAsync"/> doesn't request a return URL, so sign-in lands on Home - the
-    /// explicit navigation afterward matches <c>EventManagementScenarios</c>' own
-    /// <c>CreateAndSignInDirectorAsync</c> usage.
+    /// <see cref="LoginPage.SignInAsync"/> doesn't request a return URL, so sign-in itself lands on the
+    /// Dashboard (P2-22, #212) - waiting for that is all that's left to do.
     /// </remarks>
     private async Task SignInAndGoToDashboardAsync(string email, string password)
     {
         await new LoginPage(Page).SignInAsync(Fixture.WebBaseUrl, email, password);
-        await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
+        await ExpectDashboardAsync();
     }
 }

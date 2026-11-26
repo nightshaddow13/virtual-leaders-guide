@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Forms;
@@ -106,7 +105,7 @@ public partial class ActivityDetail : IDisposable
         }
 
         AuthenticationState authState = await AuthenticationStateTask;
-        if (!authState.User.Claims.Any(c => c.Type == ClaimTypes.Role))
+        if (!authState.User.IsStaff())
         {
             NavigationManager.NavigateTo("Account/NoAccess");
             return;

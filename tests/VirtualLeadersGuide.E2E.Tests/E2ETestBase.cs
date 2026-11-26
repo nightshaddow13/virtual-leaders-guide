@@ -410,17 +410,36 @@ public abstract class E2ETestBase : PageTest
     /// <param name="eventId">The Event to link to.</param>
     protected string EventEditorUrl(Guid eventId) => new Uri(Fixture.WebBaseUrl, $"dashboard/events/{eventId}").ToString();
 
+    /// <summary>Waits for the browser to be on <c>/dashboard</c>.</summary>
+    /// <remarks>
+    /// Also worth calling straight after a sign-in with no returnUrl, before navigating anywhere else: it holds
+    /// the test until the login POST has landed, so the next request can't overtake it and arrive without the
+    /// sign-in cookie.
+    /// </remarks>
+    protected Task ExpectDashboardAsync() =>
+        Expect(Page).ToHaveURLAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
+
+    /// <summary>The site header's "Sign out" button.</summary>
+    /// <remarks>
+    /// Scoped to the header's Account nav because <c>Account/NoAccess</c> has a second "Sign out" button of its
+    /// own - and that's where signing in with no returnUrl now leaves a User holding no Role (P2-22, #212).
+    /// </remarks>
+    protected ILocator HeaderSignOutButton =>
+        Page.GetByRole(AriaRole.Navigation, new PageGetByRoleOptions { Name = "Account" })
+            .GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Sign out" });
+
     /// <summary>Signs the current session out via the site header's real sign-out form.</summary>
     /// <remarks>
     /// The only sign-out affordance is the header's real <c>POST Account/Logout</c> form
     /// (<c>SignOutForm.razor</c>) - clicking it, rather than clearing cookies directly, exercises the same
     /// path a real session change goes through and keeps this class's tests from assuming cookie storage
-    /// details.
+    /// details. For a Staff session the opening <c>/</c> visit redirects to <c>/dashboard</c> (P2-22, #212),
+    /// whose header carries the same form.
     /// </remarks>
     protected async Task SignOutAsync()
     {
         await Page.GotoAsync(Fixture.WebBaseUrl.ToString());
-        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Sign out" }).ClickAsync();
+        await HeaderSignOutButton.ClickAsync();
     }
 
     /// <remarks>

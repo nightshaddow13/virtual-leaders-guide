@@ -82,7 +82,9 @@ public sealed class AdminAllowlistSynchronizer(
     /// <remarks>
     /// <see cref="GrantCreationOutcome.AlreadyGranted"/> means a concurrent sign-in already created the
     /// grant - not an error, see <see cref="ApiRoleGrantClient.CreateGrantAsync"/>'s remarks for why. The
-    /// fallthrough case is <see cref="GrantCreationOutcome.UserOrRoleNotFound"/> - the row vanished between
+    /// grants are re-read in that case: <paramref name="grants"/> was read before the other sign-in's write,
+    /// so returning it would stamp an Admin's cookie with no Admin claim. The fallthrough
+    /// case is <see cref="GrantCreationOutcome.UserOrRoleNotFound"/> - the row vanished between
     /// the read in <see cref="SyncAsync"/> and this write.
     /// </remarks>
     private async Task<IReadOnlyList<RoleGrantDto>> PromoteAsync(
@@ -98,7 +100,7 @@ public sealed class AdminAllowlistSynchronizer(
                 return [.. grants, grant!];
 
             case GrantCreationOutcome.AlreadyGranted:
-                return grants;
+                return await roleGrantClient.GetGrantsAsync(user.Id, cancellationToken) ?? grants;
 
             default:
                 logger.LogWarning(
