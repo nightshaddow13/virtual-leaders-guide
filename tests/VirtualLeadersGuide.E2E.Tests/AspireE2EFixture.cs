@@ -205,6 +205,8 @@ public sealed class AspireE2EFixture : IAsyncLifetime
 
         try
         {
+            StartResourcesWithoutTheIde();
+
             var appHost = await DistributedApplicationTestingBuilder
                 .CreateAsync<Projects.VirtualLeadersGuide_AppHost>(testArgs, cancellationToken);
 
@@ -607,6 +609,14 @@ public sealed class AspireE2EFixture : IAsyncLifetime
         }
     }
 
+    /// <remarks>
+    /// Under Visual Studio's Test Explorer this variable is set, and Aspire then asks the IDE to launch
+    /// <c>api</c> and <c>web</c> instead of starting them itself. Visual Studio answers that request with an
+    /// error from its Hot Reload component, so neither resource starts and every test fails.
+    /// </remarks>
+    private static void StartResourcesWithoutTheIde() =>
+        Environment.SetEnvironmentVariable("DEBUG_SESSION_PORT", null);
+
     private static string BuildFailureMessage(string reason) =>
         $"""
         AspireE2EFixture failed to bring the stack up ready: {reason}
@@ -614,8 +624,8 @@ public sealed class AspireE2EFixture : IAsyncLifetime
         Before running this suite, confirm:
           - Docker Desktop is running.
           - `dotnet dev-certs https --trust` has been run at least once on this machine.
-          - No other AppHost is running - this suite cannot run alongside `dotnet run --project
-            src/VirtualLeadersGuide.AppHost` or `VirtualLeadersGuide.AppHost.Tests`, since all three share the
-            same fixed launch-profile ports and the same persistent SQL Server data volume.
+          - No other AppHost is running from this checkout - this suite cannot run alongside `dotnet run
+            --project src/VirtualLeadersGuide.AppHost`, since both use the same persistent SQL Server data
+            volume.
         """;
 }

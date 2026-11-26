@@ -26,8 +26,7 @@ tests. See `docs/agents/coding-standards.md` (also at `CODING_STANDARDS.md` for 
 
 ### Running tests
 
-PowerShell (not Git Bash), one test project at a time, one AppHost stack per checkout. See
-`docs/agents/testing.md`.
+PowerShell (not Git Bash), and stop this checkout's dev AppHost before E2E. See `docs/agents/testing.md`.
 
 ### Code search
 

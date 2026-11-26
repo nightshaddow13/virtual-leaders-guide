@@ -19,8 +19,8 @@ Same three things `AspireE2EFixture` itself checks for and reports on failure:
 - `dotnet dev-certs https --trust` has been run at least once on this machine - `Web` unconditionally
   redirects HTTP to HTTPS, so every navigation fails on a cert error without it.
 - No other AppHost is running from this checkout. This suite cannot run alongside `dotnet run --project
-  src/VirtualLeadersGuide.AppHost` or `VirtualLeadersGuide.AppHost.Tests` - all three share the same
-  persistent SQL Server data volume. Other git worktrees have their own.
+  src/VirtualLeadersGuide.AppHost` - both use the same persistent SQL Server data volume. Other git worktrees
+  have their own, and `VirtualLeadersGuide.AppHost.Tests` mounts none.
 
 Playwright's browsers also need to be installed once per machine (see below) - unlike the three checks
 above, nothing in the suite itself detects a missing browser install cleanly; it just fails every test
