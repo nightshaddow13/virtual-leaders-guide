@@ -42,6 +42,11 @@ public partial class Login
     /// <remarks>
     /// <c>lockoutOnFailure: false</c> - this doesn't count login failures towards account lockout. Set to
     /// <see langword="true"/> to enable password failures to trigger account lockout.
+    /// <para>
+    /// With no <c>ReturnUrl</c>, success goes straight to the Dashboard (P2-22, #212) rather than to <c>/</c>,
+    /// which would only redirect Staff there in a second hop. A User holding no Role isn't special-cased:
+    /// the Dashboard's own gate sends them on to <c>NoAccess</c>.
+    /// </para>
     /// </remarks>
     public async Task LoginUser()
     {
@@ -49,7 +54,7 @@ public partial class Login
         if (result.Succeeded)
         {
             Logger.LogInformation("User logged in.");
-            RedirectManager.RedirectTo(ReturnUrl);
+            RedirectManager.RedirectTo(string.IsNullOrEmpty(ReturnUrl) ? "dashboard" : ReturnUrl);
         }
         else if (result.IsLockedOut)
         {

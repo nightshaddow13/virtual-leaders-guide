@@ -25,8 +25,7 @@ public class ChangePasswordScenarios : E2ETestBase
             await ClickSignOutOnCurrentPageAsync();
 
             await new LoginPage(Page).SignInAsync(Fixture.WebBaseUrl, email, TestCredentials.RotatedPassword);
-            await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Sign out" }))
-                .ToBeVisibleAsync();
+            await Expect(HeaderSignOutButton).ToBeVisibleAsync();
 
             await new LoginPage(Page).SignInAsync(Fixture.WebBaseUrl, email, TestCredentials.KnownPassword);
             await Expect(Page.GetByText("Error: Invalid login attempt.")).ToBeVisibleAsync();
@@ -50,5 +49,5 @@ public class ChangePasswordScenarios : E2ETestBase
     /// <see cref="PasswordResetScenarios"/> doesn't need this because it starts signed out.
     /// </remarks>
     private async Task ClickSignOutOnCurrentPageAsync() =>
-        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Sign out" }).ClickAsync();
+        await HeaderSignOutButton.ClickAsync();
 }

@@ -234,9 +234,12 @@ the Role by itself grants nothing (see Director's _unscoped_ state) — actual a
 comes from a separate Grant, layered on top. One User holds at most one Role-row per Role. Stored as a
 `UserRole` row — the same table Grants use (see ADR-0035 for why the table/endpoint name predates this
 split).
-_Avoid_: Permission, Group (now the rotation unit — see Group). "Staff" is UI copy only (e.g. the public site's "Staff sign in" affordance,
-meaning "anyone holding the Admin or Director Role") — it is not a Role and must not appear as one in code,
-an API shape, or a claim.
+_Avoid_: Permission, Group (now the rotation unit — see Group). "Staff" is not a Role (see Staff).
+
+**Staff**:
+A User who holds any Role — Admin, or Director whether scoped or unscoped. A description of a User, never
+itself a Role, a claim, or an API shape; a signed-in User holding no Role is not Staff.
+_Avoid_: Employee, Member
 
 **Grant**:
 An Event-scoped extension of a held Role's authority onto one specific Event. Applies only to Director (and
