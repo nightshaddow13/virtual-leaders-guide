@@ -59,8 +59,6 @@
                 <RadzenDataGridColumn TItem="ActivityDto" Sortable="false" Filterable="false" Width="@ActionColumnWidth" TextAlign="TextAlign.Center">
                     <Template Context="item">
                         <RadzenStack Orientation="Orientation.Horizontal" Gap="0.25rem" JustifyContent="JustifyContent.Center">
-                            <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" aria-label="Edit" @onclick:stopPropagation="true"
-                                          Click="@(() => NavigationManager.NavigateTo($"dashboard/events/{EventId}/activities/{item.Id}/edit"))" />
                             <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" aria-label="Delete" @onclick:stopPropagation="true"
                                           Click="@(() => DeleteAsync(item))" />
                         </RadzenStack>

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Radzen;
 using VirtualLeadersGuide.Web.Components.Pages;
+using VirtualLeadersGuide.Web.Markdown;
 
 namespace VirtualLeadersGuide.Web.Tests;
 
@@ -36,11 +37,13 @@ public class ActivityDetailRemovalShould : BunitContext
     private readonly List<string> _patched = [];
     private readonly List<string> _deletedActivities = [];
     private HttpStatusCode _deleteStatus = HttpStatusCode.NoContent;
+    private HttpStatusCode _postStatus = HttpStatusCode.Created;
     private HttpStatusCode _activityDeleteStatus = HttpStatusCode.NoContent;
 
     public ActivityDetailRemovalShould()
     {
         JSInterop.Mode = JSRuntimeMode.Loose;
+        Services.AddSingleton<MarkdownRenderer>();
         _placements.AddRange(
         [
             (_morningPlacement, _activityId, _morning, 4),
@@ -175,11 +178,11 @@ public class ActivityDetailRemovalShould : BunitContext
         cut.WaitForAssertion(() => Assert.Equal([_activityId.ToString()], _deletedActivities), Patience);
         cut.WaitForAssertion(() => Assert.EndsWith(
             $"dashboard/events/{_eventId}/activities", Services.GetRequiredService<NavigationManager>().Uri, StringComparison.Ordinal), Patience);
-        Assert.DoesNotContain("Discard unsaved placements?", cut.Markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("Discard unsaved changes?", cut.Markup, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void ShowDenied_WhenTheActivityDeleteIsForbidden_ForRemoveAsync()
+    public void ShowThePermissionLostBanner_WhenTheActivityDeleteIsForbidden_ForRemoveAsync()
     {
         _placements.RemoveAll(p => p.Id == _afternoonPlacement);
         _activityDeleteStatus = HttpStatusCode.Forbidden;
@@ -189,7 +192,23 @@ public class ActivityDetailRemovalShould : BunitContext
 
         Services.GetRequiredService<DialogService>().Close(true);
 
-        cut.WaitForAssertion(() => Assert.Contains("You don't have access to this Activity", cut.Markup, StringComparison.Ordinal), Patience);
+        cut.WaitForAssertion(() => Assert.Contains("You no longer have permission to edit this Activity.", cut.Markup, StringComparison.Ordinal), Patience);
+    }
+
+    [Fact]
+    public void ListUnsavedNameChangesInTheDialogAndLeaveWithoutAPrompt_WhenTheFormIsDirty_ForRemoveAsync()
+    {
+        _placements.RemoveAll(p => p.Id == _afternoonPlacement);
+        IRenderedComponent<ActivityDetail> cut = RenderPage();
+        cut.Find("#Name").Input("Canoe Basics II");
+
+        RemoveButton(cut, "Morning").Click();
+        cut.WaitForAssertion(() => Assert.Contains("Your unsaved Name and Description changes are discarded.", cut.Markup, StringComparison.Ordinal), Patience);
+        Services.GetRequiredService<DialogService>().Close(true);
+
+        cut.WaitForAssertion(() => Assert.EndsWith(
+            $"dashboard/events/{_eventId}/activities", Services.GetRequiredService<NavigationManager>().Uri, StringComparison.Ordinal), Patience);
+        Assert.DoesNotContain("Discard unsaved changes?", cut.Markup, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -222,26 +241,25 @@ public class ActivityDetailRemovalShould : BunitContext
     }
 
     [Fact]
-    public void ShowDenied_WhenTheDeleteIsForbidden_ForRemoveAsync()
+    public void ShowThePermissionLostBannerAndKeepThePage_WhenTheDeleteIsForbidden_ForRemoveAsync()
     {
         _deleteStatus = HttpStatusCode.Forbidden;
         IRenderedComponent<ActivityDetail> cut = RenderPage();
 
         RemoveButton(cut, "Morning").Click();
 
-        cut.WaitForAssertion(() => Assert.Contains("You don't have access to this Activity", cut.Markup, StringComparison.Ordinal), Patience);
+        cut.WaitForAssertion(() => Assert.Contains("You no longer have permission to edit this Activity.", cut.Markup, StringComparison.Ordinal), Patience);
     }
 
-    /// <remarks>AC5: a Director on an Event they aren't assigned to. Api answers the DELETE with 403 (covered in <c>PlacementsResourceShould</c>); the page must show the denial, not an error or a stale tree.</remarks>
     [Fact]
-    public void ShowDenied_WhenADirectorsDeleteIsForbidden_ForRemoveAsync()
+    public void ShowThePermissionLostBanner_WhenADirectorsDeleteIsForbidden_ForRemoveAsync()
     {
         _deleteStatus = HttpStatusCode.Forbidden;
         IRenderedComponent<ActivityDetail> cut = RenderPage("Director");
 
         RemoveButton(cut, "Morning").Click();
 
-        cut.WaitForAssertion(() => Assert.Contains("You don't have access to this Activity", cut.Markup, StringComparison.Ordinal), Patience);
+        cut.WaitForAssertion(() => Assert.Contains("You no longer have permission to edit this Activity.", cut.Markup, StringComparison.Ordinal), Patience);
         Assert.Equal([_morningPlacement.ToString()], _deleted);
     }
 
@@ -255,6 +273,23 @@ public class ActivityDetailRemovalShould : BunitContext
 
         cut.WaitForAssertion(() => Assert.Contains("That placement was already removed.", cut.Markup, StringComparison.Ordinal), Patience);
         Assert.DoesNotContain("Removed from", cut.Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SendNothing_WhenUndoIsClickedAfterPermissionWasLost_ForUndoRemovalAsync()
+    {
+        IRenderedComponent<ActivityDetail> cut = RenderPage();
+        RemoveButton(cut, "Morning").Click();
+        cut.WaitForAssertion(() => Assert.Contains("Undo", cut.Markup, StringComparison.Ordinal), Patience);
+        _postStatus = HttpStatusCode.Forbidden;
+        cut.Find("#PlacementTab").Change("Evening");
+        cut.Find(".pb-place").Click();
+        cut.FindAll("button").First(b => b.TextContent.Trim() == "Save changes").Click();
+        cut.WaitForAssertion(() => Assert.Contains("You no longer have permission", cut.Markup, StringComparison.Ordinal), Patience);
+
+        cut.FindAll("button").First(b => b.TextContent.Trim() == "Undo").Click();
+
+        Assert.Single(_posted);
     }
 
     // --- helpers ----------------------------------------------------------------------------------------
@@ -344,6 +379,11 @@ public class ActivityDetailRemovalShould : BunitContext
         if (request.Method == HttpMethod.Post)
         {
             _posted.Add(request.Content!.ReadAsStringAsync().Result);
+            if (_postStatus != HttpStatusCode.Created)
+            {
+                return new HttpResponseMessage(_postStatus);
+            }
+
             return new HttpResponseMessage(HttpStatusCode.Created)
             {
                 Content = JsonContent.Create(new

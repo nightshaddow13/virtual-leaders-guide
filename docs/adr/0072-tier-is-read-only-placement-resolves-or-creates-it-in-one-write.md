@@ -1,3 +1,7 @@
+---
+status: amended by P5-23 (#206) - one Save also writes the Activity's Name/Description
+---
+
 # Tab/Sub Tab/Section/Sub Section are read-only resources; Placement resolves-or-creates them in one write
 
 P5-11 (#96) exposes `Tab`, `SubTab`, `Section`, and `SubSection` (ADR-0046) alongside `ActivityPlacement`
@@ -52,3 +56,18 @@ in-session pending-ghost list against what it already loaded from the Tier `Quer
   row. Deleting an Event therefore cleans up its Tier+Placement subtree explicitly, bottom-up, in
   `EventResourceDefinition.DeleteTierAndPlacementSubtreeAsync` - code the Event delete flow (P2-17, #112)
   gained as a consequence of this ADR, filtered on each table's denormalized `EventId`.
+
+## Amendment (P5-23, #206)
+
+An Activity's Name/Description and its Placements are edited on one page, at `/{activityId}`, with one Save.
+Save PATCHes the Activity first (only if edited), then sends each pending Placement by name as this ADR
+already prescribes. No transaction spans the two, so each part succeeds or fails on its own: the page reports
+per part and leaves whatever failed pending, so the next Save retries only that. A 403 ends the Save, since
+the same access covers both parts.
+
+Considered and rejected: keeping a separate `/{activityId}/edit` form (the approved wireframe, Direction C,
+is one page), and a combined Api endpoint that would make the Save atomic (a new write path for one screen,
+against this ADR's "one write path" rule).
+
+This diverges from ADR-0073, which gives the Facility edit form its own `/{id}/edit` route: Activity's
+approved layout puts the form beside the tree instead.

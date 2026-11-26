@@ -1,0 +1,8 @@
+<div class="vlg-field">
+    <label for="Name">Name</label>
+    <ImmediateInputText id="Name" Value="@Model.Name" ValueChanged="OnNameChangedAsync" ValueExpression="@(() => Model.Name)"
+                        class="rz-textbox rz-input-md" />
+    <ValidationMessage For="@(() => Model.Name)" class="rz-messages-error" />
+</div>
+
+<MarkdownField Label="Description" FieldId="Description" Value="@Model.Description" ValueChanged="OnDescriptionChangedAsync" />

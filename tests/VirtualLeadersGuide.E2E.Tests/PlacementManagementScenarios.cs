@@ -116,7 +116,7 @@ public class PlacementManagementScenarios : E2ETestBase
             await PlaceAsync($"e2e-Evening {Guid.NewGuid():n}");
 
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Cancel" }).ClickAsync();
-            await Expect(Page.GetByText("Discard unsaved placements?")).ToBeVisibleAsync(InteractiveVisible());
+            await Expect(Page.GetByText("Discard unsaved changes?")).ToBeVisibleAsync(InteractiveVisible());
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Keep editing" }).ClickAsync();
             await Expect(Page).ToHaveURLAsync(ActivityUrl(eventId, activityId));
             await Expect(Page.Locator(".ptn-pending")).ToBeVisibleAsync(InteractiveVisible());
