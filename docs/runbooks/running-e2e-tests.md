@@ -18,9 +18,9 @@ Same three things `AspireE2EFixture` itself checks for and reports on failure:
   [`VirtualLeadersGuide.AppHost.Tests`](../adr/0014-dac-tests-use-sqlite-not-real-sql-container.md)).
 - `dotnet dev-certs https --trust` has been run at least once on this machine - `Web` unconditionally
   redirects HTTP to HTTPS, so every navigation fails on a cert error without it.
-- No other AppHost is running. This suite cannot run alongside `dotnet run --project
-  src/VirtualLeadersGuide.AppHost` or `VirtualLeadersGuide.AppHost.Tests` - all three share the same
-  fixed launch-profile ports and the same persistent SQL Server data volume.
+- No other AppHost is running from this checkout. This suite cannot run alongside `dotnet run --project
+  src/VirtualLeadersGuide.AppHost` - both use the same persistent SQL Server data volume. Other git worktrees
+  have their own, and `VirtualLeadersGuide.AppHost.Tests` mounts none.
 
 Playwright's browsers also need to be installed once per machine (see below) - unlike the three checks
 above, nothing in the suite itself detects a missing browser install cleanly; it just fails every test
@@ -112,8 +112,8 @@ machine was already CPU-saturated by one serial run
 ([ADR-0075](../adr/0075-e2e-stack-lifetime-is-owned-by-an-assembly-level-test-framework.md) has both sets of
 numbers). If runs start timing out on weaker hardware, drop the cap with the argument above.
 
-The dev AppHost must still be stopped (Section 1): parallelism changes how many tests run at once, not how
-many stacks - there is still only one, on the same fixed ports and SQL volume.
+This checkout's dev AppHost must still be stopped (Section 1): parallelism changes how many tests run at once,
+not how many stacks - there is still only one, on the same SQL volume.
 
 If the end-of-run retention check (ADR-0039) finds leftover data, the run fails with a **Test Assembly
 Cleanup Failure** and `dotnet test` exits non-zero. The summary line can still read `Passed!` - trust the exit
