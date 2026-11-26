@@ -36,6 +36,8 @@ public class AppHostShould
         var appHost = await DistributedApplicationTestingBuilder
             .CreateAsync<Projects.VirtualLeadersGuide_AppHost>(TestArgs, cancellationToken);
 
+        RemoveDataVolumes(appHost);
+
         appHost.Services.AddLogging(logging =>
         {
             logging.SetMinimumLevel(LogLevel.Debug);
@@ -52,5 +54,23 @@ public class AppHostShould
         Assert.NotNull(resourceNotifications);
 
         await app.StopAsync(cancellationToken).WaitAsync(DefaultTimeout, cancellationToken);
+    }
+
+    /// <remarks>
+    /// This project and the E2E suite run at the same time under Test Explorer's Run All or a solution-wide
+    /// <c>dotnet test</c>. Only one SQL Server can open a data volume, so leaving the volumes mounted here can
+    /// stop the E2E stack from booting.
+    /// </remarks>
+    private static void RemoveDataVolumes(IDistributedApplicationTestingBuilder appHost)
+    {
+        foreach (var resource in appHost.Resources)
+        {
+            foreach (var mount in resource.Annotations.OfType<ContainerMountAnnotation>()
+                .Where(mount => mount.Type == ContainerMountType.Volume)
+                .ToList())
+            {
+                resource.Annotations.Remove(mount);
+            }
+        }
     }
 }
