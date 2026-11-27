@@ -92,6 +92,9 @@ public partial class InfoPageEditor
         }
 
         eventName = eventDto.Name;
+        picker = null;
+        KeepPlacement();
+        saveErrorMessage = null;
 
         if (InfoPageId is null)
         {

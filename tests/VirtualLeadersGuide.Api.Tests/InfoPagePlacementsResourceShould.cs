@@ -185,7 +185,7 @@ public class InfoPagePlacementsResourceShould : IAsyncLifetime
     [Theory]
     [InlineData("PATCH")]
     [InlineData("DELETE")]
-    public async Task RejectWithForbidden_WhenAnUnassignedDirectorWrites_ForExistingPlacement(string method)
+    public async Task RejectWithForbidden_WhenAnUnassignedDirectorWrites_ForPatchAndDelete(string method)
     {
         Tab tab = await _factory.CreateTabAsync(_event.Id);
         InfoPagePlacement placement = await _factory.CreateInfoPagePlacementAsync(_event.Id, _page.Id, tab.Id);

@@ -11,6 +11,7 @@ namespace VirtualLeadersGuide.Api.Data;
 /// Only ever adds to the <see cref="VirtualLeadersGuideDbContext"/> change tracker and never saves: the
 /// caller's own save persists a new Tier together with its first Placement, or neither.
 /// </remarks>
+/// <param name="dbContext">Looks Tiers up and tracks any it creates.</param>
 public sealed class TierPathResolver(VirtualLeadersGuideDbContext dbContext)
 {
     /// <summary>Resolves the Tab, which every Placement requires.</summary>

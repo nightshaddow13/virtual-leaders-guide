@@ -32,7 +32,7 @@ public class InfoPageEditorPlacementShould : BunitContext
     }
 
     [Fact]
-    public void ShowAHintAndNoFields_OnANewInfoPage_ForRender()
+    public void ShowAHintAndNoFields_WhenTheInfoPageIsNew_ForRender()
     {
         IRenderedComponent<InfoPageEditor> cut = RenderEditor(isNew: true);
 
@@ -152,6 +152,35 @@ public class InfoPageEditorPlacementShould : BunitContext
         Click(cut, "Remove");
 
         cut.WaitForAssertion(() => Assert.Equal(HttpMethod.Delete, Assert.Single(_writes).Method), Patience);
+        cut.WaitForAssertion(() => Assert.Contains("Removed from Logistics", cut.Markup, StringComparison.Ordinal), Patience);
+    }
+
+    [Fact]
+    public void PlaceItBackOnTheSamePath_WhenUndoIsClicked_ForUndoRemovalAsync()
+    {
+        _placed = true;
+        _activitiesOnTab = true;
+        IRenderedComponent<InfoPageEditor> cut = RenderEditor();
+        Click(cut, "Remove");
+        cut.WaitForAssertion(() => Assert.Contains("Undo", cut.Markup, StringComparison.Ordinal), Patience);
+
+        Click(cut, "Undo");
+
+        cut.WaitForAssertion(() => Assert.Equal(2, _writes.Count), Patience);
+        Assert.Equal(HttpMethod.Post, _writes[1].Method);
+        Assert.Contains("\"tabName\":\"Logistics\"", _writes[1].Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DropTheUnsavedPick_WhenTheComponentIsReusedForAnotherRoute_ForOnParametersSetAsync()
+    {
+        IRenderedComponent<InfoPageEditor> cut = RenderEditor();
+        cut.Find("#PlacementTab").Change("About");
+
+        cut.Render(parameters => parameters.Add(c => c.InfoPageId, _infoPageId));
+
+        cut.WaitForAssertion(
+            () => Assert.True(string.IsNullOrEmpty(cut.Find("#PlacementTab").GetAttribute("value"))), Patience);
     }
 
     private static void Click(IRenderedComponent<InfoPageEditor> cut, string text) =>

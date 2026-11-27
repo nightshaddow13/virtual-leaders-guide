@@ -36,13 +36,13 @@ public class InfoPagePlacementPickerShould
         new Dictionary<Guid, string> { [OtherPage] = "Packing List" });
 
     [Fact]
-    public void OfferEveryTab_IncludingOnesWithNoActivities_ForTabOptions()
+    public void OfferEveryTab_WhenSomeHaveNoActivities_ForTabOptions()
     {
         Assert.Equal(["Logistics", "Morning", "About"], Picker().TabOptions().Select(o => o.Name));
     }
 
     [Fact]
-    public void DescribeWhereThisInfoPageIs_ForCurrent()
+    public void DescribeThePath_WhenThisInfoPageIsPlaced_ForCurrent()
     {
         Assert.Equal("Logistics › Arrival", Picker().Current!.Display);
     }
@@ -54,7 +54,7 @@ public class InfoPagePlacementPickerShould
     [InlineData("About", null, "")]
     [InlineData("Brand New", null, "")]
     [InlineData("Logistics", "Brand New", "")]
-    public void SayWhatFillsTheExactScreen_ForAnnotate(string tab, string? subTab, string expected)
+    public void SayWhatFillsTheScreen_WhenAskedAboutAnExactPath_ForAnnotate(string tab, string? subTab, string expected)
     {
         Assert.Equal(expected, Picker().Annotate(tab, subTab));
     }

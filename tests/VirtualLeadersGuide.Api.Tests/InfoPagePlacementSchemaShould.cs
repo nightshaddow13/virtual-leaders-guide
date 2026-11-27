@@ -49,7 +49,7 @@ public class InfoPagePlacementSchemaShould : IAsyncLifetime
     }
 
     [Fact]
-    public async Task AllowTheBareTabAndItsSubTabToHoldDifferentInfoPages_ForSaveChanges()
+    public async Task AllowBoth_WhenTheBareTabAndItsSubTabHoldDifferentInfoPages_ForSaveChanges()
     {
         InfoPage first = await _factory.CreateInfoPageAsync(_event.Id);
         InfoPage second = await _factory.CreateInfoPageAsync(_event.Id);

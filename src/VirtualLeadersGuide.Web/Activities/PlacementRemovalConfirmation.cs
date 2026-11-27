@@ -32,9 +32,10 @@ internal static class PlacementRemovalConfirmation
         if (impact.Surviving.Count > 0)
         {
             string[] names = [.. impact.Surviving.Select(tier => tier.Name).Reverse()];
+            string users = impact.SurvivorHeldByInfoPageOnly ? "other content still uses" : "other activities still use";
             consequences.Add(names.Length == 1
-                ? $"{names[0]} stays — other activities still use it."
-                : $"{JoinNames(names)} stay — other activities still use them.");
+                ? $"{names[0]} stays — {users} it."
+                : $"{JoinNames(names)} stay — {users} them.");
         }
 
         if (impact.OtherPlacementsOfThisActivity > 0)

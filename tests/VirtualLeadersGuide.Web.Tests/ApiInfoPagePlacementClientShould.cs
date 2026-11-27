@@ -8,7 +8,7 @@ namespace VirtualLeadersGuide.Web.Tests;
 public class ApiInfoPagePlacementClientShould
 {
     [Fact]
-    public async Task PostTheInfoPageAndTierNames_ForCreateAsync()
+    public async Task PostTheInfoPageAndTierNames_WhenPlacing_ForCreateAsync()
     {
         Guid infoPageId = Guid.NewGuid();
         HttpMethod? method = null;
@@ -32,7 +32,7 @@ public class ApiInfoPagePlacementClientShould
     }
 
     [Fact]
-    public async Task PatchOnlyTheNewPath_ForMoveAsync()
+    public async Task PatchOnlyTheNewPath_WhenMoving_ForMoveAsync()
     {
         Guid placementId = Guid.NewGuid();
         HttpRequestMessage? sent = null;
@@ -78,7 +78,7 @@ public class ApiInfoPagePlacementClientShould
     [InlineData(HttpStatusCode.Forbidden, InfoPagePlacementWriteOutcome.Forbidden)]
     [InlineData(HttpStatusCode.NotFound, InfoPagePlacementWriteOutcome.NotFound)]
     [InlineData(HttpStatusCode.NoContent, InfoPagePlacementWriteOutcome.Success)]
-    public async Task MapTheStatus_ForDeleteAsync(HttpStatusCode status, InfoPagePlacementWriteOutcome expected)
+    public async Task MapTheStatus_WhenApiResponds_ForDeleteAsync(HttpStatusCode status, InfoPagePlacementWriteOutcome expected)
     {
         var client = Client(_ => new HttpResponseMessage(status));
 

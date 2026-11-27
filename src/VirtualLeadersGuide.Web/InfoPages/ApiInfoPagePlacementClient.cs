@@ -12,6 +12,7 @@ namespace VirtualLeadersGuide.Web.InfoPages;
 
 /// <summary>Thin HTTP client over Api's <c>/api/infoPagePlacements</c> writes (P5-24, #208). Reads come with the Event's tree, <see cref="ApiPlacementClient.GetTreeForEventAsync"/>.</summary>
 /// <remarks>Typed outcomes for expected non-2xx responses, <see cref="InfoPageDataUnavailableException"/> for everything else.</remarks>
+/// <param name="apiClient">Sends authenticated requests to Api.</param>
 public sealed class ApiInfoPagePlacementClient(InternalApiClient apiClient)
 {
     private const string JsonApiMediaType = "application/vnd.api+json";
@@ -90,7 +91,7 @@ public sealed class ApiInfoPagePlacementClient(InternalApiClient apiClient)
             case HttpStatusCode.UnprocessableEntity:
                 return InfoPagePlacementWriteOutcome.Invalid;
             case HttpStatusCode.Conflict:
-                switch (await ReadErrorCodeAsync(response, cancellationToken))
+                switch (await ErrorDocument.ReadCodeAsync(response, JsonOptions, cancellationToken))
                 {
                     case PlacementErrorCodes.SlotHasActivities:
                         return InfoPagePlacementWriteOutcome.SlotHasActivities;
@@ -106,19 +107,6 @@ public sealed class ApiInfoPagePlacementClient(InternalApiClient apiClient)
         throw new InfoPageDataUnavailableException(
             $"The Placement store (Api) returned an unexpected {(int)response.StatusCode} response.",
             new HttpRequestException(response.ReasonPhrase));
-    }
-
-    private static async Task<string?> ReadErrorCodeAsync(HttpResponseMessage response, CancellationToken cancellationToken)
-    {
-        try
-        {
-            ErrorDocument? document = await response.Content.ReadFromJsonAsync<ErrorDocument>(JsonOptions, cancellationToken);
-            return document?.Errors.FirstOrDefault()?.Code;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
     }
 
     private static HttpRequestMessage NewRequest(HttpMethod method, string uri)

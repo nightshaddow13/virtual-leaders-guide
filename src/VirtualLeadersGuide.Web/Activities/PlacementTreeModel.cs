@@ -79,8 +79,10 @@ public sealed record TierRef(TierKind Kind, string Name);
 /// <param name="Reaped">Tiers nothing else references afterwards, deepest first - Api deletes them with the Placement.</param>
 /// <param name="Surviving">Tiers on the path that stay because something else still uses them, shallowest first.</param>
 /// <param name="OtherPlacementsOfThisActivity">How many saved Placements the Activity keeps. Zero means this is its last (ADR-0050).</param>
+/// <param name="SurvivorHeldByInfoPageOnly">Whether some surviving Tier is kept alive by no other Activity Placement, only by an InfoPage's (P5-24, #208).</param>
 public sealed record RemovalImpact(
-    PlacementPath Path, IReadOnlyList<TierRef> Reaped, IReadOnlyList<TierRef> Surviving, int OtherPlacementsOfThisActivity);
+    PlacementPath Path, IReadOnlyList<TierRef> Reaped, IReadOnlyList<TierRef> Surviving, int OtherPlacementsOfThisActivity,
+    bool SurvivorHeldByInfoPageOnly = false);
 
 /// <summary>What deleting a whole Activity does to the guide (P5-9, #95).</summary>
 /// <param name="PlacementCount">How many saved Placements go with the Activity.</param>
@@ -254,6 +256,7 @@ public sealed class PlacementTreeModel
 
         var reaped = new List<TierRef>();
         var surviving = new List<TierRef>();
+        bool heldByInfoPageOnly = false;
         for (int level = chain.Count - 1; level >= 0; level--)
         {
             (TierRef tier, Guid id) = chain[level];
@@ -264,12 +267,14 @@ public sealed class PlacementTreeModel
             else
             {
                 surviving.Insert(0, tier);
+                heldByInfoPageOnly |= !_server.Placements.Any(p => p.Id != placementId
+                    && (p.TabId == id || p.SubTabId == id || p.SectionId == id || p.SubSectionId == id));
             }
         }
 
         string? NameAt(TierKind kind) => chain.Where(link => link.Tier.Kind == kind).Select(link => link.Tier.Name).FirstOrDefault();
         var path = new PlacementPath(tab.Name, NameAt(TierKind.SubTab), NameAt(TierKind.Section), NameAt(TierKind.SubSection));
-        return new RemovalImpact(path, reaped, surviving, otherPlacements);
+        return new RemovalImpact(path, reaped, surviving, otherPlacements, heldByInfoPageOnly);
     }
 
     /// <summary>
@@ -316,6 +321,7 @@ public sealed class PlacementTreeModel
     /// <param name="server">The Event's persisted Tiers and Placements.</param>
     /// <param name="infoPagePlacementId">A saved InfoPage Placement on the Event.</param>
     /// <returns>The reaped Tiers, deepest first - empty if none, or if no such Placement is in the tree.</returns>
+    /// <remarks>The removed row is reshaped as a Placement so the one reap walk decides it too; its id excludes it from the references.</remarks>
     public static IReadOnlyList<TierRef> DescribeInfoPagePlacementRemoval(PlacementTreeDto server, Guid infoPagePlacementId)
     {
         if (server.InfoPagePlacements.FirstOrDefault(p => p.Id == infoPagePlacementId) is not { } removed)
@@ -323,7 +329,6 @@ public sealed class PlacementTreeModel
             return [];
         }
 
-        // Shaped as a Placement so the one reap walk decides it too; its id excludes it from the references.
         var path = new PlacementDto
         {
             Id = removed.Id, ActivityId = Guid.Empty, TabId = removed.TabId, SubTabId = removed.SubTabId, SortOrder = 0

@@ -116,7 +116,8 @@ public sealed class ApiPlacementClient(InternalApiClient apiClient)
             case HttpStatusCode.Forbidden:
                 return (PlacementWriteOutcome.Forbidden, null, []);
             case HttpStatusCode.Conflict:
-                return (await ReadConflictAsync(response, cancellationToken), null, []);
+                string? code = await ErrorDocument.ReadCodeAsync(response, JsonOptions, cancellationToken);
+                return (code == PlacementErrorCodes.SlotHasInfoPage ? PlacementWriteOutcome.SlotHasInfoPage : PlacementWriteOutcome.Conflict, null, []);
             case HttpStatusCode.UnprocessableEntity:
                 return (PlacementWriteOutcome.Invalid, null, await ReadErrorPointersAsync(response, cancellationToken));
         }
@@ -239,23 +240,6 @@ public sealed class ApiPlacementClient(InternalApiClient apiClient)
 
     private static async Task<T> ReadAsync<T>(HttpResponseMessage response, CancellationToken cancellationToken) =>
         (await response.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken))!;
-
-    /// <remarks>A 409 with no readable body is still a conflict - only the InfoPage code changes what it means.</remarks>
-    private static async Task<PlacementWriteOutcome> ReadConflictAsync(
-        HttpResponseMessage response, CancellationToken cancellationToken)
-    {
-        try
-        {
-            ErrorDocument document = await ReadAsync<ErrorDocument>(response, cancellationToken);
-            return document.Errors.Any(error => error.Code == PlacementErrorCodes.SlotHasInfoPage)
-                ? PlacementWriteOutcome.SlotHasInfoPage
-                : PlacementWriteOutcome.Conflict;
-        }
-        catch (JsonException)
-        {
-            return PlacementWriteOutcome.Conflict;
-        }
-    }
 
     private static async Task<IReadOnlyList<string>> ReadErrorPointersAsync(
         HttpResponseMessage response, CancellationToken cancellationToken)

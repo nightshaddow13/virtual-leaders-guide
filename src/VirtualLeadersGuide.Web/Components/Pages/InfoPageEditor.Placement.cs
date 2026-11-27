@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Components;
+using Radzen;
 using VirtualLeadersGuide.Web.Activities;
 using VirtualLeadersGuide.Web.Components.Shared;
 using VirtualLeadersGuide.Web.InfoPages;
@@ -7,10 +8,12 @@ namespace VirtualLeadersGuide.Web.Components.Pages;
 
 /// <summary>
 /// The editor's Placement section (P5-24, #208). A Tab/Sub Tab pick is written by Save changes, after the page
-/// itself; Remove acts at once.
+/// itself; Remove acts at once, confirming only when it would delete a Tier and offering Undo otherwise (ADR-0045).
 /// </summary>
 public partial class InfoPageEditor
 {
+    private const int UndoToastDuration = 8000;
+
     [Inject]
     private ApiPlacementClient PlacementClient { get; set; } = default!;
 
@@ -142,12 +145,68 @@ public partial class InfoPageEditor
                 return;
             }
 
+            if (outcome == InfoPagePlacementWriteOutcome.Success && reaped.Count == 0)
+            {
+                OfferUndo(current);
+            }
+
             await LoadPlacementAsync();
             KeepPlacement();
         }
         catch (Exception ex) when (ex is ActivityDataUnavailableException or InfoPageDataUnavailableException)
         {
             saveErrorMessage = "Something went wrong removing this placement. Try again.";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void OfferUndo(PlacementPath removed)
+    {
+        Guid infoPageId = InfoPageId!.Value;
+        NotificationService.Notify(new NotificationMessage
+        {
+            Severity = NotificationSeverity.Info,
+            Summary = $"Removed from {removed.Display}",
+            DetailContent = _ => builder =>
+            {
+                builder.OpenComponent<UndoToast>(0);
+                builder.AddComponentParameter(1, nameof(UndoToast.OnUndo),
+                    EventCallback.Factory.Create(this, () => UndoRemovalAsync(infoPageId, removed)));
+                builder.CloseComponent();
+            },
+            Duration = UndoToastDuration
+        });
+    }
+
+    /// <remarks>Places the InfoPage back by name. "Already placed" means it is back (or elsewhere) already, so the reload shows where.</remarks>
+    private async Task UndoRemovalAsync(Guid infoPageId, PlacementPath removed)
+    {
+        isSaving = true;
+        saveErrorMessage = null;
+        try
+        {
+            InfoPagePlacementWriteOutcome outcome =
+                await InfoPagePlacementClient.CreateAsync(infoPageId, removed.Tab, removed.SubTab, CancellationToken.None);
+            if (outcome == InfoPagePlacementWriteOutcome.Forbidden)
+            {
+                permissionLostMessage = "You no longer have permission to edit this Info page.";
+                return;
+            }
+
+            if (outcome is not (InfoPagePlacementWriteOutcome.Success or InfoPagePlacementWriteOutcome.AlreadyPlaced))
+            {
+                saveErrorMessage = $"Couldn't restore \"{removed.Display}\". Something else is shown there now.";
+            }
+
+            await LoadPlacementAsync();
+            KeepPlacement();
+        }
+        catch (Exception ex) when (ex is ActivityDataUnavailableException or InfoPageDataUnavailableException)
+        {
+            saveErrorMessage = "Couldn't restore that placement. Try again.";
         }
         finally
         {
