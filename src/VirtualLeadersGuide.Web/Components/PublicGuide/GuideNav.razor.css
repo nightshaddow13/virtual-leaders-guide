@@ -1,0 +1,14 @@
+/* Radzen has no wrap or gap utility. */
+.vlg-guide-tabs {
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+/* The narrow-screen menu spans the bar instead of hanging off its own button, so it can't leave the screen. */
+.vlg-menu-sheet {
+    position: static;
+}
+
+    .vlg-menu-sheet > nav {
+        inset-inline: 0;
+    }

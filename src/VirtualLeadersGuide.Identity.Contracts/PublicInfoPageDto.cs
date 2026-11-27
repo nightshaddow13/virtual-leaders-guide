@@ -1,8 +1,8 @@
 namespace VirtualLeadersGuide.Identity.Contracts;
 
 /// <summary>
-/// The public, anonymous-safe view of an InfoPage, returned by
-/// <c>PublicGuideRoutes.InfoPagesByEvent</c> (P4-1, #23).
+/// The public, anonymous-safe view of an InfoPage (P4-1, #23), carried on the screen it is placed on
+/// (<see cref="PublicGuideScreenDto.InfoPage"/>).
 /// </summary>
 /// <remarks>
 /// No <c>EventId</c> - the request is already scoped by the Event's Slug. <see cref="MarkdownContent"/> is raw

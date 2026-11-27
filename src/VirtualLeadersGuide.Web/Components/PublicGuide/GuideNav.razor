@@ -1,0 +1,53 @@
+@using VirtualLeadersGuide.Identity.Contracts
+@using VirtualLeadersGuide.Web.Components.Layout
+@using VirtualLeadersGuide.Web.PublicGuide
+
+@* Wide screens: an entry per Tab, the ones that don't fit under More. Narrow screens: every Tab in one menu. *@
+<nav class="vlg-guide-tabs rz-display-none rz-display-md-flex rz-align-items-center" aria-label="Tabs"
+     data-enhance-nav="false">
+    @foreach (PublicGuideTabDto tab in Guide.Tabs.Take(GuideMenu.ShownCount(Guide)))
+    {
+        @if (tab.SubTabs.Count == 0)
+        {
+            <GuideLink Href="@GuideMenu.Href(Slug, tab, null)" Label="@tab.Name" IsSelected="tab == Selection.Tab"
+                       Class="rz-text-nowrap" />
+        }
+        else
+        {
+            <details class="vlg-menu" name="vlg-menu">
+                <summary class="@NavButton.Summary(tab == Selection.Tab)">
+                    @tab.Name <RadzenIcon Icon="arrow_drop_down" />
+                </summary>
+                <div class="@NavButton.Panel">
+                    @foreach ((string name, PublicGuideSubTabDto? subTab) in GuideMenu.Screens(tab))
+                    {
+                        <GuideLink Href="@GuideMenu.Href(Slug, tab, subTab)" Label="@name"
+                                   IsSelected="tab == Selection.Tab && subTab == Selection.SubTab"
+                                   Class="@NavButton.MenuItem" />
+                    }
+                </div>
+            </details>
+        }
+    }
+
+    @if (Overflow.Count > 0)
+    {
+        <details class="vlg-menu vlg-menu-end" name="vlg-menu">
+            <summary class="@NavButton.Summary(Overflow.Contains(Selection.Tab))">
+                More <RadzenIcon Icon="arrow_drop_down" />
+            </summary>
+            <div class="@NavButton.Panel">
+                <GuideTabList Slug="@Slug" Tabs="Overflow" Selection="Selection" />
+            </div>
+        </details>
+    }
+</nav>
+
+<details class="vlg-menu vlg-menu-sheet rz-display-md-none" name="vlg-menu">
+    <summary class="@NavButton.Summary()" aria-label="Guide menu">
+        <RadzenIcon Icon="menu" />
+    </summary>
+    <nav class="@NavButton.Panel" aria-label="Guide menu" data-enhance-nav="false">
+        <GuideTabList Slug="@Slug" Tabs="Guide.Tabs" Selection="Selection" />
+    </nav>
+</details>

@@ -1,0 +1,13 @@
+<details class="vlg-menu vlg-menu-end" name="vlg-menu">
+    <summary class="@NavButton.Summary()" aria-label="Account menu">
+        <RadzenIcon Icon="account_circle" />
+        <RadzenIcon Icon="arrow_drop_down" />
+    </summary>
+    <nav class="@NavButton.Panel" aria-label="Account">
+        <RadzenText TextStyle="TextStyle.Caption" TagName="TagName.Div" class="rz-p-2">
+            @DisplayEmail<br />@DisplayRole
+        </RadzenText>
+        <a class="@NavButton.Classes() @NavButton.MenuItem" href="Account/Manage">Manage account</a>
+        <SignOutForm />
+    </nav>
+</details>

@@ -228,6 +228,7 @@
     --rz-primary-darker: color-mix(in oklch, var(--vlg-moss), black 30%);
     --rz-primary-light: color-mix(in oklch, var(--vlg-moss), white 25%);
     --rz-primary-lighter: var(--vlg-moss-tint);
+    --rz-on-primary-lighter: var(--vlg-moss);
     --rz-on-primary: var(--vlg-on-primary);
 
     --rz-danger: var(--vlg-clay);
@@ -337,3 +338,38 @@ h1:focus {
         right: 0.75rem;
         top: 0.5rem;
     }
+
+/* Rendered markdown (MarkdownRenderer output): no stray margin above the first block or below the last.
+   Shared by the editor preview and the public guide. */
+.vlg-prose :first-child {
+    margin-block-start: 0;
+}
+
+.vlg-prose :last-child {
+    margin-block-end: 0;
+}
+
+/* Dropdown menus in the top bar - native <details> dressed with Radzen classes (ADR-0034). Shared by the
+   account menu and the guide's Tabs. Colours stay on --vlg-* tokens: Radzen's neutral utilities don't follow
+   the dark theme (#226). */
+.vlg-menu {
+    position: relative;
+}
+
+.vlg-menu-panel {
+    position: absolute;
+    top: 100%;
+    inset-inline-start: 0;
+    z-index: 1;
+    min-width: 12rem;
+    max-height: 70vh;
+    border: 1px solid var(--vlg-line);
+    border-radius: var(--vlg-radius);
+    background-color: var(--vlg-surface);
+    box-shadow: var(--vlg-shadow);
+}
+
+/* A menu at the bar's far end opens inwards. */
+.vlg-menu-end .vlg-menu-panel {
+    inset-inline: auto 0;
+}

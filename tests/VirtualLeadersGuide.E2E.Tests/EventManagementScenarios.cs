@@ -436,7 +436,7 @@ public class EventManagementScenarios : E2ETestBase
 
             await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
 
-            await ExpectOpenGuideToShowAsync(name, slug, "This guide is unlocked");
+            await ExpectOpenGuideToShowAsync(name, slug, "haven't been added yet");
         });
 
     [Fact(DisplayName = "Given a Past Event, when an Admin opens its guide from the dashboard, then the guide opens unlocked in a new tab")]
@@ -455,7 +455,7 @@ public class EventManagementScenarios : E2ETestBase
             await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
             await FilterDashboardByStatusAsync("Past");
 
-            await ExpectOpenGuideToShowAsync(name, slug, "This guide is unlocked");
+            await ExpectOpenGuideToShowAsync(name, slug, "haven't been added yet");
         });
 
     [Fact(DisplayName = "Given a Cancelled Event, when an Admin opens its guide from the dashboard, then the new tab shows the cancelled state")]
@@ -490,7 +490,7 @@ public class EventManagementScenarios : E2ETestBase
             await CreateAndSignInDirectorAsync(eventId);
             await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
 
-            await ExpectOpenGuideToShowAsync(name, slug, "This guide is unlocked");
+            await ExpectOpenGuideToShowAsync(name, slug, "haven't been added yet");
         });
 
     [Fact(DisplayName = "Given a Draft Event, when an Admin views the dashboard, then its Open guide button is disabled and says why on hover or focus")]

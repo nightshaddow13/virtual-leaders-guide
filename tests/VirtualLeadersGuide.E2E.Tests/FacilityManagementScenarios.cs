@@ -111,8 +111,7 @@ public class FacilityManagementScenarios : E2ETestBase
         });
 
     /// <remarks>
-    /// The header link is the only coverage <c>SiteHeader.razor</c>'s new "Facilities" <c>NavLink</c> gets -
-    /// there is no <c>SiteHeaderShould</c> bUnit file. Reaches the list by clicking that link rather than
+    /// <c>SiteHeaderShould</c> only covers which links the header renders. Reaches the list by clicking that link rather than
     /// navigating directly, so a regression removing or mis-routing the link fails this test, not just a
     /// direct-navigation one.
     /// </remarks>
