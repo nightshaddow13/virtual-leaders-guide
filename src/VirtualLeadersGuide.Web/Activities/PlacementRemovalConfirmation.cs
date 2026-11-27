@@ -32,9 +32,10 @@ internal static class PlacementRemovalConfirmation
         if (impact.Surviving.Count > 0)
         {
             string[] names = [.. impact.Surviving.Select(tier => tier.Name).Reverse()];
+            string users = impact.SurvivorHeldByInfoPageOnly ? "other content still uses" : "other activities still use";
             consequences.Add(names.Length == 1
-                ? $"{names[0]} stays — other activities still use it."
-                : $"{JoinNames(names)} stay — other activities still use them.");
+                ? $"{names[0]} stays — {users} it."
+                : $"{JoinNames(names)} stay — {users} them.");
         }
 
         if (impact.OtherPlacementsOfThisActivity > 0)
@@ -68,6 +69,18 @@ internal static class PlacementRemovalConfirmation
         [nameof(ConfirmDialog.Message)] = $"An activity needs at least one placement. Delete {activityName} instead?",
         [nameof(ConfirmDialog.Consequences)] = ActivityDeleteConfirmation.Consequences(impact, unsaved),
         [nameof(ConfirmDialog.ConfirmText)] = "Delete activity",
+        [nameof(ConfirmDialog.DismissText)] = "Keep it"
+    };
+
+    /// <summary>Builds the parameters for removing an InfoPage's Placement when that empties at least one Tier (P5-24, #208).</summary>
+    /// <param name="path">Where the InfoPage is placed.</param>
+    /// <param name="reaped">The Tiers the removal empties, from <see cref="PlacementTreeModel.DescribeInfoPagePlacementRemoval"/>.</param>
+    /// <returns>The parameter dictionary for <c>DialogService.OpenAsync&lt;ConfirmDialog&gt;</c>.</returns>
+    public static Dictionary<string, object?> ForInfoPage(PlacementPath path, IReadOnlyList<TierRef> reaped) => new()
+    {
+        [nameof(ConfirmDialog.Message)] = $"Remove this placement? {path.Display}",
+        [nameof(ConfirmDialog.Consequences)] = (IReadOnlyList<string>)[$"Nothing else is placed there, so {Describe(reaped)} from the guide too."],
+        [nameof(ConfirmDialog.ConfirmText)] = "Remove",
         [nameof(ConfirmDialog.DismissText)] = "Keep it"
     };
 

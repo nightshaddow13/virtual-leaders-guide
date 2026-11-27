@@ -79,8 +79,10 @@ public sealed record TierRef(TierKind Kind, string Name);
 /// <param name="Reaped">Tiers nothing else references afterwards, deepest first - Api deletes them with the Placement.</param>
 /// <param name="Surviving">Tiers on the path that stay because something else still uses them, shallowest first.</param>
 /// <param name="OtherPlacementsOfThisActivity">How many saved Placements the Activity keeps. Zero means this is its last (ADR-0050).</param>
+/// <param name="SurvivorHeldByInfoPageOnly">Whether some surviving Tier is kept alive by no other Activity Placement, only by an InfoPage's (P5-24, #208).</param>
 public sealed record RemovalImpact(
-    PlacementPath Path, IReadOnlyList<TierRef> Reaped, IReadOnlyList<TierRef> Surviving, int OtherPlacementsOfThisActivity);
+    PlacementPath Path, IReadOnlyList<TierRef> Reaped, IReadOnlyList<TierRef> Surviving, int OtherPlacementsOfThisActivity,
+    bool SurvivorHeldByInfoPageOnly = false);
 
 /// <summary>What deleting a whole Activity does to the guide (P5-9, #95).</summary>
 /// <param name="PlacementCount">How many saved Placements go with the Activity.</param>
@@ -265,6 +267,7 @@ public sealed class PlacementTreeModel
 
         var reaped = new List<TierRef>();
         var surviving = new List<TierRef>();
+        bool heldByInfoPageOnly = false;
         for (int level = chain.Count - 1; level >= 0; level--)
         {
             (TierRef tier, Guid id) = chain[level];
@@ -275,12 +278,14 @@ public sealed class PlacementTreeModel
             else
             {
                 surviving.Insert(0, tier);
+                heldByInfoPageOnly |= !_server.Placements.Any(p => p.Id != placementId
+                    && (p.TabId == id || p.SubTabId == id || p.SectionId == id || p.SubSectionId == id));
             }
         }
 
         string? NameAt(TierKind kind) => chain.Where(link => link.Tier.Kind == kind).Select(link => link.Tier.Name).FirstOrDefault();
         var path = new PlacementPath(tab.Name, NameAt(TierKind.SubTab), NameAt(TierKind.Section), NameAt(TierKind.SubSection));
-        return new RemovalImpact(path, reaped, surviving, otherPlacements);
+        return new RemovalImpact(path, reaped, surviving, otherPlacements, heldByInfoPageOnly);
     }
 
     /// <summary>
@@ -310,7 +315,7 @@ public sealed class PlacementTreeModel
 
         TierRef[] reaped =
         [
-            .. TierLevels(server, reapedIds).SelectMany(level => level.Tiers
+            .. TierLevels(server, reapedIds, []).SelectMany(level => level.Tiers
                 .Where(tier => reapedIds.Contains(tier.Id))
                 .Select(tier => tier.Name)
                 .Order(StringComparer.OrdinalIgnoreCase)
@@ -318,6 +323,35 @@ public sealed class PlacementTreeModel
         ];
 
         return new ActivityDeletionImpact(removing.Count, reaped);
+    }
+
+    /// <summary>
+    /// Which Tiers removing an InfoPage's Placement would empty (ADR-0046, P5-24 #208) - the same rules as
+    /// <see cref="DescribeRemoval"/>.
+    /// </summary>
+    /// <param name="server">The Event's persisted Tiers and Placements.</param>
+    /// <param name="infoPagePlacementId">A saved InfoPage Placement on the Event.</param>
+    /// <returns>The reaped Tiers, deepest first - empty if none, or if no such Placement is in the tree.</returns>
+    /// <remarks>The removed row is reshaped as a Placement so the one reap walk decides it too; its id excludes it from the references.</remarks>
+    public static IReadOnlyList<TierRef> DescribeInfoPagePlacementRemoval(PlacementTreeDto server, Guid infoPagePlacementId)
+    {
+        if (server.InfoPagePlacements.FirstOrDefault(p => p.Id == infoPagePlacementId) is not { } removed)
+        {
+            return [];
+        }
+
+        var path = new PlacementDto
+        {
+            Id = removed.Id, ActivityId = Guid.Empty, TabId = removed.TabId, SubTabId = removed.SubTabId, SortOrder = 0
+        };
+        HashSet<Guid> reapedIds = ReapedTierIds(server, [path]);
+
+        return
+        [
+            .. TierLevels(server, reapedIds, []).SelectMany(level => level.Tiers
+                .Where(tier => reapedIds.Contains(tier.Id))
+                .Select(tier => new TierRef(level.Kind, tier.Name)))
+        ];
     }
 
     /// <summary>One level of the removed Placement's path: the Tier and its server id, for matching against other Placements and child Tiers.</summary>
@@ -334,7 +368,8 @@ public sealed class PlacementTreeModel
     /// <summary>The four Tier levels, deepest first - the order a reap has to decide them in, children before parents.</summary>
     /// <param name="server">The Event's persisted Tiers and Placements.</param>
     /// <param name="reaped">The Tiers already decided to be reaped; a child in this set no longer keeps its parent alive. Read lazily, so it can still be growing as the levels are walked.</param>
-    private static TierLevel[] TierLevels(PlacementTreeDto server, HashSet<Guid> reaped) =>
+    /// <param name="removingIds">Placements being removed, so an InfoPage Placement among them keeps nothing alive.</param>
+    private static TierLevel[] TierLevels(PlacementTreeDto server, HashSet<Guid> reaped, HashSet<Guid> removingIds) =>
     [
         new(TierKind.SubSection, p => p.SubSectionId, _ => false,
             server.SubSections.Select(t => (t.Id, t.Name))),
@@ -342,21 +377,24 @@ public sealed class PlacementTreeModel
             id => server.SubSections.Any(s => s.SectionId == id && !reaped.Contains(s.Id)),
             server.Sections.Select(t => (t.Id, t.Name))),
         new(TierKind.SubTab, p => p.SubTabId,
-            id => server.Sections.Any(s => s.ParentSubTabId == id && !reaped.Contains(s.Id)),
+            id => server.Sections.Any(s => s.ParentSubTabId == id && !reaped.Contains(s.Id))
+                || server.InfoPagePlacements.Any(p => p.SubTabId == id && !removingIds.Contains(p.Id)),
             server.SubTabs.Select(t => (t.Id, t.Name))),
         new(TierKind.Tab, p => p.TabId,
             id => server.SubTabs.Any(s => s.TabId == id && !reaped.Contains(s.Id))
-                || server.Sections.Any(s => s.ParentTabId == id && !reaped.Contains(s.Id)),
+                || server.Sections.Any(s => s.ParentTabId == id && !reaped.Contains(s.Id))
+                || server.InfoPagePlacements.Any(p => p.TabId == id && !removingIds.Contains(p.Id)),
             server.Tabs.Select(t => (t.Id, t.Name)))
     ];
 
     /// <summary>
     /// The ids of every Tier left unreferenced once <paramref name="removing"/> is gone - the same rules as
     /// Api's <c>TierReaper</c>, decided bottom-up so a Tier whose only remaining children are themselves
-    /// reaped is reaped too. A Tier survives while any other Placement names it or any child Tier that isn't
+    /// reaped is reaped too. A Tier survives while any other Placement (Activity or InfoPage) names it or any child Tier that isn't
     /// itself reaped hangs under it. The Web and Api copies can't share code across the project boundary:
     /// change one, change the other, and keep their paired test cases (<c>PlacementTreeModelShould</c> /
-    /// <c>PlacementsResourceShould</c> / <c>ActivitiesResourceShould</c>) in step.
+    /// <c>PlacementsResourceShould</c> / <c>ActivitiesResourceShould</c> /
+    /// <c>InfoPagePlacementsResourceShould</c>) in step.
     /// </summary>
     private static HashSet<Guid> ReapedTierIds(PlacementTreeDto server, IReadOnlyCollection<PlacementDto> removing)
     {
@@ -364,7 +402,7 @@ public sealed class PlacementTreeModel
         List<PlacementDto> others = [.. server.Placements.Where(p => !removingIds.Contains(p.Id))];
         var reaped = new HashSet<Guid>();
 
-        foreach (TierLevel level in TierLevels(server, reaped))
+        foreach (TierLevel level in TierLevels(server, reaped, removingIds))
         {
             foreach (Guid id in removing.Select(level.IdOf).OfType<Guid>().Distinct())
             {

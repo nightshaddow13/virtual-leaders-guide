@@ -1,0 +1,7 @@
+/* The editor's Placement section (P5-24, #208; ADR-0040). Layout inside it is RadzenStack's (ADR-0038). */
+
+.ipe-placement {
+    margin-block-start: 1.5rem;
+    padding-block-start: 1rem;
+    border-block-start: 1px solid var(--vlg-line);
+}

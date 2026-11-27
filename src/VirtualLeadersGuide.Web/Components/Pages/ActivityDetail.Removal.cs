@@ -107,9 +107,10 @@ public partial class ActivityDetail
     /// <remarks>
     /// Re-creates the removed Placement by name, then restores its <c>SortOrder</c> (decision 3). A failed
     /// reposition is silent: order is advisory until P5-13 (#98), so the row simply stays at the end of its
-    /// bucket. A 409 means it's already back (a double click, or another tab restored it). The toast outlives a
-    /// loss of permission, so the click is ignored then - the banner already says why. It also outlives the start
-    /// of a Save, so Undo waits for that to finish rather than writing alongside it.
+    /// bucket. A duplicate 409 means it's already back (a double click, or another tab restored it); an InfoPage
+    /// having taken the screen since the removal is reported (P5-24, #208). The toast outlives a loss of
+    /// permission, so the click is ignored then - the banner already says why. It also outlives the start of a
+    /// Save, so Undo waits for that to finish rather than writing alongside it.
     /// </remarks>
     private async Task UndoRemovalAsync(PlacementLeaf removed)
     {
@@ -146,6 +147,10 @@ public partial class ActivityDetail
             else if (outcome == PlacementWriteOutcome.Invalid)
             {
                 saveErrorMessage = $"Couldn't restore \"{path.Display}\". Add it again with the builder.";
+            }
+            else if (outcome == PlacementWriteOutcome.SlotHasInfoPage)
+            {
+                saveErrorMessage = $"Couldn't restore \"{path.Display}\": an Info page is shown there now.";
             }
 
             await RefreshOrReportAsync();

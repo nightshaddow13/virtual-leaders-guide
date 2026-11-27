@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Radzen;
+using VirtualLeadersGuide.Web.Activities;
 using VirtualLeadersGuide.Web.Authorization;
 using VirtualLeadersGuide.Web.Components.Shared;
 using VirtualLeadersGuide.Web.Events;
@@ -91,6 +92,9 @@ public partial class InfoPageEditor
         }
 
         eventName = eventDto.Name;
+        picker = null;
+        KeepPlacement();
+        saveErrorMessage = null;
 
         if (InfoPageId is null)
         {
@@ -118,6 +122,17 @@ public partial class InfoPageEditor
         }
 
         model = new InfoPageFormModel { Title = infoPageDto.Title, MarkdownContent = infoPageDto.MarkdownContent };
+
+        try
+        {
+            await LoadPlacementAsync();
+        }
+        catch (Exception ex) when (ex is ActivityDataUnavailableException or InfoPageDataUnavailableException)
+        {
+            state = PageState.Unavailable;
+            return;
+        }
+
         state = PageState.Ready;
     }
 
@@ -145,7 +160,7 @@ public partial class InfoPageEditor
                 await UpdateAsync(InfoPageId.Value);
             }
         }
-        catch (InfoPageDataUnavailableException)
+        catch (Exception ex) when (ex is ActivityDataUnavailableException or InfoPageDataUnavailableException)
         {
             saveErrorMessage = "Something went wrong saving this Info page. Try again.";
         }
@@ -191,6 +206,11 @@ public partial class InfoPageEditor
         if (outcome == InfoPageWriteOutcome.Forbidden)
         {
             permissionLostMessage = "You no longer have permission to edit this Info page.";
+            return;
+        }
+
+        if (!await SavePlacementAsync(id))
+        {
             return;
         }
 

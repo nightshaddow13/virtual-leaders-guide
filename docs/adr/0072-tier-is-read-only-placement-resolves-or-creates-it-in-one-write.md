@@ -71,3 +71,11 @@ against this ADR's "one write path" rule).
 
 This diverges from ADR-0073, which gives the Facility edit form its own `/{id}/edit` route: Activity's
 approved layout puts the form beside the tree instead.
+
+## Amendment (P5-24, #208)
+
+InfoPage Placement (`InfoPagePlacement`, ADR-0047) is a second write path onto Tabs and Sub Tabs, so
+`ActivityPlacementResourceDefinition` is no longer the only one. The "one write path" rule now reads: a Tier is
+created only by a Placement write - Tab and Sub Tab through the shared `TierPathResolver`, Section and Sub Section
+in `ActivityPlacementResourceDefinition` - and deleted only through `TierReaper` (or the bulk cleanup on Event
+delete), which a Placement write or its owner's delete calls. Tier resources stay read-only.

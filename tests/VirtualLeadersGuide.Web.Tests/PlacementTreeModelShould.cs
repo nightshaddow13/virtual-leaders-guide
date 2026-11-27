@@ -1,4 +1,5 @@
 using VirtualLeadersGuide.Web.Activities;
+using VirtualLeadersGuide.Web.InfoPages;
 
 namespace VirtualLeadersGuide.Web.Tests;
 
@@ -6,7 +7,8 @@ namespace VirtualLeadersGuide.Web.Tests;
 /// Pure-logic coverage of <see cref="PlacementTreeModel"/> (P5-11, #96; plan decision 4): the merged
 /// server-plus-ghost tree behind the Activity page's live tree, autofill choices, canonical casing, near-
 /// duplicate nudge and duplicate detection. No Blazor, no HTTP - the component tests in
-/// <see cref="ActivityPlacementBuilderShould"/> only need to prove the UI is wired to these answers.
+/// <see cref="ActivityPlacementBuilderShould"/> only need to prove the UI is wired to these answers. The InfoPage
+/// Placement reap cases are paired with Api's <c>InfoPagePlacementsResourceShould</c> (P5-24, #208).
 /// </remarks>
 public class PlacementTreeModelShould
 {
@@ -640,5 +642,84 @@ public class PlacementTreeModelShould
 
         Assert.Equal(1, impact.PlacementCount);
         Assert.Equal([TierKind.Tab], impact.Reaped.Select(t => t.Kind));
+    }
+
+    // --- InfoPage Placements -------------------------------------------------------------------------
+
+    [Fact]
+    public void KeepTheTab_WhenAnInfoPageFillsIt_ForDescribeDeletion()
+    {
+        Guid activity = Guid.NewGuid();
+        Guid tab = Guid.NewGuid();
+        var server = new PlacementTreeDto
+        {
+            Tabs = [new TabDto { Id = tab, Name = "Logistics", SortOrder = 0 }],
+            SubTabs = [new SubTabDto { Id = _roundRobin, TabId = tab, Name = "Arrival", SortOrder = 0 }],
+            Placements = [new PlacementDto { Id = Guid.NewGuid(), ActivityId = activity, TabId = tab, SortOrder = 0 }],
+            InfoPagePlacements = [new InfoPagePlacementDto { Id = Guid.NewGuid(), InfoPageId = Guid.NewGuid(), TabId = tab, SubTabId = _roundRobin }]
+        };
+
+        Assert.Empty(PlacementTreeModel.DescribeDeletion(server, activity).Reaped);
+    }
+
+    [Fact]
+    public void ReapTheSubTabAndTab_WhenOnlyTheInfoPageUsedThem_ForDescribeInfoPagePlacementRemoval()
+    {
+        Guid tab = Guid.NewGuid();
+        Guid placement = Guid.NewGuid();
+        var server = new PlacementTreeDto
+        {
+            Tabs = [new TabDto { Id = tab, Name = "Logistics", SortOrder = 0 }],
+            SubTabs = [new SubTabDto { Id = _roundRobin, TabId = tab, Name = "Arrival", SortOrder = 0 }],
+            InfoPagePlacements = [new InfoPagePlacementDto { Id = placement, InfoPageId = Guid.NewGuid(), TabId = tab, SubTabId = _roundRobin }]
+        };
+
+        IReadOnlyList<TierRef> reaped = PlacementTreeModel.DescribeInfoPagePlacementRemoval(server, placement);
+
+        Assert.Equal([new TierRef(TierKind.SubTab, "Arrival"), new TierRef(TierKind.Tab, "Logistics")], reaped);
+    }
+
+    [Fact]
+    public void ReapOnlyTheSubTab_WhenActivitiesStillUseTheTab_ForDescribeInfoPagePlacementRemoval()
+    {
+        Guid tab = Guid.NewGuid();
+        Guid placement = Guid.NewGuid();
+        var server = new PlacementTreeDto
+        {
+            Tabs = [new TabDto { Id = tab, Name = "Logistics", SortOrder = 0 }],
+            SubTabs = [new SubTabDto { Id = _roundRobin, TabId = tab, Name = "Arrival", SortOrder = 0 }],
+            Placements = [new PlacementDto { Id = Guid.NewGuid(), ActivityId = Guid.NewGuid(), TabId = tab, SortOrder = 0 }],
+            InfoPagePlacements = [new InfoPagePlacementDto { Id = placement, InfoPageId = Guid.NewGuid(), TabId = tab, SubTabId = _roundRobin }]
+        };
+
+        IReadOnlyList<TierRef> reaped = PlacementTreeModel.DescribeInfoPagePlacementRemoval(server, placement);
+
+        Assert.Equal([new TierRef(TierKind.SubTab, "Arrival")], reaped);
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void SayWhetherOnlyAnInfoPageHoldsASurvivor_WhenAPlacementIsRemoved_ForDescribeRemoval(bool anotherActivityOnTab, bool expected)
+    {
+        Guid tab = Guid.NewGuid();
+        Guid removed = Guid.NewGuid();
+        List<PlacementDto> placements = [new() { Id = removed, ActivityId = ThisActivity, TabId = tab, SortOrder = 0 }];
+        if (anotherActivityOnTab)
+        {
+            placements.Add(new PlacementDto { Id = Guid.NewGuid(), ActivityId = OtherActivity, TabId = tab, SortOrder = 1 });
+        }
+
+        var server = new PlacementTreeDto
+        {
+            Tabs = [new TabDto { Id = tab, Name = "Logistics", SortOrder = 0 }],
+            SubTabs = [new SubTabDto { Id = _roundRobin, TabId = tab, Name = "Arrival", SortOrder = 0 }],
+            Placements = placements,
+            InfoPagePlacements = [new InfoPagePlacementDto { Id = Guid.NewGuid(), InfoPageId = Guid.NewGuid(), TabId = tab, SubTabId = _roundRobin }]
+        };
+
+        RemovalImpact impact = ModelOf(server).DescribeRemoval(removed)!;
+
+        Assert.Equal(expected, impact.SurvivorHeldByInfoPageOnly);
     }
 }

@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using VirtualLeadersGuide.Web.Authorization;
 using VirtualLeadersGuide.Web.Identity;
+using VirtualLeadersGuide.Web.InfoPages;
 using VirtualLeadersGuide.Web.JsonApi;
 
 namespace VirtualLeadersGuide.Web.Activities;
@@ -43,7 +44,9 @@ public sealed class ApiPlacementClient(InternalApiClient apiClient)
         Task<List<TierResourceObject<TierAttributesDto>>> sections = ListAsync<TierAttributesDto>("/api/sections", eventId, cancellationToken);
         Task<List<TierResourceObject<TierAttributesDto>>> subSections = ListAsync<TierAttributesDto>("/api/subSections", eventId, cancellationToken);
         Task<List<TierResourceObject<PlacementAttributesDto>>> placements = ListAsync<PlacementAttributesDto>(PlacementsPath, eventId, cancellationToken);
-        await Task.WhenAll(tabs, subTabs, sections, subSections, placements);
+        Task<List<TierResourceObject<InfoPagePlacementAttributesDto>>> infoPagePlacements =
+            ListAsync<InfoPagePlacementAttributesDto>("/api/infoPagePlacements", eventId, cancellationToken);
+        await Task.WhenAll(tabs, subTabs, sections, subSections, placements, infoPagePlacements);
 
         return new PlacementTreeDto
         {
@@ -64,7 +67,12 @@ public sealed class ApiPlacementClient(InternalApiClient apiClient)
             {
                 Id = Guid.Parse(r.Id!), SectionId = r.Attributes!.SectionId!.Value, Name = r.Attributes.Name!, SortOrder = r.Attributes.SortOrder ?? 0
             })],
-            Placements = [.. placements.Result.Select(ToPlacementDto)]
+            Placements = [.. placements.Result.Select(ToPlacementDto)],
+            InfoPagePlacements = [.. infoPagePlacements.Result.Select(r => new InfoPagePlacementDto
+            {
+                Id = Guid.Parse(r.Id!), InfoPageId = r.Attributes!.InfoPageId!.Value, TabId = r.Attributes.TabId!.Value,
+                SubTabId = r.Attributes.SubTabId
+            })]
         };
     }
 
@@ -78,7 +86,7 @@ public sealed class ApiPlacementClient(InternalApiClient apiClient)
     /// <returns>
     /// <see cref="PlacementWriteOutcome.Success"/> with the created Placement;
     /// <see cref="PlacementWriteOutcome.Forbidden"/>; <see cref="PlacementWriteOutcome.Invalid"/> with the
-    /// offending pointers; or <see cref="PlacementWriteOutcome.Conflict"/> if the Activity is already placed
+    /// offending pointers; <see cref="PlacementWriteOutcome.SlotHasInfoPage"/> if an InfoPage fills that screen; or <see cref="PlacementWriteOutcome.Conflict"/> if the Activity is already placed
     /// at this exact path.
     /// </returns>
     public async Task<(PlacementWriteOutcome Outcome, PlacementDto? Placement, IReadOnlyList<string> Pointers)> CreateAsync(
@@ -108,7 +116,8 @@ public sealed class ApiPlacementClient(InternalApiClient apiClient)
             case HttpStatusCode.Forbidden:
                 return (PlacementWriteOutcome.Forbidden, null, []);
             case HttpStatusCode.Conflict:
-                return (PlacementWriteOutcome.Conflict, null, []);
+                string? code = await ErrorDocument.ReadCodeAsync(response, JsonOptions, cancellationToken);
+                return (code == PlacementErrorCodes.SlotHasInfoPage ? PlacementWriteOutcome.SlotHasInfoPage : PlacementWriteOutcome.Conflict, null, []);
             case HttpStatusCode.UnprocessableEntity:
                 return (PlacementWriteOutcome.Invalid, null, await ReadErrorPointersAsync(response, cancellationToken));
         }

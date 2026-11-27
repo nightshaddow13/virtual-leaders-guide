@@ -1,3 +1,6 @@
+using System.Net.Http.Json;
+using System.Text.Json;
+
 namespace VirtualLeadersGuide.Web.JsonApi;
 
 /// <summary>
@@ -20,6 +23,25 @@ internal sealed class DocumentMeta
 internal sealed class ErrorDocument
 {
     public required List<ErrorObject> Errors { get; init; }
+
+    /// <summary>The first error's <see cref="ErrorObject.Code"/> on a response.</summary>
+    /// <param name="response">A non-2xx JSON:API response.</param>
+    /// <param name="options">The client's serializer options.</param>
+    /// <param name="cancellationToken">Propagated to the body read.</param>
+    /// <returns>The code, or <see langword="null"/> if there is none or the body can't be read.</returns>
+    public static async Task<string?> ReadCodeAsync(
+        HttpResponseMessage response, JsonSerializerOptions options, CancellationToken cancellationToken)
+    {
+        try
+        {
+            ErrorDocument? document = await response.Content.ReadFromJsonAsync<ErrorDocument>(options, cancellationToken);
+            return document?.Errors.FirstOrDefault()?.Code;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
 }
 
 /// <summary>
@@ -31,6 +53,9 @@ internal sealed class ErrorDocument
 /// </summary>
 internal sealed class ErrorObject
 {
+    /// <summary>A stable, machine-readable reason - what distinguishes Placement's several 409s.</summary>
+    public string? Code { get; init; }
+
     public string? Title { get; init; }
 
     public string? Detail { get; init; }

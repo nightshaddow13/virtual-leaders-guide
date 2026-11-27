@@ -24,7 +24,7 @@ namespace VirtualLeadersGuide.Api.Data;
 /// <see cref="ActivityPlacement.TabId"/>/<see cref="ActivityPlacement.SubTabId"/>/<see cref="ActivityPlacement.SectionId"/>/
 /// <see cref="ActivityPlacement.SubSectionId"/> from either a supplied id or a supplied name (creating the
 /// row if the name doesn't resolve to an existing one), checking the Tab/Sub-Tab InfoPage-exclusivity rule
-/// (ADR-0047, currently a structural no-op - see <see cref="ValidateNoInfoPageConflictAsync"/>), checking the
+/// (ADR-0047, see <see cref="ValidateNoInfoPageConflictAsync"/>), checking the
 /// path-uniqueness rule (ADR-0046), and assigning an initial <see cref="ActivityPlacement.SortOrder"/>. Every
 /// resolve-or-create step adds to the same <see cref="VirtualLeadersGuideDbContext"/> change tracker without
 /// calling <c>SaveChangesAsync</c> itself - JsonApiDotNetCore's own repository persists everything this method
@@ -42,20 +42,23 @@ public sealed class ActivityPlacementResourceDefinition : JsonApiResourceDefinit
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly VirtualLeadersGuideDbContext _dbContext;
     private readonly TierReaper _tierReaper;
+    private readonly TierPathResolver _tierPathResolver;
 
     /// <summary>Constructs the definition with the services it needs to authorize and resolve Placement writes.</summary>
     /// <param name="resourceGraph">Passed through to <see cref="JsonApiResourceDefinition{TResource,TId}"/>.</param>
     /// <param name="httpContextAccessor">Resolves the current request's <see cref="System.Security.Claims.ClaimsPrincipal"/> for <see cref="CurrentPolicy"/>.</param>
     /// <param name="dbContext">Backs every resolve-or-create lookup below, and <see cref="StoredEventIdAsync"/>'s re-read.</param>
     /// <param name="tierReaper">Marks the Tiers a deleted Placement leaves empty for removal (P5-12, #97).</param>
+    /// <param name="tierPathResolver">Resolves-or-creates a new Placement's Tab and Sub Tab.</param>
     public ActivityPlacementResourceDefinition(
         IResourceGraph resourceGraph, IHttpContextAccessor httpContextAccessor, VirtualLeadersGuideDbContext dbContext,
-        TierReaper tierReaper)
+        TierReaper tierReaper, TierPathResolver tierPathResolver)
         : base(resourceGraph)
     {
         _httpContextAccessor = httpContextAccessor;
         _dbContext = dbContext;
         _tierReaper = tierReaper;
+        _tierPathResolver = tierPathResolver;
     }
 
     /// <inheritdoc/>
@@ -166,7 +169,7 @@ public sealed class ActivityPlacementResourceDefinition : JsonApiResourceDefinit
             .AnyAsync(placement => placement.ActivityId == stored.ActivityId && placement.Id != placementId, cancellationToken);
         if (!hasOthers)
         {
-            throw UnprocessableEntity(
+            throw PlacementErrors.Unprocessable(
                 "Last placement.", "An Activity needs at least one Placement; delete the Activity instead.", "/data");
         }
 
@@ -191,8 +194,9 @@ public sealed class ActivityPlacementResourceDefinition : JsonApiResourceDefinit
         await ValidateActivityExistsAsync(resource.ActivityId, eventId, cancellationToken);
 
         resource.EventId = eventId;
-        Guid tabId = await ResolveTabAsync(resource, eventId, cancellationToken);
-        Guid? subTabId = await ResolveSubTabAsync(resource, eventId, tabId, cancellationToken);
+        Guid tabId = await _tierPathResolver.ResolveTabAsync(eventId, resource.TabId, resource.TabName, cancellationToken);
+        Guid? subTabId = await _tierPathResolver.ResolveSubTabAsync(
+            eventId, tabId, resource.SubTabId, resource.SubTabName, cancellationToken);
         Guid? sectionId = await ResolveSectionAsync(resource, eventId, tabId, subTabId, cancellationToken);
         Guid? subSectionId = await ResolveSubSectionAsync(resource, eventId, sectionId, cancellationToken);
 
@@ -229,78 +233,6 @@ public sealed class ActivityPlacementResourceDefinition : JsonApiResourceDefinit
     }
 
     /// <summary>
-    /// Resolves <see cref="ActivityPlacement.TabId"/>/<see cref="ActivityPlacement.TabName"/> - Tab is
-    /// required on every Placement (the ticket's own acceptance criteria), so exactly one of the two must
-    /// be supplied.
-    /// </summary>
-    private async Task<Guid> ResolveTabAsync(ActivityPlacement resource, Guid eventId, CancellationToken cancellationToken)
-    {
-        if (resource.TabId is { } tabId)
-        {
-            bool belongsToEvent = await _dbContext.Tabs.AsNoTracking()
-                .AnyAsync(tab => tab.Id == tabId && tab.EventId == eventId, cancellationToken);
-
-            if (!belongsToEvent)
-            {
-                throw UnprocessableEntity("Unknown Tab.", $"Tab '{tabId}' does not exist on this Event.", "/data/attributes/tabId");
-            }
-
-            return tabId;
-        }
-
-        string? name = NormalizeOrNull(resource.TabName);
-        if (name is null)
-        {
-            throw UnprocessableEntity("Tab is required.", "Supply either tabId or tabName.", "/data/attributes/tabId");
-        }
-
-        Tab? existing = await FindByNameAsync(_dbContext.Tabs.Where(tab => tab.EventId == eventId), tab => tab.Name, name.ToUpperInvariant(), cancellationToken);
-        if (existing is not null)
-        {
-            return existing.Id;
-        }
-
-        int sortOrder = await _dbContext.Tabs.AsNoTracking().CountAsync(tab => tab.EventId == eventId, cancellationToken);
-        var created = Tab.Create(eventId, name, sortOrder);
-        _dbContext.Tabs.Add(created);
-        return created.Id;
-    }
-
-    /// <summary>Resolves <see cref="ActivityPlacement.SubTabId"/>/<see cref="ActivityPlacement.SubTabName"/> - optional, scoped to the already-resolved <paramref name="tabId"/>.</summary>
-    private async Task<Guid?> ResolveSubTabAsync(ActivityPlacement resource, Guid eventId, Guid tabId, CancellationToken cancellationToken)
-    {
-        if (resource.SubTabId is { } subTabId)
-        {
-            bool belongsToTab = await _dbContext.SubTabs.AsNoTracking()
-                .AnyAsync(subTab => subTab.Id == subTabId && subTab.TabId == tabId, cancellationToken);
-
-            if (!belongsToTab)
-            {
-                throw UnprocessableEntity("Unknown Sub Tab.", $"Sub Tab '{subTabId}' is not under this Placement's Tab.", "/data/attributes/subTabId");
-            }
-
-            return subTabId;
-        }
-
-        string? name = NormalizeOrNull(resource.SubTabName);
-        if (name is null)
-        {
-            return null;
-        }
-
-        SubTab? existing = await FindByNameAsync(_dbContext.SubTabs.Where(subTab => subTab.TabId == tabId), subTab => subTab.Name, name.ToUpperInvariant(), cancellationToken);
-        if (existing is not null)
-        {
-            return existing.Id;
-        }
-
-        int sortOrder = await _dbContext.SubTabs.AsNoTracking().CountAsync(subTab => subTab.TabId == tabId, cancellationToken);
-        var created = SubTab.Create(eventId, tabId, name, sortOrder);
-        _dbContext.SubTabs.Add(created);
-        return created.Id;
-    }
-
-    /// <summary>
     /// Resolves <see cref="ActivityPlacement.SectionId"/>/<see cref="ActivityPlacement.SectionName"/> -
     /// optional. Its parent is derived, not separately supplied: the resolved <paramref name="subTabId"/>
     /// when this Placement sets one, otherwise the bare <paramref name="tabId"/> (ADR-0046).
@@ -319,13 +251,13 @@ public sealed class ActivityPlacementResourceDefinition : JsonApiResourceDefinit
 
             if (!matchesParent)
             {
-                throw UnprocessableEntity("Unknown Section.", $"Section '{sectionId}' does not belong under this Placement's resolved path.", "/data/attributes/sectionId");
+                throw PlacementErrors.Unprocessable("Unknown Section.", $"Section '{sectionId}' does not belong under this Placement's resolved path.", "/data/attributes/sectionId");
             }
 
             return sectionId;
         }
 
-        string? name = NormalizeOrNull(resource.SectionName);
+        string? name = TierPathResolver.NormalizeOrNull(resource.SectionName);
         if (name is null)
         {
             return null;
@@ -335,7 +267,7 @@ public sealed class ActivityPlacementResourceDefinition : JsonApiResourceDefinit
             ? _dbContext.Sections.Where(section => section.ParentSubTabId == scopedSubTab)
             : _dbContext.Sections.Where(section => section.ParentTabId == tabId);
 
-        Section? existing = await FindByNameAsync(siblings, section => section.Name, name.ToUpperInvariant(), cancellationToken);
+        Section? existing = await TierPathResolver.FindByNameAsync(siblings, section => section.Name, name, cancellationToken);
         if (existing is not null)
         {
             return existing.Id;
@@ -356,7 +288,7 @@ public sealed class ActivityPlacementResourceDefinition : JsonApiResourceDefinit
     private async Task<Guid?> ResolveSubSectionAsync(
         ActivityPlacement resource, Guid eventId, Guid? sectionId, CancellationToken cancellationToken)
     {
-        bool wantsSubSection = resource.SubSectionId is not null || NormalizeOrNull(resource.SubSectionName) is not null;
+        bool wantsSubSection = resource.SubSectionId is not null || TierPathResolver.NormalizeOrNull(resource.SubSectionName) is not null;
         if (!wantsSubSection)
         {
             return null;
@@ -364,7 +296,7 @@ public sealed class ActivityPlacementResourceDefinition : JsonApiResourceDefinit
 
         if (sectionId is not { } resolvedSectionId)
         {
-            throw UnprocessableEntity("Sub Section requires a Section.", "Supply a sectionId or sectionName on this same Placement.", "/data/attributes/subSectionId");
+            throw PlacementErrors.Unprocessable("Sub Section requires a Section.", "Supply a sectionId or sectionName on this same Placement.", "/data/attributes/subSectionId");
         }
 
         if (resource.SubSectionId is { } subSectionId)
@@ -374,15 +306,15 @@ public sealed class ActivityPlacementResourceDefinition : JsonApiResourceDefinit
 
             if (!belongsToSection)
             {
-                throw UnprocessableEntity("Unknown Sub Section.", $"Sub Section '{subSectionId}' is not under this Placement's Section.", "/data/attributes/subSectionId");
+                throw PlacementErrors.Unprocessable("Unknown Sub Section.", $"Sub Section '{subSectionId}' is not under this Placement's Section.", "/data/attributes/subSectionId");
             }
 
             return subSectionId;
         }
 
-        string name = NormalizeOrNull(resource.SubSectionName)!;
-        SubSection? existing = await FindByNameAsync(
-            _dbContext.SubSections.Where(subSection => subSection.SectionId == resolvedSectionId), subSection => subSection.Name, name.ToUpperInvariant(), cancellationToken);
+        string name = TierPathResolver.NormalizeOrNull(resource.SubSectionName)!;
+        SubSection? existing = await TierPathResolver.FindByNameAsync(
+            _dbContext.SubSections.Where(subSection => subSection.SectionId == resolvedSectionId), subSection => subSection.Name, name, cancellationToken);
         if (existing is not null)
         {
             return existing.Id;
@@ -395,15 +327,15 @@ public sealed class ActivityPlacementResourceDefinition : JsonApiResourceDefinit
         return created.Id;
     }
 
-    /// <remarks>
-    /// ADR-0047's Tab/Sub-Tab InfoPage-exclusivity rule has nothing to check against yet - InfoPage's own
-    /// Placement table doesn't exist in code (P5-18/19/20/21 all closed pre-four-tier-model, see this
-    /// story's plan). Kept as its own named, documented no-op rather than omitted outright, so a future
-    /// InfoPage Placement story has one obvious place to add the real check instead of rediscovering that
-    /// this rule was never wired in.
-    /// </remarks>
-    private static Task ValidateNoInfoPageConflictAsync(Guid tabId, Guid? subTabId, CancellationToken cancellationToken) =>
-        Task.CompletedTask;
+    /// <remarks>ADR-0047: a screen is the exact (Tab, Sub Tab) pair, so a Section-level Placement counts against its Tab's (or Sub Tab's) screen.</remarks>
+    private async Task ValidateNoInfoPageConflictAsync(Guid tabId, Guid? subTabId, CancellationToken cancellationToken)
+    {
+        if (await _dbContext.InfoPagePlacements.AsNoTracking()
+                .AnyAsync(placement => placement.TabId == tabId && placement.SubTabId == subTabId, cancellationToken))
+        {
+            throw PlacementErrors.Conflict(PlacementErrors.SlotHasInfoPage, "This screen already shows an InfoPage.");
+        }
+    }
 
     /// <remarks>
     /// A pre-check, not a <see cref="DbUpdateException"/> catch - matching <see cref="UserRoleResourceDefinition.CheckForConflictsAsync"/>'s
@@ -422,41 +354,8 @@ public sealed class ActivityPlacementResourceDefinition : JsonApiResourceDefinit
             return;
         }
 
-        throw new JsonApiException(new ErrorObject(HttpStatusCode.Conflict)
-        {
-            Title = "Resource conflict.",
-            Detail = "This Activity is already placed at this exact path.",
-            Source = new ErrorSource { Pointer = "/data" }
-        });
+        throw PlacementErrors.Conflict(PlacementErrors.Duplicate, "This Activity is already placed at this exact path.");
     }
-
-    /// <remarks>Case-insensitive via <c>ToUpper()</c> translated into the query, matching <see cref="FacilityTypeResourceDefinition.CheckForConflictsAsync"/>'s portable technique rather than relying on column collation (ADR-0014: SQLite defaults to case-sensitive, unlike SQL Server).</remarks>
-    private static async Task<TTier?> FindByNameAsync<TTier>(
-        IQueryable<TTier> scope, System.Linq.Expressions.Expression<Func<TTier, string>> nameSelector, string normalizedName, CancellationToken cancellationToken)
-        where TTier : class
-    {
-        var parameter = nameSelector.Parameters[0];
-        var upperCall = System.Linq.Expressions.Expression.Call(nameSelector.Body, nameof(string.ToUpper), null);
-        var predicate = System.Linq.Expressions.Expression.Lambda<Func<TTier, bool>>(
-            System.Linq.Expressions.Expression.Equal(upperCall, System.Linq.Expressions.Expression.Constant(normalizedName)), parameter);
-
-        return await scope.AsNoTracking().FirstOrDefaultAsync(predicate, cancellationToken);
-    }
-
-    /// <remarks>Returns the trimmed value in its original casing - for the stored Name, not the comparison. Comparison callers uppercase it themselves via <see cref="FindByNameAsync{TTier}"/>'s own normalization.</remarks>
-    private static string? NormalizeOrNull(string? value)
-    {
-        string? trimmed = value?.Trim();
-        return string.IsNullOrEmpty(trimmed) ? null : trimmed;
-    }
-
-    private static JsonApiException UnprocessableEntity(string title, string detail, string pointer) =>
-        new(new ErrorObject(HttpStatusCode.UnprocessableEntity)
-        {
-            Title = title,
-            Detail = detail,
-            Source = new ErrorSource { Pointer = pointer }
-        });
 
     private ActivityPlacementAccessPolicy CurrentPolicy() =>
         new(_httpContextAccessor.HttpContext?.User ?? throw new InvalidOperationException(

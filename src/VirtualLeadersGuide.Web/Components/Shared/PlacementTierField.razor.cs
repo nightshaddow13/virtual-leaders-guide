@@ -50,6 +50,10 @@ public partial class PlacementTierField
     [Parameter]
     public IReadOnlyList<TierOption> Options { get; set; } = [];
 
+    /// <summary>Replaces each choice's "N activities" note - the InfoPage picker says what already fills that screen (P5-24, #208). An empty string shows nothing.</summary>
+    [Parameter]
+    public Func<string, string>? Annotate { get; set; }
+
     private string? NearDuplicate => PlacementTreeModel.NearDuplicateOf(Options, Value);
 
     /// <remarks>
@@ -63,6 +67,11 @@ public partial class PlacementTierField
 
     private string CountText(string optionName)
     {
+        if (Annotate is not null)
+        {
+            return Annotate(optionName);
+        }
+
         int count = Options.FirstOrDefault(o => o.Name == optionName)?.ActivityCount ?? 0;
         return count == 1 ? "1 activity" : $"{count} activities";
     }

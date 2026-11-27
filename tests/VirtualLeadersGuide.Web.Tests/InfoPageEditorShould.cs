@@ -260,6 +260,10 @@ public class InfoPageEditorShould : BunitContext
     {
         Services.AddSingleton(ApiClientTestFactory.CreateEventClient(eventHandler));
         Services.AddSingleton(ApiClientTestFactory.CreateInfoPageClient(infoPageHandler));
+        Services.AddSingleton(ApiClientTestFactory.CreatePlacementClient(
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = Array.Empty<object>() })));
+        Services.AddSingleton(ApiClientTestFactory.CreateInfoPagePlacementClient(
+            StubHttpMessageHandler.RespondingWith(HttpStatusCode.NotFound)));
         RadzenTestServices.RegisterRadzenComponentsHost(Services);
     }
 
