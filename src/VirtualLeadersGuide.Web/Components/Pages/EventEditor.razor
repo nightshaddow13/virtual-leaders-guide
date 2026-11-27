@@ -200,12 +200,11 @@
                                                  BadgeStyle="@(director.HasCredential ? BadgeStyle.Success : BadgeStyle.Warning)" Variant="Variant.Outlined" />
                                     @if (director.IsAdmin)
                                     {
-                                        <span @ref="adminGuardAnchors[director.GrantId]"
-                                              @onmouseenter="@(() => TooltipService.Open(adminGuardAnchors[director.GrantId], AdminGuardTooltipText))">
+                                        <DisabledTooltip Text="@AdminGuardTooltipText">
                                             <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Text"
                                                           Size="ButtonSize.ExtraSmall" Disabled="true"
                                                           aria-label="@director.RemoveButtonAriaLabel" />
-                                        </span>
+                                        </DisabledTooltip>
                                     }
                                     else
                                     {

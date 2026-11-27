@@ -42,13 +42,13 @@ public partial class Dashboard
     /// <remarks>
     /// Not the icon buttons' own ~44px each: the grid renders with a fixed table layout
     /// (<c>rz-grid-table-fixed</c>), so a column can never grow to fit its content - one narrower than the
-    /// buttons clips them against the cell's padding box instead of just looking cramped. Three buttons for an
-    /// Admin (Edit, Duplicate - P2-21, #116, and Delete - P2-17, #112; a Director only ever sees the first) at
-    /// ~44px each, two 4px gaps between them, and the same breathing room on both sides that 76px reserved for
-    /// one button, comes to 172px. The buttons themselves are icon-only, not text - see ADR-0037 for the
-    /// row-action convention this establishes.
+    /// buttons clips them against the cell's padding box instead of just looking cramped. Four buttons for an
+    /// Admin (Open guide - P2-23, #213, Edit, Duplicate - P2-21, #116, and Delete - P2-17, #112) at ~44px each,
+    /// three 4px gaps between them, and the same breathing room on both sides that 76px reserved for one button,
+    /// comes to 220px. A Director sees only two of them and deliberately shares the width. The buttons themselves
+    /// are icon-only, not text - see ADR-0037 for the row-action convention this establishes.
     /// </remarks>
-    private const string ActionColumnWidth = "172px";
+    private const string ActionColumnWidth = "220px";
 
     /// <remarks>
     /// Same fixed-table-layout reasoning as <see cref="ActionColumnWidth"/> - the STATUS column's own badge

@@ -1,0 +1,7 @@
+@* ADR-0052's wrapper: a disabled control can't take hover or focus itself, so this element does. The reason names it
+   through aria-labelledby, not aria-describedby: Radzen's tooltip script overwrites and then removes the latter. *@
+<span @ref="anchor" tabindex="0" role="group" aria-labelledby="@reasonId" @attributes="AdditionalAttributes"
+      @onmouseenter="Show" @onfocus="Show" @onblur="Hide">
+    @ChildContent
+    <span id="@reasonId" hidden>@Text</span>
+</span>
