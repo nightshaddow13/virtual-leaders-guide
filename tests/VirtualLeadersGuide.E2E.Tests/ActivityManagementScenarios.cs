@@ -5,8 +5,8 @@ using VirtualLeadersGuide.Identity.Contracts;
 namespace VirtualLeadersGuide.E2E.Tests;
 
 /// <remarks>
-/// Covers P5-6 (#87, create), P5-7 (#93, list) and P5-8 (#94, edit). A successful create lands on the new
-/// Activity's own edit page, so create scenarios assert a detail-URL pattern and then navigate to the list
+/// Covers P5-6 (#87, create), P5-7 (#93, list), P5-8 (#94, edit) and P5-23 (#206, one page for the details and
+/// the Placements). A successful create lands on the new Activity's own page, so create scenarios assert a detail-URL pattern and then navigate to the list
 /// themselves when they need to see it. Every
 /// Activity here is created through the real UI within the same scenario - Activities cascade-delete with
 /// their Event, so <see cref="E2ETestBase.TrackEvent"/> alone covers cleanup (ADR-0039). The
@@ -53,19 +53,64 @@ public class ActivityManagementScenarios : E2ETestBase
             Guid activityId = await CreateActivityAsync(eventId, "Original Name");
 
             string renamedTo = $"e2e-Renamed {Guid.NewGuid():n}";
-            await Page.GotoAsync(ActivityEditorUrl(eventId, activityId));
+            await Page.GotoAsync(ActivityUrl(eventId, activityId));
             await Page.Locator("#Name").FillAsync(renamedTo);
             await Page.Locator("#Description").FillAsync("Now with **portaging**.");
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" }).ClickAsync();
-            await Expect(Page).ToHaveURLAsync(
-                ActivitiesListUrl(eventId), InteractiveUrl());
-            await Expect(Page.GetByText(renamedTo)).ToBeVisibleAsync(
-                InteractiveVisible());
+            await ExpectSavedAsAsync(renamedTo);
+            await Expect(Page).ToHaveURLAsync(ActivityUrl(eventId, activityId));
 
-            await Page.GotoAsync(ActivityEditorUrl(eventId, activityId));
+            await Page.ReloadAsync();
             await Expect(Page.Locator("#Name")).ToHaveValueAsync(
                 renamedTo, InteractiveValue());
             await Expect(Page.Locator(".md-pane-preview strong")).ToHaveTextAsync("portaging");
+        });
+
+    [Fact(DisplayName = "Given an Activity, when an Admin renames it and places it and saves once, then both persist")]
+    public async Task GivenAnActivity_WhenAnAdminRenamesItAndPlacesItAndSavesOnce_ThenBothPersist() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, _) = await CreateEventAsync("Combined Save Host");
+            Guid activityId = await CreateActivityAsync(eventId, "Before Combined Save");
+            string renamedTo = $"e2e-Combined {Guid.NewGuid():n}";
+            string tab = $"e2e-Morning {Guid.NewGuid():n}";
+
+            await Page.GotoAsync(ActivityUrl(eventId, activityId));
+            await Page.Locator("#Name").FillAsync(renamedTo);
+            await Page.Locator("#PlacementTab").FillAsync(tab);
+            await Page.Locator("#PlacementTab").PressAsync("Tab");
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Place it" }).ClickAsync();
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" }).ClickAsync();
+            await Expect(Page.Locator(".ptn-pending")).ToHaveCountAsync(0, InteractiveCount());
+            await ExpectSavedAsAsync(renamedTo);
+
+            await Page.ReloadAsync();
+            await ExpectSavedAsAsync(renamedTo);
+            await Expect(Page.Locator(".ptn-lit")).ToHaveTextAsync(renamedTo, InteractiveText());
+            await Expect(Page.Locator(".ptn-tab")).ToContainTextAsync(tab, InteractiveContainText());
+        });
+
+    [Fact(DisplayName = "Given an Activity with an unsaved Name, when an Admin clicks Cancel, then they can keep editing or discard and leave")]
+    public async Task GivenAnActivityWithAnUnsavedName_WhenAnAdminClicksCancel_ThenTheyCanKeepEditingOrDiscardAndLeave() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, _) = await CreateEventAsync("Dirty Name Guard Host");
+            Guid activityId = await CreateActivityAsync(eventId, "Unrenamed");
+            string typed = $"e2e-Typed {Guid.NewGuid():n}";
+
+            await Page.GotoAsync(ActivityUrl(eventId, activityId));
+            await Page.Locator("#Name").FillAsync(typed);
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Cancel" }).ClickAsync();
+            await Expect(Page.GetByText("Discard unsaved changes?")).ToBeVisibleAsync(InteractiveVisible());
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Keep editing" }).ClickAsync();
+            await Expect(Page).ToHaveURLAsync(ActivityUrl(eventId, activityId));
+            await Expect(Page.Locator("#Name")).ToHaveValueAsync(typed, InteractiveValue());
+
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Cancel" }).ClickAsync();
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Discard and leave" }).ClickAsync();
+            await Expect(Page).ToHaveURLAsync(ActivitiesListUrl(eventId), InteractiveUrl());
         });
 
     /// <remarks>Pins ADR-0069: an assigned Director gets the exact same full CRUD an Admin does - unlike Event's own details, which stay Admin-only.</remarks>
@@ -88,15 +133,12 @@ public class ActivityManagementScenarios : E2ETestBase
 
             string createdPath = new Uri(Page.Url).AbsolutePath;
             Guid activityId = Guid.Parse(createdPath[(createdPath.LastIndexOf('/') + 1)..]);
-            await Page.GotoAsync(ActivityEditorUrl(eventId, activityId));
+            await Page.GotoAsync(ActivityUrl(eventId, activityId));
 
             string renamedTo = $"e2e-Director Renamed {Guid.NewGuid():n}";
             await Page.Locator("#Name").FillAsync(renamedTo);
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" }).ClickAsync();
-            await Expect(Page).ToHaveURLAsync(
-                ActivitiesListUrl(eventId), InteractiveUrl());
-            await Expect(Page.GetByText(renamedTo)).ToBeVisibleAsync(
-                InteractiveVisible());
+            await ExpectSavedAsAsync(renamedTo);
         });
 
     [Fact(DisplayName = "Given an Event with Activities, when an Admin opens its Activities list, then each Activity appears")]
@@ -155,8 +197,8 @@ public class ActivityManagementScenarios : E2ETestBase
                 InteractiveVisible());
         });
 
-    [Fact(DisplayName = "Given a Director not assigned to an Event, when navigating directly to one of its Activities' editor, then they are denied")]
-    public async Task GivenADirectorNotAssignedToAnEvent_WhenNavigatingDirectlyToOneOfItsActivitiesEditor_ThenTheyAreDenied() =>
+    [Fact(DisplayName = "Given a Director not assigned to an Event, when navigating directly to one of its Activities by id, then they are denied")]
+    public async Task GivenADirectorNotAssignedToAnEvent_WhenNavigatingDirectlyToOneOfItsActivitiesById_ThenTheyAreDenied() =>
         await RunAsync(async () =>
         {
             await SignInAsAdminAsync();
@@ -167,16 +209,50 @@ public class ActivityManagementScenarios : E2ETestBase
 
             await CreateAndSignInDirectorAsync(assignedEventId);
 
-            await Page.GotoAsync(ActivityEditorUrl(unassignedEventId, activityId));
+            await Page.GotoAsync(ActivityUrl(unassignedEventId, activityId));
 
-            await Expect(Page.GetByText("You don't have access to this Event")).ToBeVisibleAsync(
+            await Expect(Page.GetByText("You don't have access to this Activity")).ToBeVisibleAsync(
                 InteractiveVisible());
+        });
+
+    /// <remarks>
+    /// Links are a different route out than Cancel: the router isn't interactive, so a link click can navigate
+    /// without ever reaching the circuit's location-changing handler. Only a real browser shows which happens.
+    /// </remarks>
+    [Theory(DisplayName = "Given an Activity with an unsaved Name, when an Admin follows a link away, then they are warned and can keep editing or leave")]
+    [InlineData(".rz-breadcrumb", "ACTIVITIES", "/activities$")]
+    [InlineData("body", "Dashboard", "/dashboard$")]
+    public async Task GivenAnActivityWithAnUnsavedName_WhenAnAdminFollowsALinkAway_ThenTheyAreWarned(string scope, string link, string destination) =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, _) = await CreateEventAsync("Link Guard Host");
+            Guid activityId = await CreateActivityAsync(eventId, "Linked Away");
+            string typed = $"e2e-Typed {Guid.NewGuid():n}";
+
+            await Page.GotoAsync(ActivityUrl(eventId, activityId));
+            await Page.Locator("#Name").FillAsync(typed);
+            await Page.Locator(scope).GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = link }).First.ClickAsync();
+
+            await Expect(Page.GetByText("Discard unsaved changes?")).ToBeVisibleAsync(InteractiveVisible());
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Keep editing" }).ClickAsync();
+            await Expect(Page).ToHaveURLAsync(ActivityUrl(eventId, activityId));
+            await Expect(Page.Locator("#Name")).ToHaveValueAsync(typed, InteractiveValue());
+
+            await Page.Locator(scope).GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = link }).First.ClickAsync();
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Discard and leave" }).ClickAsync();
+            await Expect(Page).ToHaveURLAsync(new Regex(destination), InteractiveUrl());
+            await Expect(Page.Locator("#Name")).ToHaveCountAsync(0, InteractiveCount());
         });
 
     private static Regex ActivityDetailUrlPattern { get; } = new(@"activities/[0-9a-f-]{36}$");
 
-    private string ActivityEditorUrl(Guid eventId, Guid activityId) =>
-        new Uri(Fixture.WebBaseUrl, $"dashboard/events/{eventId}/activities/{activityId}/edit").ToString();
+    private string ActivityUrl(Guid eventId, Guid activityId) =>
+        new Uri(Fixture.WebBaseUrl, $"dashboard/events/{eventId}/activities/{activityId}").ToString();
+
+    /// <remarks>The breadcrumb's last item is the saved Name, upper-cased, so it only reads this once the save landed.</remarks>
+    private async Task ExpectSavedAsAsync(string name) =>
+        await Expect(Page.Locator(".rz-breadcrumb")).ToContainTextAsync(name.ToUpperInvariant(), InteractiveContainText());
 
     /// <summary>Creates an Activity through the real UI, returning its id. See <see cref="E2ETestBase.CreateEventAsync"/>'s identical shape.</summary>
     private async Task<Guid> CreateActivityAsync(Guid eventId, string label)

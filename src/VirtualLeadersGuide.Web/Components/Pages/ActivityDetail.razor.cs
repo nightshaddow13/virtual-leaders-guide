@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
-using Microsoft.AspNetCore.Components.Routing;
+using Microsoft.AspNetCore.Components.Forms;
 using Radzen;
 using VirtualLeadersGuide.Web.Activities;
 using VirtualLeadersGuide.Web.Authorization;
@@ -10,15 +10,23 @@ using VirtualLeadersGuide.Web.Events;
 namespace VirtualLeadersGuide.Web.Components.Pages;
 
 /// <summary>
-/// An Activity's page (P5-11, #96): the Placement builder beside the live "Where it appears" tree
-/// (wireframe turn 2, Direction C). "Place it" adds an unsaved ghost row; <see cref="SaveAsync"/> is what
-/// makes ghosts permanent; leaving with ghosts pending asks once first. Removing a saved row (P5-12, #97)
-/// writes immediately - see <see cref="RemoveAsync"/>.
+/// The one page for an existing Activity (P5-23, #206; wireframe turn 2, Direction C): Name, Description and
+/// beside the live "Where it appears" tree with the Placement builder under it. "Place it" adds an unsaved ghost row;
+/// <see cref="SaveAsync"/> commits the Name/Description and the ghosts from one button; leaving with either
+/// pending asks once first. Removing a saved row (P5-12, #97) writes immediately - see <see cref="RemoveAsync"/>.
 /// </summary>
 /// <remarks>
-/// Editing the Activity's Name and Description lives on this same page once P5-8 (#94) ships - this story
-/// builds the page as the host for the Placement surface that ticket's wireframe assumes, because P5-8 had
-/// not shipped an edit page to attach it to.
+/// Loading and page state live here, saving and the leave guard in <c>ActivityDetail.Save.cs</c>, removal in
+/// <c>ActivityDetail.Removal.cs</c>. Everything that displays the Activity's name - tree rows, ghosts, dialogs,
+/// breadcrumb, title - shows the saved <see cref="activity"/>, never what is being typed into <see cref="form"/>.
+/// <para>
+/// The builder sits under the tree rather than under the Description where the wireframe draws it (asked for
+/// after seeing the page), and the tree is left out while it would be empty.
+/// </para>
+/// <para>
+/// In the markup, the two <c>fieldset</c>s exist only so that losing permission disables the details and the
+/// builder. The builder is outside the <c>EditForm</c>: inside it, Enter in an autofill field would submit.
+/// </para>
 /// </remarks>
 public partial class ActivityDetail : IDisposable
 {
@@ -40,9 +48,11 @@ public partial class ActivityDetail : IDisposable
     [Inject]
     private NotificationService NotificationService { get; set; } = default!;
 
+    /// <summary>The Event from the route.</summary>
     [Parameter]
     public Guid EventId { get; set; }
 
+    /// <summary>The Activity being edited, from the route.</summary>
     [Parameter]
     public Guid ActivityId { get; set; }
 
@@ -58,12 +68,29 @@ public partial class ActivityDetail : IDisposable
     private PlacementTreeDto tree = PlacementTreeDto.Empty;
     private Dictionary<Guid, string> activityNames = [];
     private readonly List<PlacementPath> ghosts = [];
-    private PlacementTreeModel? model;
-    private string? saveErrorMessage;
-    private bool isSaving;
-    private IDisposable? locationChangingRegistration;
 
-    private int PlacedCount => tree.Placements.Count(p => p.ActivityId == ActivityId) + ghosts.Count;
+    /// <summary>Placements written since <see cref="tree"/> was last read, so they stay drawn when it can't be read again (access lost, or the read failed).</summary>
+    private readonly List<(Guid Id, PlacementPath Path)> savedSinceLoad = [];
+
+    private PlacementTreeModel? model;
+    private readonly ActivityFormModel form = new();
+    private EditContext editContext = default!;
+    private string? saveErrorMessage;
+    private bool permissionLost;
+
+    private const string PermissionLostText = "You no longer have permission to edit this Activity.";
+    private const string RefreshFailedText = "Couldn't refresh the placements, so the tree may be out of date. Reload the page.";
+
+    private bool WriteBlocked => isSaving || isRemoving || permissionLost;
+
+    private int PlacedCount => tree.Placements.Count(p => p.ActivityId == ActivityId) + savedSinceLoad.Count + ghosts.Count;
+
+    private bool IsDirty => activity is not null && form.Differs(activity.Name, activity.Description);
+
+    private bool HasUnsavedChanges => IsDirty || ghosts.Count > 0;
+
+    /// <inheritdoc/>
+    protected override void OnInitialized() => editContext = new EditContext(form);
 
     /// <remarks>
     /// Gates on <see cref="ApiEventClient.GetEventAsync"/> first, exactly like <c>ActivityList.razor.cs</c> -
@@ -113,6 +140,7 @@ public partial class ActivityDetail : IDisposable
             }
 
             activity = activityDto;
+            ResetForm();
             await LoadTreeAsync();
         }
         catch (Exception ex) when (ex is EventDataUnavailableException or ActivityDataUnavailableException)
@@ -125,40 +153,9 @@ public partial class ActivityDetail : IDisposable
         state = PageState.Ready;
     }
 
-    /// <remarks>
-    /// Registered after first render, not in initialization: a location-changing handler only fires inside
-    /// an interactive circuit, and this page is <c>prerender: false</c>, so the first render already is one.
-    /// </remarks>
-    protected override void OnAfterRender(bool firstRender)
+    /// <remarks>Empty on purpose: receiving the callback is what re-renders the page, so Save and the leave guard see the edit.</remarks>
+    private void OnDetailsChanged()
     {
-        if (firstRender)
-        {
-            locationChangingRegistration = NavigationManager.RegisterLocationChangingHandler(ConfirmLeavingAsync);
-        }
-    }
-
-    /// <summary>Prompts once when leaving with ghost rows pending (the ticket's "leaving prompts once"; Cancel goes through the same guard, which is how "Cancel discards them all" is confirmed).</summary>
-    private async ValueTask ConfirmLeavingAsync(LocationChangingContext context)
-    {
-        if (ghosts.Count == 0 || isSaving)
-        {
-            return;
-        }
-
-        var parameters = new Dictionary<string, object?>
-        {
-            [nameof(ConfirmDialog.Message)] =
-                ghosts.Count == 1 ? "You have 1 unsaved placement." : $"You have {ghosts.Count} unsaved placements.",
-            [nameof(ConfirmDialog.Consequences)] = (IReadOnlyList<string>)[.. ghosts.Select(g => g.Display), "Leaving discards them"],
-            [nameof(ConfirmDialog.ConfirmText)] = "Discard and leave",
-            [nameof(ConfirmDialog.DismissText)] = "Keep editing"
-        };
-
-        bool? leave = await DialogService.OpenAsync<ConfirmDialog>("Discard unsaved placements?", parameters);
-        if (leave is not true)
-        {
-            context.PreventNavigation();
-        }
     }
 
     private Task OnPlace(PlacementPath path)
@@ -169,100 +166,20 @@ public partial class ActivityDetail : IDisposable
         return Task.CompletedTask;
     }
 
-    /// <remarks>
-    /// Sends each ghost as its own request, in the order they were placed - not one batch - so a ghost that
-    /// introduces a Tab is already persisted when a later ghost reuses it by name (Api resolves each by name,
-    /// ADR-0072). Stops at the first rejection and keeps that ghost and every later one pending, so nothing
-    /// the user placed is lost to a partial failure; a 409 (already placed - the stale-tree race) is dropped as
-    /// satisfied rather than treated as a failure. The tree is reloaded either way, so what's drawn matches
-    /// what actually saved.
-    /// </remarks>
-    private async Task SaveAsync()
-    {
-        isSaving = true;
-        saveErrorMessage = null;
-        var alreadyPlaced = new List<string>();
-        var onInfoPageScreens = new List<string>();
-
-        try
-        {
-            foreach (PlacementPath ghost in ghosts.ToList())
-            {
-                (PlacementWriteOutcome outcome, _, _) = await PlacementClient.CreateAsync(
-                    ActivityId, ghost.Tab, ghost.SubTab, ghost.Section, ghost.SubSection, CancellationToken.None);
-
-                if (outcome == PlacementWriteOutcome.Forbidden)
-                {
-                    state = PageState.Denied;
-                    return;
-                }
-
-                if (outcome == PlacementWriteOutcome.Invalid)
-                {
-                    saveErrorMessage = $"Couldn't save \"{ghost.Display}\". Check its levels and try again.";
-                    break;
-                }
-
-                ghosts.Remove(ghost);
-                if (outcome == PlacementWriteOutcome.Conflict)
-                {
-                    alreadyPlaced.Add(ghost.Display);
-                }
-                else if (outcome == PlacementWriteOutcome.SlotHasInfoPage)
-                {
-                    onInfoPageScreens.Add(ghost.Display);
-                }
-            }
-
-            await LoadTreeAsync();
-            RebuildModel();
-
-            saveErrorMessage ??= DescribeSkipped(alreadyPlaced, onInfoPageScreens);
-            if (saveErrorMessage is null)
-            {
-                NotificationService.Notify(NotificationSeverity.Success, "Placements saved");
-            }
-        }
-        catch (ActivityDataUnavailableException)
-        {
-            saveErrorMessage = "Something went wrong saving these placements. Try again.";
-            RebuildModel();
-        }
-        finally
-        {
-            isSaving = false;
-        }
-    }
-
-    private static string? DescribeSkipped(List<string> alreadyPlaced, List<string> onInfoPageScreens)
-    {
-        var messages = new List<string>();
-        if (alreadyPlaced.Count > 0)
-        {
-            messages.Add($"Already placed, so skipped: {string.Join(", ", alreadyPlaced)}.");
-        }
-
-        if (onInfoPageScreens.Count > 0)
-        {
-            messages.Add($"Skipped, because an Info page is shown there: {string.Join(", ", onInfoPageScreens)}.");
-        }
-
-        return messages.Count == 0 ? null : string.Join(" ", messages);
-    }
+    /// <summary>Puts the saved Name and Description back into the form, leaving it clean.</summary>
+    private void ResetForm() => form.Load(activity!.Name, activity.Description);
 
     private async Task LoadTreeAsync()
     {
         tree = await PlacementClient.GetTreeForEventAsync(EventId, CancellationToken.None);
+        savedSinceLoad.Clear();
         (IReadOnlyList<ActivityDto> activities, _) =
             await ActivityClient.GetActivitiesForEventAsync(EventId, 1, 9999, null, CancellationToken.None);
         activityNames = activities.ToDictionary(a => a.Id, a => a.Name);
     }
 
     private void RebuildModel() =>
-        model = new PlacementTreeModel(tree, ActivityId, activity!.Name, activityNames, ghosts);
+        model = new PlacementTreeModel(tree, ActivityId, activity!.Name, activityNames, ghosts, savedSinceLoad);
 
     private void NavigateToList() => NavigationManager.NavigateTo($"dashboard/events/{EventId}/activities");
-
-    /// <inheritdoc/>
-    public void Dispose() => locationChangingRegistration?.Dispose();
 }

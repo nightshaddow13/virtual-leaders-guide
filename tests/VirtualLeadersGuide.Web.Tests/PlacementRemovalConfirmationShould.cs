@@ -81,7 +81,7 @@ public class PlacementRemovalConfirmationShould
     public void OfferToDeleteTheActivityInstead_WhenTheActivityHasNoOtherPlacement_ForForLastPlacement()
     {
         Dictionary<string, object?> parameters = PlacementRemovalConfirmation.ForLastPlacement(
-            "Canoe Basics", new ActivityDeletionImpact(1, [new TierRef(TierKind.Tab, "Morning")]), pendingGhosts: 0);
+            "Canoe Basics", new ActivityDeletionImpact(1, [new TierRef(TierKind.Tab, "Morning")]), unsaved: default);
 
         Assert.Equal(
             "An activity needs at least one placement. Delete Canoe Basics instead?", parameters[nameof(ConfirmDialog.Message)]);
@@ -99,8 +99,17 @@ public class PlacementRemovalConfirmationShould
     public void WarnThatPendingPlacementsAreDiscarded_WhenGhostRowsArePending_ForForLastPlacement()
     {
         IReadOnlyList<string> bullets = Bullets(PlacementRemovalConfirmation.ForLastPlacement(
-            "Canoe Basics", new ActivityDeletionImpact(1, []), pendingGhosts: 2));
+            "Canoe Basics", new ActivityDeletionImpact(1, []), new UnsavedWork(Placements: 2)));
 
         Assert.Contains("Your 2 unsaved placements are discarded.", bullets);
+    }
+
+    [Fact]
+    public void WarnThatUnsavedDetailsAreDiscarded_WhenNameOrDescriptionIsDirty_ForForLastPlacement()
+    {
+        IReadOnlyList<string> bullets = Bullets(PlacementRemovalConfirmation.ForLastPlacement(
+            "Canoe Basics", new ActivityDeletionImpact(1, []), new UnsavedWork(Details: true)));
+
+        Assert.Contains("Your unsaved Name and Description changes are discarded.", bullets);
     }
 }

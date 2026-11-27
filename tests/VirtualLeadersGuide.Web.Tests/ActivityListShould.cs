@@ -102,32 +102,11 @@ public class ActivityListShould : BunitContext
     }
 
     [Fact]
-    public void ShowAnEditIcon_WhenTheSignedInUserIsAnAdmin_ForLoadDataAsync()
+    public void RenderNoEditIcon_WhenAnActivityIsListed_ForLoadDataAsync()
     {
         IRenderedComponent<ActivityList> cut = RenderWithOneActivity("admin-1", "Admin", Guid.NewGuid());
 
-        Assert.Contains(cut.FindAll("button"), button => button.GetAttribute("aria-label") == "Edit");
-    }
-
-    [Fact]
-    public void ShowTheSameEditIcon_WhenTheSignedInUserIsAnAssignedDirector_ForLoadDataAsync()
-    {
-        IRenderedComponent<ActivityList> cut = RenderWithOneActivity("director-1", "Director", Guid.NewGuid());
-
-        Assert.Contains(cut.FindAll("button"), button => button.GetAttribute("aria-label") == "Edit");
-    }
-
-    [Fact]
-    public void NavigateToTheActivityEditor_WhenTheRowsEditIconIsClicked_ForLoadDataAsync()
-    {
-        Guid eventId = Guid.NewGuid();
-        Guid activityId = Guid.NewGuid();
-        IRenderedComponent<ActivityList> cut = RenderWithOneActivity("admin-1", "Admin", eventId, activityId);
-
-        cut.FindAll("button").Single(button => button.GetAttribute("aria-label") == "Edit").Click();
-
-        var navigation = Services.GetRequiredService<NavigationManager>();
-        Assert.EndsWith($"dashboard/events/{eventId}/activities/{activityId}/edit", navigation.Uri, StringComparison.Ordinal);
+        Assert.DoesNotContain(cut.FindAll("button"), button => button.GetAttribute("aria-label") == "Edit");
     }
 
     [Fact]

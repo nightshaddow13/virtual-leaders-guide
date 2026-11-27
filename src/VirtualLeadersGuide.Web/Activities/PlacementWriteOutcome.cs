@@ -1,6 +1,6 @@
 namespace VirtualLeadersGuide.Web.Activities;
 
-/// <summary>Outcomes <see cref="ApiPlacementClient.CreateAsync"/> distinguishes.</summary>
+/// <summary>Outcomes <see cref="ApiPlacementClient.CreateAsync"/> and <see cref="ApiPlacementClient.UpdateSortOrderAsync"/> distinguish.</summary>
 public enum PlacementWriteOutcome
 {
     Success,

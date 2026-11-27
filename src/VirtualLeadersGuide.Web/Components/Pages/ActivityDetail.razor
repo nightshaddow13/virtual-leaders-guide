@@ -33,6 +33,9 @@
         break;
 
     case PageState.Ready:
+        <NavigationLock ConfirmExternalNavigation="HasUnsavedChanges" />
+        <LinkGuard Active="HasUnsavedChanges" />
+
         <RadzenBreadCrumb>
             <RadzenBreadCrumbItem Text="@(isAdmin ? "EVENTS" : "MY EVENTS")" Path="dashboard" />
             <RadzenBreadCrumbItem Text="@eventName?.ToUpperInvariant()" Path="@($"dashboard/events/{EventId}")" />
@@ -42,18 +45,20 @@
 
         <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween"
                      AlignItems="AlignItems.End" Gap="1rem" Style="margin-block-end: 1rem;">
-            <div>
-                <h1>@activity!.Name</h1>
-                <RadzenText TextStyle="TextStyle.Caption">Where this activity appears in the guide</RadzenText>
-            </div>
+            <h1>Edit activity</h1>
             <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
                 <RadzenButton Text="Cancel" ButtonStyle="ButtonStyle.Light" ButtonType="ButtonType.Button"
                               Disabled="@isSaving" Click="NavigateToList" />
                 <RadzenButton Text="Save changes" ButtonType="ButtonType.Button"
-                              Disabled="@(isSaving || isRemoving || ghosts.Count == 0)" Click="SaveAsync" />
+                              Disabled="@(WriteBlocked || !HasUnsavedChanges)"
+                              Click="SubmitAsync" />
             </RadzenStack>
         </RadzenStack>
 
+        @if (permissionLost)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" AllowClose="false" Text="@PermissionLostText" />
+        }
         @if (saveErrorMessage is not null)
         {
             <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" AllowClose="false" Text="@saveErrorMessage" />
@@ -61,10 +66,24 @@
 
         <RadzenRow Gap="1rem">
             <RadzenColumn Size="12" SizeLG="7">
-                <PlacementBuilder Model="model!" PlacedCount="@PlacedCount" OnPlace="OnPlace" />
+                <fieldset class="ad-editable" disabled="@permissionLost">
+                    <EditForm EditContext="editContext" OnValidSubmit="SaveAsync">
+                        <DataAnnotationsValidator />
+                        <ActivityDetailsFields Model="form" Changed="OnDetailsChanged" />
+                    </EditForm>
+                </fieldset>
             </RadzenColumn>
             <RadzenColumn Size="12" SizeLG="5">
-                <PlacementTree Roots="@model!.Roots" IsBusy="@(isSaving || isRemoving)" OnRemove="RemoveAsync" />
+                <RadzenStack Gap="1rem">
+                    @if (model!.Roots.Count > 0)
+                    {
+                        <PlacementTree Roots="@model.Roots" IsBusy="@WriteBlocked" OnRemove="RemoveAsync" />
+                    }
+
+                    <fieldset class="ad-editable" disabled="@permissionLost">
+                        <PlacementBuilder Model="model" PlacedCount="@PlacedCount" OnPlace="OnPlace" />
+                    </fieldset>
+                </RadzenStack>
             </RadzenColumn>
         </RadzenRow>
         break;

@@ -230,7 +230,7 @@ public class ApiPlacementClientShould
     }
 
     [Fact]
-    public async Task PatchOnlyTheSortOrderAndReturnTrue_WhenApiRespondsWithNoContent_ForUpdateSortOrderAsync()
+    public async Task PatchOnlyTheSortOrderAndReturnSuccess_WhenApiRespondsWithNoContent_ForUpdateSortOrderAsync()
     {
         Guid placementId = Guid.NewGuid();
         HttpRequestMessage? seen = null;
@@ -242,9 +242,9 @@ public class ApiPlacementClientShould
             return new HttpResponseMessage(HttpStatusCode.NoContent);
         }));
 
-        bool accepted = await client.UpdateSortOrderAsync(placementId, 3, CancellationToken.None);
+        PlacementWriteOutcome outcome = await client.UpdateSortOrderAsync(placementId, 3, CancellationToken.None);
 
-        Assert.True(accepted);
+        Assert.Equal(PlacementWriteOutcome.Success, outcome);
         Assert.Equal(HttpMethod.Patch, seen!.Method);
         using JsonDocument document = JsonDocument.Parse(body!);
         JsonElement data = document.RootElement.GetProperty("data");
@@ -255,11 +255,11 @@ public class ApiPlacementClientShould
     }
 
     [Fact]
-    public async Task ReturnFalseWithoutThrowing_WhenApiRejectsTheReorder_ForUpdateSortOrderAsync()
+    public async Task ReturnARejectionWithoutThrowing_WhenApiRejectsTheReorder_ForUpdateSortOrderAsync()
     {
         ApiPlacementClient client = CreateClient(StubHttpMessageHandler.RespondingWith(HttpStatusCode.UnprocessableEntity));
 
-        Assert.False(await client.UpdateSortOrderAsync(Guid.NewGuid(), 3, CancellationToken.None));
+        Assert.NotEqual(PlacementWriteOutcome.Success, await client.UpdateSortOrderAsync(Guid.NewGuid(), 3, CancellationToken.None));
     }
 
     private static ApiPlacementClient CreateClient(HttpMessageHandler apiHandler) =>

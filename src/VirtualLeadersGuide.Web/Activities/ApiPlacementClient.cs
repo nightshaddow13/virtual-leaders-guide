@@ -158,8 +158,8 @@ public sealed class ApiPlacementClient(InternalApiClient apiClient)
     /// <param name="placementId">The Placement to reposition.</param>
     /// <param name="sortOrder">Its new position among Placements sharing its exact Tier path.</param>
     /// <param name="cancellationToken">Propagated to the underlying HTTP call.</param>
-    /// <returns>Whether Api accepted it. Never throws for a rejected PATCH: order is advisory until P5-13 (#98), so Undo treats a failure as "stayed at the end".</returns>
-    public async Task<bool> UpdateSortOrderAsync(Guid placementId, int sortOrder, CancellationToken cancellationToken)
+    /// <returns><see cref="PlacementWriteOutcome.Success"/>, <see cref="PlacementWriteOutcome.Forbidden"/> or, for any other rejection, <see cref="PlacementWriteOutcome.Invalid"/>. Never throws for a rejected PATCH: order is advisory until P5-13 (#98), so Undo treats a rejection as "stayed at the end".</returns>
+    public async Task<PlacementWriteOutcome> UpdateSortOrderAsync(Guid placementId, int sortOrder, CancellationToken cancellationToken)
     {
         var body = new TierDocument<PlacementAttributesDto>
         {
@@ -173,7 +173,12 @@ public sealed class ApiPlacementClient(InternalApiClient apiClient)
         using var request = NewRequest(HttpMethod.Patch, $"{PlacementsPath}/{placementId}", body);
         using HttpResponseMessage response = await SendAsync(request, cancellationToken);
 
-        return response.StatusCode == HttpStatusCode.NoContent;
+        return response.StatusCode switch
+        {
+            HttpStatusCode.NoContent => PlacementWriteOutcome.Success,
+            HttpStatusCode.Forbidden => PlacementWriteOutcome.Forbidden,
+            _ => PlacementWriteOutcome.Invalid
+        };
     }
 
     private async Task<List<TierResourceObject<TAttributes>>> ListAsync<TAttributes>(
