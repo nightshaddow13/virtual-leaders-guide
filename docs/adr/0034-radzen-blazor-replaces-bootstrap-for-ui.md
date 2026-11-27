@@ -105,3 +105,11 @@ retries briefly rather than assuming the method is already there.
   both themes before shipping.
 - The design project is a live, user-owned artifact and can change after this ADR is written — re-read
   `styles.css` via `DesignSync` before trusting a token value quoted elsewhere (including this ADR) verbatim.
+
+## Amendment (P2-26, #241)
+
+The shell is one top bar. `SignedInContextStrip` is gone: its email and role moved into an account menu, and its
+Dashboard button became a link in the bar. Menus are native `<details>`, which open without a circuit, dressed
+in Radzen's button classes; `wwwroot/js/menus.js` closes them on an outside click or Escape. On a guide the bar
+shows that guide's Tabs instead of the management links (ADR-0080). Where the text above names
+`SignedInContextStrip` or its styling, this amendment supersedes it.

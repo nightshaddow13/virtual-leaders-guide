@@ -1,3 +1,7 @@
+---
+status: amended by P5-14 (#88)
+---
+
 # The public guide reads InfoPages through `/internal/public/*`, a separate anonymous endpoint, not by loosening `/api/infoPages`
 
 P4-1 (#23) needs an unlocked visitor at `/e/{slug}` to read an Event's InfoPages. P5-16 (#21)'s acceptance
@@ -40,3 +44,11 @@ but the Slug being real and the Event not being `Draft`.
   authorization.
 - `InfoPageAccessPolicy` and `/api/infoPages`'s Admin/Director-only scoping (ADR-0059) are unchanged; this ADR
   does not reopen that decision, it routes around it for the one caller shape it was never meant to serve.
+
+## Amendment (P5-14, #88)
+
+`GET /internal/public/events/{slug}/infoPages` is replaced by `GET /internal/public/events/{slug}/guide`, which
+returns the whole guide already nested and ordered: Tabs, Sub Tabs, Sections, Sub Sections, their Activities,
+and each screen's InfoPage. The trust boundary above is unchanged.
+
+Only placed content is public now. An InfoPage or Activity with no Placement does not appear.

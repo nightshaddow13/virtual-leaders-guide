@@ -1,0 +1,43 @@
+@using VirtualLeadersGuide.Identity.Contracts
+
+<div class="vlg-screen">
+    @if (Screen.InfoPage is { } infoPage)
+    {
+        <RadzenText TextStyle="TextStyle.H6" TagName="TagName.H2" class="vlg-screen-heading">@infoPage.Title</RadzenText>
+        <div class="vlg-prose">@MarkdownRenderer.RenderToHtml(infoPage.MarkdownContent)</div>
+    }
+    else if (Screen.IsEmpty)
+    {
+        <RadzenText TextStyle="TextStyle.Caption" TagName="TagName.P">Nothing's been added here yet.</RadzenText>
+    }
+    else
+    {
+        @foreach (PublicGuideActivityDto activity in Screen.Activities)
+        {
+            <GuideActivity Activity="activity" />
+        }
+
+        @foreach (PublicGuideSectionDto section in Screen.Sections)
+        {
+            <section class="vlg-section">
+                <RadzenText TextStyle="TextStyle.H6" TagName="TagName.H2" class="vlg-screen-heading">@section.Name</RadzenText>
+
+                @foreach (PublicGuideActivityDto activity in section.Activities)
+                {
+                    <GuideActivity Activity="activity" />
+                }
+
+                @foreach (PublicGuideSubSectionDto subSection in section.SubSections)
+                {
+                    <RadzenText TextStyle="TextStyle.Overline" TagName="TagName.H3" class="vlg-subsection-heading rz-mt-4 rz-mb-2">@subSection.Name</RadzenText>
+                    <div class="vlg-subsection">
+                        @foreach (PublicGuideActivityDto activity in subSection.Activities)
+                        {
+                            <GuideActivity Activity="activity" InSubSection="true" />
+                        }
+                    </div>
+                }
+            </section>
+        }
+    }
+</div>

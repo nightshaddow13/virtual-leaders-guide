@@ -17,7 +17,7 @@ public class NavMenuScenarios : E2ETestBase
             await new LoginPage(Page).SignInAsync(
                 Fixture.WebBaseUrl, AspireE2EFixture.NoRoleEmail, TestCredentials.KnownPassword);
 
-            await HeaderSignOutButton.ClickAsync();
+            await ClickHeaderSignOutAsync();
 
             await Expect(Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = "Sign in" })).ToBeVisibleAsync();
         });

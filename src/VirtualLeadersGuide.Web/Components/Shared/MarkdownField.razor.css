@@ -39,14 +39,6 @@
     overflow-y: auto;
 }
 
-    .md-preview-surface :first-child {
-        margin-block-start: 0;
-    }
-
-    .md-preview-surface :last-child {
-        margin-block-end: 0;
-    }
-
 @media (min-width: 64rem) {
     .md-panes {
         display: grid;

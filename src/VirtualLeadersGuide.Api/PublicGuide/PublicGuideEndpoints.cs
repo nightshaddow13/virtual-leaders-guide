@@ -6,7 +6,7 @@ namespace VirtualLeadersGuide.Api.PublicGuide;
 
 /// <summary>
 /// The anonymous-reachable surface behind the public Leaders Guide gate - an Event lookup by Slug, a Passcode
-/// check, and an Event's InfoPages (P4-1, #23), for a visitor with no signed-in identity at all.
+/// check, and an Event's guide (P5-14, #88), for a visitor with no signed-in identity at all.
 /// </summary>
 /// <remarks>
 /// Gated by the same <c>X-Internal-Key</c> fallback policy as every other Api endpoint (ADR-0015), never
@@ -20,7 +20,7 @@ namespace VirtualLeadersGuide.Api.PublicGuide;
 public static class PublicGuideEndpoints
 {
     /// <summary>
-    /// Maps this type's three endpoints - Event lookup by Slug, a Passcode check, and an Event's InfoPages -
+    /// Maps this type's three endpoints - Event lookup by Slug, a Passcode check, and an Event's guide -
     /// onto <paramref name="app"/>.
     /// </summary>
     /// <param name="app">The route builder to map onto - typically the top-level <c>WebApplication</c> in <c>Program.cs</c>.</param>
@@ -31,7 +31,7 @@ public static class PublicGuideEndpoints
 
         group.MapGet(PublicGuideRoutes.EventBySlug, GetEventBySlugAsync);
         group.MapPost(PublicGuideRoutes.PasscodeCheck, CheckPasscodeAsync);
-        group.MapGet(PublicGuideRoutes.InfoPagesByEvent, GetInfoPagesAsync);
+        group.MapGet(PublicGuideRoutes.GuideByEvent, GetGuideAsync);
 
         return app;
     }
@@ -92,16 +92,11 @@ public static class PublicGuideEndpoints
 
     /// <remarks>
     /// <c>404</c> for an unknown Slug or a <c>Draft</c> Event, same guard as <see cref="GetEventBySlugAsync"/>
-    /// (ADR-0068) - a caller that reaches this endpoint at all is expected to already know the Event is real
-    /// and published, but the guard costs nothing to repeat and keeps this endpoint's own behavior legible on
-    /// its own. A <c>Cancelled</c> Event still succeeds here, matching <see cref="GetEventBySlugAsync"/>'s own
-    /// posture - going dark for Cancelled is a Web-side rendering decision (<c>EventGuide.razor.cs</c> never
-    /// even calls this endpoint once it resolves to Cancelled), not something this lookup enforces. Ordered by
-    /// <see cref="Page.Title"/> ascending - <see cref="Page"/> has no ordering column (P5-15, #20), matching
-    /// <c>ApiInfoPageClient.GetInfoPagesForEventAsync</c>'s own convention for the same reason. Not paged - an
-    /// Event's InfoPage count is small, and a visitor reads them as one continuous page, not a grid.
+    /// (ADR-0068). A <c>Cancelled</c> Event still succeeds - going dark for Cancelled is a Web-side rendering
+    /// decision. Not paged: one Event's guide is small. Only placed content is returned, nested and ordered by
+    /// <see cref="PublicGuideAssembler"/>.
     /// </remarks>
-    private static async Task<IResult> GetInfoPagesAsync(
+    private static async Task<IResult> GetGuideAsync(
         string slug, VirtualLeadersGuideDbContext db, CancellationToken cancellationToken)
     {
         Event? @event = await db.Events.AsNoTracking()
@@ -112,13 +107,25 @@ public static class PublicGuideEndpoints
             return Results.NotFound();
         }
 
-        List<PublicInfoPageDto> infoPages = await db.InfoPages.AsNoTracking()
-            .Where(page => page.EventId == @event.Id)
-            .OrderBy(page => page.Title)
-            .Select(page => new PublicInfoPageDto { Id = page.Id, Title = page.Title, MarkdownContent = page.MarkdownContent })
-            .ToListAsync(cancellationToken);
+        List<Tab> tabs = await db.Tabs.AsNoTracking()
+            .Where(t => t.EventId == @event.Id).ToListAsync(cancellationToken);
+        List<SubTab> subTabs = await db.SubTabs.AsNoTracking()
+            .Where(t => t.EventId == @event.Id).ToListAsync(cancellationToken);
+        List<Section> sections = await db.Sections.AsNoTracking()
+            .Where(s => s.EventId == @event.Id).ToListAsync(cancellationToken);
+        List<SubSection> subSections = await db.SubSections.AsNoTracking()
+            .Where(s => s.EventId == @event.Id).ToListAsync(cancellationToken);
+        List<ActivityPlacement> placements = await db.ActivityPlacements.AsNoTracking()
+            .Include(p => p.Activity)
+            .Where(p => p.EventId == @event.Id).ToListAsync(cancellationToken);
+        List<InfoPagePlacement> infoPagePlacements = await db.InfoPagePlacements.AsNoTracking()
+            .Include(p => p.InfoPage)
+            .Where(p => p.EventId == @event.Id).ToListAsync(cancellationToken);
 
-        return Results.Ok(infoPages);
+        var assembler = new PublicGuideAssembler(
+            tabs, subTabs, sections, subSections, placements, infoPagePlacements);
+
+        return Results.Ok(assembler.Build());
     }
 
     /// <remarks>
