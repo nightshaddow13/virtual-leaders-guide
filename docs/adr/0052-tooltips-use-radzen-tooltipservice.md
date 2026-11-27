@@ -1,3 +1,7 @@
+---
+status: amended by P2-23 (#213)
+---
+
 # Tooltips use Radzen's TooltipService
 
 P2-18 (#113) needs this app's first tooltip: explaining, on hover, why an Event's Directors list shows a
@@ -33,3 +37,15 @@ could occur. Keying a `Dictionary<TKey, ElementReference>` by a stable per-row i
 - A future tooltip on a control that is never disabled doesn't need the wrapper-`<span>`/dictionary
   machinery above - that pattern is specifically for the disabled-control case, not a mandatory shape for
   every tooltip.
+
+## Amendment (P2-23, #213)
+
+The disabled-control wrapper described above is now one shared component, `DisabledTooltip`; use it rather than
+writing the `<span>` again. It injects `TooltipService` and holds its own `ElementReference`, so pages no longer
+inject the service for this and a row in a loop needs no dictionary.
+
+The wrapper is also focusable, opens the tooltip on focus and closes it on blur, and carries the same text as its
+accessible name. Hover alone left keyboard and screen reader users with a disabled control and no reason.
+
+The text is wired with `aria-labelledby`, not `aria-describedby`: Radzen's tooltip script overwrites and then removes
+`aria-describedby` on the element it anchors to.

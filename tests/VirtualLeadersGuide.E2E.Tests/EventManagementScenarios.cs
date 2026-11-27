@@ -300,15 +300,7 @@ public class EventManagementScenarios : E2ETestBase
             await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
             await Expect(Page.GetByText(name)).Not.ToBeVisibleAsync();
 
-            ILocator statusFilterDropdown = Page.Locator(".rz-dropdown");
-            await Expect(statusFilterDropdown).ToBeVisibleAsync(
-                InteractiveVisible());
-            await statusFilterDropdown.ClickAsync();
-            ILocator cancelledOption = Page.GetByRole(AriaRole.Option, new PageGetByRoleOptions { Name = "Cancelled" });
-            await Expect(cancelledOption).ToBeVisibleAsync(
-                InteractiveVisible());
-            await cancelledOption.ClickAsync();
-            await Page.Keyboard.PressAsync("Escape");
+            await FilterDashboardByStatusAsync("Cancelled");
 
             ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = name });
             await Expect(row).ToBeVisibleAsync(InteractiveVisible());
@@ -433,6 +425,142 @@ public class EventManagementScenarios : E2ETestBase
             await Expect(row).ToBeVisibleAsync(InteractiveVisible());
             await Expect(row.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Duplicate" })).Not.ToBeVisibleAsync();
         });
+
+    [Fact(DisplayName = "Given a Live Event, when an Admin opens its guide from the dashboard, then the guide opens unlocked in a new tab")]
+    public async Task GivenALiveEvent_WhenAnAdminOpensItsGuideFromTheDashboard_ThenTheGuideOpensUnlockedInANewTab() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, string name) = await CreateEventAsync("Open Guide");
+            string slug = await GoLiveAsync(eventId);
+
+            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
+
+            await ExpectOpenGuideToShowAsync(name, slug, "This guide is unlocked");
+        });
+
+    [Fact(DisplayName = "Given a Past Event, when an Admin opens its guide from the dashboard, then the guide opens unlocked in a new tab")]
+    public async Task GivenAPastEvent_WhenAnAdminOpensItsGuideFromTheDashboard_ThenTheGuideOpensUnlockedInANewTab() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, string name) = await CreateEventAsync("Open Past Guide");
+            await Page.GotoAsync(EventEditorUrl(eventId));
+            await Page.Locator("#StartsAt").FillAsync("2020-06-12T09:00");
+            await Page.Locator("#EndsAt").FillAsync("2020-06-14T17:00");
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" }).ClickAsync();
+            await Expect(Page).ToHaveURLAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString(), InteractiveUrl());
+            string slug = await GoLiveAsync(eventId);
+
+            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
+            await FilterDashboardByStatusAsync("Past");
+
+            await ExpectOpenGuideToShowAsync(name, slug, "This guide is unlocked");
+        });
+
+    [Fact(DisplayName = "Given a Cancelled Event, when an Admin opens its guide from the dashboard, then the new tab shows the cancelled state")]
+    public async Task GivenACancelledEvent_WhenAnAdminOpensItsGuideFromTheDashboard_ThenTheNewTabShowsTheCancelledState() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, string name) = await CreateEventAsync("Open Cancelled Guide");
+            string slug = await GoLiveAsync(eventId);
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Cancel event" }).ClickAsync();
+            ILocator dialog = Page.Locator(".rz-dialog-content");
+            await Expect(dialog).ToBeVisibleAsync(InteractiveVisible());
+            await dialog.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Cancel event", Exact = true }).ClickAsync();
+            await Expect(Page.GetByText("CANCELLED", new PageGetByTextOptions { Exact = true })).ToBeVisibleAsync(
+                InteractiveVisible());
+
+            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
+            await FilterDashboardByStatusAsync("Cancelled");
+
+            await ExpectOpenGuideToShowAsync(name, slug, "This event was cancelled");
+        });
+
+    [Fact(DisplayName = "Given a Director assigned to a Live Event, when they open its guide from the dashboard, then the guide opens unlocked in a new tab")]
+    public async Task GivenADirectorAssignedToALiveEvent_WhenTheyOpenItsGuideFromTheDashboard_ThenTheGuideOpensUnlockedInANewTab() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, string name) = await CreateEventAsync("Director Open Guide");
+            string slug = await GoLiveAsync(eventId);
+            await SignOutAsync();
+
+            await CreateAndSignInDirectorAsync(eventId);
+            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
+
+            await ExpectOpenGuideToShowAsync(name, slug, "This guide is unlocked");
+        });
+
+    [Fact(DisplayName = "Given a Draft Event, when an Admin views the dashboard, then its Open guide button is disabled and says why on hover or focus")]
+    public async Task GivenADraftEvent_WhenAnAdminViewsTheDashboard_ThenItsOpenGuideButtonIsDisabledAndSaysWhy() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (_, string name) = await CreateEventAsync("Draft Guide");
+
+            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
+            ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = name });
+            ILocator openGuide = row.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Open guide" });
+            await Expect(openGuide).ToBeVisibleAsync(InteractiveVisible());
+
+            await Expect(openGuide).ToBeDisabledAsync();
+            await Expect(row.GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = "Open guide" }))
+                .ToHaveCountAsync(0);
+
+            ILocator wrapper = row.GetByRole(AriaRole.Group);
+            ILocator tooltip = Page.Locator(".rz-tooltip");
+
+            await wrapper.HoverAsync();
+            await Expect(tooltip).ToContainTextAsync("Go live to open this guide.");
+
+            await Page.Mouse.MoveAsync(0, 0);
+            await Expect(tooltip).ToHaveCountAsync(0);
+
+            await wrapper.FocusAsync();
+            await Expect(tooltip).ToContainTextAsync("Go live to open this guide.");
+
+            // Radzen rewrites attributes on its anchor as a tooltip opens and closes; the name has to survive that.
+            await wrapper.BlurAsync();
+            await Expect(tooltip).ToHaveCountAsync(0);
+            await Expect(row.GetByRole(AriaRole.Group, new LocatorGetByRoleOptions { Name = "Draft guides can't be previewed yet" }))
+                .ToBeVisibleAsync();
+        });
+
+    private async Task<string> GoLiveAsync(Guid eventId)
+    {
+        await Page.GotoAsync(EventEditorUrl(eventId));
+        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Go live" }).ClickAsync();
+        await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Cancel event" }))
+            .ToBeVisibleAsync(InteractiveVisible());
+        return await Page.Locator("#Slug").InputValueAsync();
+    }
+
+    private async Task FilterDashboardByStatusAsync(string status)
+    {
+        ILocator statusFilterDropdown = Page.Locator(".rz-dropdown");
+        await Expect(statusFilterDropdown).ToBeVisibleAsync(InteractiveVisible());
+        await statusFilterDropdown.ClickAsync();
+        ILocator option = Page.GetByRole(AriaRole.Option, new PageGetByRoleOptions { Name = status });
+        await Expect(option).ToBeVisibleAsync(InteractiveVisible());
+        await option.ClickAsync();
+        await Page.Keyboard.PressAsync("Escape");
+    }
+
+    private async Task ExpectOpenGuideToShowAsync(string eventName, string slug, string guideText)
+    {
+        ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = eventName });
+        ILocator openGuide = row.GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = "Open guide" });
+        await Expect(openGuide).ToBeVisibleAsync(InteractiveVisible());
+        await Expect(openGuide).ToHaveAttributeAsync("href", $"e/{slug}");
+        await Expect(openGuide).ToHaveAttributeAsync("target", "_blank");
+
+        IPage guide = await Page.Context.RunAndWaitForPageAsync(() => openGuide.ClickAsync());
+
+        await Expect(guide).ToHaveURLAsync(new Uri(Fixture.WebBaseUrl, $"e/{slug}").ToString());
+        await Expect(guide.GetByText(guideText)).ToBeVisibleAsync(InteractiveVisible());
+    }
 
     /// <remarks>
     /// Scoped to the field's own container, not a bare page-wide <c>GetByText</c> - a collision on
