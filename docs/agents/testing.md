@@ -29,6 +29,17 @@ dotnet test tests/VirtualLeadersGuide.E2E.Tests
 
 Judge a run by its exit code. E2E can print `Passed!` and still fail its end-of-run cleanup check.
 
+## Exploratory testing in the browser
+
+Run the AppHost from the checkout under test and drive it in Chrome. Stop it again before any E2E run.
+
+- **Admin: ask the user to sign in when you need it.** Check the page first, as an earlier session may still be
+  signed in. If it isn't, or you signed it out, ask them. Don't wait until the end of the run to say so.
+- **Director and other roles: use the E2E fixture accounts**, which exist once E2E has run against this checkout's
+  volume. Emails are in `tests/VirtualLeadersGuide.E2E.Tests/AspireE2EFixture.cs` and the password in
+  `TestCredentials.cs`. Don't ask the user for these; they may not know them.
+- **Make your own data.** Create throwaway Events rather than changing the user's, and ask before deleting them.
+
 ## When the stack doesn't come up
 
 Every E2E test fails with `resource 'api' ... failed to start`. That message is the effect, not the cause. Get
