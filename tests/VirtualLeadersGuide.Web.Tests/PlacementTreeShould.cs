@@ -106,7 +106,18 @@ public class PlacementTreeShould : BunitContext
 
         cut.Find("button[aria-label='Move Morning down']").Click();
 
-        Assert.Equal((_savedPlacement, 1), (raised!.Leaf.PlacementId!.Value, raised.Delta));
+        Assert.Equal((_savedPlacement, PlacementDirection.Down), (raised!.Leaf.PlacementId!.Value, raised.Direction));
+    }
+
+    [Fact]
+    public void DisableTheArrowsButNotRemove_WhenStale_ForPlacementTree()
+    {
+        IRenderedComponent<PlacementTree> cut = Render<PlacementTree>(parameters => parameters
+            .Add(c => c.Roots, Roots())
+            .Add(c => c.IsStale, true));
+
+        Assert.All(cut.FindAll("button[aria-label^='Move ']"), b => Assert.True(b.HasAttribute("disabled")));
+        Assert.All(cut.FindAll("button[aria-label^='Remove placement']"), b => Assert.False(b.HasAttribute("disabled")));
     }
 
     [Fact]

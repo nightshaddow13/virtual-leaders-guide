@@ -461,9 +461,8 @@ public sealed class ActivityPlacementResourceDefinition : JsonApiResourceDefinit
     private async Task ValidateNoDuplicatePlacementAsync(
         Guid activityId, Guid tabId, Guid? subTabId, Guid? sectionId, Guid? subSectionId, CancellationToken cancellationToken)
     {
-        bool duplicate = await _dbContext.ActivityPlacements.AsNoTracking().AnyAsync(placement =>
-            placement.ActivityId == activityId && placement.TabId == tabId && placement.SubTabId == subTabId
-            && placement.SectionId == sectionId && placement.SubSectionId == subSectionId, cancellationToken);
+        bool duplicate = await Bucket(tabId, subTabId, sectionId, subSectionId)
+            .AnyAsync(placement => placement.ActivityId == activityId, cancellationToken);
 
         if (!duplicate)
         {

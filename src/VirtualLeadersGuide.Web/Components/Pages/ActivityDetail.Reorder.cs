@@ -13,53 +13,67 @@ public partial class ActivityDetail
     private string? announcement;
 
     /// <remarks>
-    /// Writes immediately, like a removal, with no toast or Undo - the opposite arrow is the undo. Focus and
+    /// Writes immediately, like a removal, with no toast or Undo - the opposite arrow is the undo. The tree is
+    /// reloaded even when the write threw, since Api may have applied it before the response was lost. Focus and
     /// the announcement are set only after the move is redrawn and the controls are enabled again, and only
-    /// when the reload worked.
+    /// when both the write and the reload worked.
     /// </remarks>
     private async Task MoveAsync(PlacementMove move)
     {
-        if (move.Leaf.PlacementId is not { } placementId || WriteBlocked)
+        if (move.Leaf.PlacementId is not { } placementId || WriteBlocked || treeStale)
         {
             return;
         }
 
         saveErrorMessage = null;
         ClearMoveFeedback();
-        bool moved = false;
+        var problems = new List<string>();
         isReordering = true;
         try
         {
-            switch (await PlacementClient.MoveAsync(placementId, move.Leaf.Position + move.Delta, CancellationToken.None))
+            try
             {
-                case PlacementWriteOutcome.Forbidden:
+                PlacementWriteOutcome outcome = await PlacementClient.MoveAsync(
+                    placementId, move.Leaf.Position + (int)move.Direction, CancellationToken.None);
+                if (outcome == PlacementWriteOutcome.Forbidden)
+                {
                     permissionLost = true;
                     return;
-                case PlacementWriteOutcome.Success:
-                    moved = true;
-                    break;
-                default:
-                    saveErrorMessage = "That placement changed. The tree was refreshed.";
-                    break;
+                }
+
+                if (outcome != PlacementWriteOutcome.Success)
+                {
+                    problems.Add("That placement changed. The tree was refreshed.");
+                }
+            }
+            catch (ActivityDataUnavailableException)
+            {
+                problems.Add("Couldn't reorder that placement. Try again.");
             }
 
-            await RefreshOrReportAsync();
-        }
-        catch (ActivityDataUnavailableException)
-        {
-            saveErrorMessage = "Couldn't reorder that placement. Try again.";
+            if (!await TryRefreshTreeAsync())
+            {
+                problems.Add(RefreshFailedText);
+            }
         }
         finally
         {
             isReordering = false;
         }
 
-        if (moved && saveErrorMessage is null && model!.FindLeaf(placementId) is { } leaf)
+        if (problems.Count > 0)
         {
-            focusRequest = new PlacementFocusRequest(placementId, move.Delta);
+            saveErrorMessage = string.Join(" ", problems);
+        }
+        else if (model!.FindLeaf(placementId) is { } leaf)
+        {
+            focusRequest = new PlacementFocusRequest(placementId, move.Direction);
             announcement = $"Moved to position {leaf.Position + 1} of {leaf.SavedCount}.";
         }
     }
+
+    /// <summary>Drops the focus request once an arrow has taken focus, so a row drawn again later doesn't take it back.</summary>
+    private void OnMoveFocused() => focusRequest = null;
 
     /// <summary>Drops the last move's focus request and announcement, so a later redraw doesn't replay them.</summary>
     private void ClearMoveFeedback()

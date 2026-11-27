@@ -22,13 +22,17 @@ public partial class PlacementReorderButtons
     [Parameter]
     public EventCallback<PlacementMove> OnMove { get; set; }
 
-    /// <summary>Whether a save, removal or move is in flight.</summary>
+    /// <summary>Whether the arrows can't be used right now.</summary>
     [Parameter]
     public bool Disabled { get; set; }
 
     /// <summary>Which row's arrow should be focused after a move, or <see langword="null"/>.</summary>
     [Parameter]
     public PlacementFocusRequest? FocusRequest { get; set; }
+
+    /// <summary>Raised once this row has honoured <see cref="FocusRequest"/>, so the host can drop it.</summary>
+    [Parameter]
+    public EventCallback OnFocused { get; set; }
 
     /// <remarks>
     /// Honours each request once, by reference: moving the same row the same way twice makes two equal
@@ -45,10 +49,11 @@ public partial class PlacementReorderButtons
         }
 
         handledRequest = request;
-        bool up = request.Delta < 0 ? Leaf.CanMoveUp : !Leaf.CanMoveDown;
+        bool up = request.Direction == PlacementDirection.Up ? Leaf.CanMoveUp : !Leaf.CanMoveDown;
         if ((up ? upButton : downButton) is { } button)
         {
             await button.Element.FocusAsync();
+            await OnFocused.InvokeAsync();
         }
     }
 }

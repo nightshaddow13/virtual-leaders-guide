@@ -15,7 +15,7 @@ public enum TierKind
 /// <param name="IsThisActivity">Whether this is the Activity whose page is open - drawn lit.</param>
 /// <param name="PlacementId">The saved Placement's id, or <see langword="null"/> for an unsaved ghost row (P5-12, #97).</param>
 /// <param name="Path">The Tier path this row sits at - what a remove names in its dialog, toast, and Undo.</param>
-/// <param name="SortOrder">The saved Placement's stored order value, which may have gaps; 0 for a ghost. Display position is <see cref="Position"/>.</param>
+/// <param name="SortOrder">What the row is ordered by: the stored value, which may have gaps; <see cref="int.MaxValue"/> for a row saved since the tree was last read, whose value isn't known; 0 for a ghost. Display position is <see cref="Position"/>.</param>
 public sealed record PlacementLeaf(
     Guid ActivityId, string ActivityName, bool IsThisActivity,
     Guid? PlacementId, PlacementPath Path, int SortOrder)
@@ -39,15 +39,25 @@ public sealed record PlacementLeaf(
     public IEnumerable<object> Items => [];
 }
 
+/// <summary>Which way a row moves within its path; the value is the step added to its position.</summary>
+public enum PlacementDirection
+{
+    /// <summary>One place earlier.</summary>
+    Up = -1,
+
+    /// <summary>One place later.</summary>
+    Down = 1
+}
+
 /// <summary>A request to move one saved row a step within its path (P5-13, #98).</summary>
 /// <param name="Leaf">The row to move.</param>
-/// <param name="Delta">-1 for up, +1 for down.</param>
-public sealed record PlacementMove(PlacementLeaf Leaf, int Delta);
+/// <param name="Direction">Which way.</param>
+public sealed record PlacementMove(PlacementLeaf Leaf, PlacementDirection Direction);
 
 /// <summary>Which arrow should take focus once a move has been redrawn, so keyboard users keep their place (P5-13, #98).</summary>
 /// <param name="PlacementId">The moved row.</param>
-/// <param name="Delta">The direction that was used.</param>
-public sealed record PlacementFocusRequest(Guid PlacementId, int Delta);
+/// <param name="Direction">The direction that was used.</param>
+public sealed record PlacementFocusRequest(Guid PlacementId, PlacementDirection Direction);
 
 /// <summary>One Tier row in the live tree, with whatever hangs beneath it.</summary>
 public sealed class TierNode

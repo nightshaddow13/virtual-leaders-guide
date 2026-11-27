@@ -9,8 +9,8 @@ namespace VirtualLeadersGuide.Web.Components.Pages;
 /// <summary>
 /// The removal half of <see cref="ActivityDetail"/>: removing a saved or pending row and Undo (P5-12, #97),
 /// and the last-Placement dialog that offers to delete the whole Activity instead (P5-9, #95). Split out so
-/// the page's load/save/leave-guard flow in <c>ActivityDetail.razor.cs</c> stays readable; the two halves
-/// share the page's state (<c>model</c>, <c>ghosts</c>, <c>state</c>).
+/// the page's other flows stay readable; the parts share the page's state (<c>model</c>, <c>ghosts</c>,
+/// <c>state</c>).
 /// </summary>
 public partial class ActivityDetail
 {
@@ -235,6 +235,7 @@ public partial class ActivityDetail
         catch (ActivityDataUnavailableException)
         {
             refreshed = false;
+            treeStale = true;
         }
 
         RebuildModel();
@@ -242,7 +243,7 @@ public partial class ActivityDetail
         return refreshed;
     }
 
-    /// <summary><see cref="TryRefreshTreeAsync"/> for the removal paths, which report a failed reload as the page's error.</summary>
+    /// <summary><see cref="TryRefreshTreeAsync"/> for removal and Undo, which report a failed reload as the page's error.</summary>
     private async Task RefreshOrReportAsync()
     {
         if (!await TryRefreshTreeAsync())

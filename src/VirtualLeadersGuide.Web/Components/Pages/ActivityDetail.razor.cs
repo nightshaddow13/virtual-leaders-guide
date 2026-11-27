@@ -18,7 +18,7 @@ namespace VirtualLeadersGuide.Web.Components.Pages;
 /// </summary>
 /// <remarks>
 /// Loading and page state live here, saving and the leave guard in <c>ActivityDetail.Save.cs</c>, removal in
-/// <c>ActivityDetail.Removal.cs</c>. Everything that displays the Activity's name - tree rows, ghosts, dialogs,
+/// <c>ActivityDetail.Removal.cs</c>, reordering in <c>ActivityDetail.Reorder.cs</c>. Everything that displays the Activity's name - tree rows, ghosts, dialogs,
 /// breadcrumb, title - shows the saved <see cref="activity"/>, never what is being typed into <see cref="form"/>.
 /// <para>
 /// The builder sits under the tree rather than under the Description where the wireframe draws it (asked for
@@ -72,6 +72,9 @@ public partial class ActivityDetail : IDisposable
 
     /// <summary>Placements written since <see cref="tree"/> was last read, so they stay drawn when it can't be read again (access lost, or the read failed).</summary>
     private readonly List<(Guid Id, PlacementPath Path)> savedSinceLoad = [];
+
+    /// <summary>Set when a reload failed: the rows drawn may no longer be where Api has them, so they can't be moved (a move sends a position).</summary>
+    private bool treeStale;
 
     private PlacementTreeModel? model;
     private readonly ActivityFormModel form = new();
@@ -178,6 +181,7 @@ public partial class ActivityDetail : IDisposable
         (IReadOnlyList<ActivityDto> activities, _) =
             await ActivityClient.GetActivitiesForEventAsync(EventId, 1, 9999, null, CancellationToken.None);
         activityNames = activities.ToDictionary(a => a.Id, a => a.Name);
+        treeStale = false;
     }
 
     private void RebuildModel() =>

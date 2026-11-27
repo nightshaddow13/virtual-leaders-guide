@@ -12,13 +12,14 @@ public class PlacementReorderButtonsShould : BunitContext
     public PlacementReorderButtonsShould() => JSInterop.Mode = JSRuntimeMode.Loose;
 
     [Theory]
-    [InlineData(1, -1, "up")]
-    [InlineData(1, 1, "down")]
-    [InlineData(0, -1, "down")]
-    [InlineData(2, 1, "up")]
-    public void FocusTheUsedArrowOrTheOtherWhenItIsDisabled_WhenARequestNamesTheRow_ForFocusRequest(
-        int position, int delta, string focused)
+    [InlineData(1, PlacementDirection.Up, "up")]
+    [InlineData(1, PlacementDirection.Down, "down")]
+    [InlineData(0, PlacementDirection.Up, "down")]
+    [InlineData(2, PlacementDirection.Down, "up")]
+    public void FocusTheUsedArrowOrTheOtherAndReportIt_WhenARequestNamesTheRow_ForOnAfterRenderAsync(
+        int position, PlacementDirection direction, string focused)
     {
+        int reported = 0;
         var leaf = new PlacementLeaf(
             Guid.NewGuid(), "Canoe Basics", IsThisActivity: true, PlacementId, new PlacementPath("Morning"), position)
         {
@@ -28,7 +29,10 @@ public class PlacementReorderButtonsShould : BunitContext
 
         IRenderedComponent<PlacementReorderButtons> cut = Render<PlacementReorderButtons>(parameters => parameters
             .Add(c => c.Leaf, leaf)
-            .Add(c => c.FocusRequest, new PlacementFocusRequest(PlacementId, delta)));
+            .Add(c => c.FocusRequest, new PlacementFocusRequest(PlacementId, direction))
+            .Add(c => c.OnFocused, EventCallback.Factory.Create(this, () => reported++)));
+
+        Assert.Equal(1, reported);
 
         JSRuntimeInvocation invocation = Assert.Single(JSInterop.Invocations["Blazor._internal.domWrapper.focus"]);
         Assert.IsType<ElementReference>(invocation.Arguments[0])

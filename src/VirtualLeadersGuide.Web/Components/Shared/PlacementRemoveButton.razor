@@ -15,7 +15,7 @@
     [Parameter]
     public EventCallback<PlacementLeaf> OnRemove { get; set; }
 
-    /// <summary>Whether a save or removal is in flight.</summary>
+    /// <summary>Whether the page is currently refusing writes.</summary>
     [Parameter]
     public bool Disabled { get; set; }
 }

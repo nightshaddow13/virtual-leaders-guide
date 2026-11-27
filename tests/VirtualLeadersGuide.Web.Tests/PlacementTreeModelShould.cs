@@ -433,13 +433,13 @@ public class PlacementTreeModelShould
     }
 
     [Fact]
-    public void OrderRowsBySortOrderRatherThanName_WhenTheTreeIsBuilt_ForLeaves() =>
+    public void OrderRowsBySortOrderRatherThanName_WhenTheTreeIsBuilt_ForPlacementTreeModel() =>
         Assert.Equal(
             ["Swim Check", "Canoe Basics", "archery"],
             Bucket(thisOrder: 4, swimOrder: 1, archeryOrder: 9, out _).Roots[0].Leaves.Select(l => l.ActivityName));
 
     [Fact]
-    public void BreakTiesByNameIgnoringCase_WhenSortOrdersMatch_ForLeaves() =>
+    public void BreakTiesByNameIgnoringCase_WhenSortOrdersMatch_ForPlacementTreeModel() =>
         Assert.Equal(
             ["archery", "Canoe Basics", "Swim Check"],
             Bucket(0, 0, 0, out _).Roots[0].Leaves.Select(l => l.ActivityName));
@@ -459,7 +459,7 @@ public class PlacementTreeModelShould
 
     /// <remarks>Api appends a new Placement to its path, so a row the page couldn't re-read belongs at the end.</remarks>
     [Fact]
-    public void PutARowSavedSinceTheLoadLast_WhenItSharesAPath_ForLeaves()
+    public void PutARowSavedSinceTheLoadLast_WhenItSharesAPath_ForPlacementTreeModel()
     {
         var added = Guid.NewGuid();
         var model = new PlacementTreeModel(
@@ -476,7 +476,7 @@ public class PlacementTreeModelShould
     }
 
     [Fact]
-    public void KeepGhostsLastAndNotCountThemAsNeighbours_WhenOneSharesThePath_ForLeaves()
+    public void KeepGhostsLastAndNotCountThemAsNeighbours_WhenOneSharesThePath_ForPlacementTreeModel()
     {
         var saved = Guid.NewGuid();
         var model = new PlacementTreeModel(

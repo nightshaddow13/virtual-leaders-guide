@@ -4,6 +4,7 @@ using System.Text.Json;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using VirtualLeadersGuide.Web.Components.Pages;
+using VirtualLeadersGuide.Web.Components.Shared;
 using VirtualLeadersGuide.Web.Markdown;
 
 namespace VirtualLeadersGuide.Web.Tests;
@@ -27,6 +28,8 @@ public class ActivityDetailReorderShould : BunitContext
     private readonly List<(Guid Id, Guid ActivityId)> _bucket = [];
     private readonly List<(string Id, int SortOrder)> _patched = [];
     private HttpStatusCode _patchStatus = HttpStatusCode.NoContent;
+    private bool _applyDespiteError;
+    private bool _readsFailAfterPatch;
 
     public ActivityDetailReorderShould()
     {
@@ -48,6 +51,36 @@ public class ActivityDetailReorderShould : BunitContext
         Assert.Equal([(_thisPlacement.ToString(), sent)], _patched);
         Assert.True(Arrow(cut, direction).HasAttribute("disabled"));
         cut.WaitForAssertion(() => Assert.NotEmpty(JSInterop.Invocations["Blazor._internal.domWrapper.focus"]), Patience);
+        cut.WaitForAssertion(() => Assert.Null(cut.FindComponent<PlacementTree>().Instance.FocusRequest), Patience);
+    }
+
+    /// <remarks>The move saved but the reload didn't, so the drawn positions are no longer Api's.</remarks>
+    [Fact]
+    public void DisableTheArrows_WhenTheReloadAfterAMoveFails_ForMoveAsync()
+    {
+        _readsFailAfterPatch = true;
+        IRenderedComponent<ActivityDetail> cut = RenderPage();
+
+        Arrow(cut, "down").Click();
+
+        cut.WaitForAssertion(() => Assert.Contains("the tree may be out of date", cut.Markup, StringComparison.Ordinal), Patience);
+        cut.WaitForAssertion(() => Assert.True(Arrow(cut, "up").HasAttribute("disabled")), Patience);
+        Assert.True(Arrow(cut, "down").HasAttribute("disabled"));
+        Assert.Empty(cut.Find("[role='status']").TextContent);
+    }
+
+    /// <remarks>Api applied the move and the response was lost: the reload shows the row already at the bottom.</remarks>
+    [Fact]
+    public void ReloadTheTree_WhenTheMoveThrowsAfterApiAppliedIt_ForMoveAsync()
+    {
+        _patchStatus = HttpStatusCode.InternalServerError;
+        _applyDespiteError = true;
+        IRenderedComponent<ActivityDetail> cut = RenderPage();
+
+        Arrow(cut, "down").Click();
+
+        cut.WaitForAssertion(() => Assert.True(Arrow(cut, "down").HasAttribute("disabled")), Patience);
+        cut.WaitForAssertion(() => Assert.False(Arrow(cut, "up").HasAttribute("disabled")), Patience);
     }
 
     [Fact]
@@ -144,7 +177,7 @@ public class ActivityDetailReorderShould : BunitContext
             using JsonDocument body = JsonDocument.Parse(request.Content!.ReadAsStringAsync().Result);
             int position = body.RootElement.GetProperty("data").GetProperty("attributes").GetProperty("sortOrder").GetInt32();
             _patched.Add((id, position));
-            if (_patchStatus == HttpStatusCode.NoContent)
+            if (_patchStatus == HttpStatusCode.NoContent || _applyDespiteError)
             {
                 (Guid Id, Guid ActivityId) row = _bucket.Single(p => p.Id.ToString() == id);
                 _bucket.Remove(row);
@@ -152,6 +185,11 @@ public class ActivityDetailReorderShould : BunitContext
             }
 
             return new HttpResponseMessage(_patchStatus);
+        }
+
+        if (_readsFailAfterPatch && _patched.Count > 0)
+        {
+            return new HttpResponseMessage(HttpStatusCode.InternalServerError);
         }
 
         object[] data = path switch

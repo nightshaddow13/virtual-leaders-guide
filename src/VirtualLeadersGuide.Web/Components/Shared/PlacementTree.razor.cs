@@ -27,9 +27,17 @@ public partial class PlacementTree
     [Parameter]
     public bool IsBusy { get; set; }
 
+    /// <summary>Whether the rows may be out of date - disables the arrows, which send a position, but not the ×.</summary>
+    [Parameter]
+    public bool IsStale { get; set; }
+
     /// <summary>Which row's arrow should take focus after a move.</summary>
     [Parameter]
     public PlacementFocusRequest? FocusRequest { get; set; }
+
+    /// <summary>Raised once an arrow has taken focus for <see cref="FocusRequest"/>.</summary>
+    [Parameter]
+    public EventCallback OnFocused { get; set; }
 
     /// <summary>Screen-reader text saying where a moved row landed.</summary>
     [Parameter]
