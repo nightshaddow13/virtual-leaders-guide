@@ -25,7 +25,8 @@ public class PlacementManagementScenarios : E2ETestBase
             string tab = $"e2e-Morning {Guid.NewGuid():n}";
 
             await Page.GotoAsync(ActivityUrl(eventId, activityId));
-            await Expect(Page.GetByText("Not placed anywhere yet")).ToBeVisibleAsync(InteractiveVisible());
+            await Expect(Page.GetByText("Add a placement")).ToBeVisibleAsync(InteractiveVisible());
+            await Expect(Page.GetByText("WHERE IT APPEARS")).ToHaveCountAsync(0);
             await PlaceAsync(tab);
 
             await Expect(Page.Locator(".ptn-pending")).ToBeVisibleAsync(InteractiveVisible());

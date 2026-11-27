@@ -11,7 +11,7 @@ namespace VirtualLeadersGuide.Web.Components.Pages;
 
 /// <summary>
 /// The one page for an existing Activity (P5-23, #206; wireframe turn 2, Direction C): Name, Description and
-/// the Placement builder beside the live "Where it appears" tree. "Place it" adds an unsaved ghost row;
+/// beside the live "Where it appears" tree with the Placement builder under it. "Place it" adds an unsaved ghost row;
 /// <see cref="SaveAsync"/> commits the Name/Description and the ghosts from one button; leaving with either
 /// pending asks once first. Removing a saved row (P5-12, #97) writes immediately - see <see cref="RemoveAsync"/>.
 /// </summary>
@@ -20,9 +20,12 @@ namespace VirtualLeadersGuide.Web.Components.Pages;
 /// <c>ActivityDetail.Removal.cs</c>. Everything that displays the Activity's name - tree rows, ghosts, dialogs,
 /// breadcrumb, title - shows the saved <see cref="activity"/>, never what is being typed into <see cref="form"/>.
 /// <para>
-/// In the markup, the <c>fieldset</c> exists only so that losing permission disables the details and the builder
-/// together. The <c>EditForm</c> stops short of the builder: with it inside, Enter in one of its autofill fields
-/// would submit.
+/// The builder sits under the tree rather than under the Description where the wireframe draws it (asked for
+/// after seeing the page), and the tree is left out while it would be empty.
+/// </para>
+/// <para>
+/// In the markup, the two <c>fieldset</c>s exist only so that losing permission disables the details and the
+/// builder. The builder is outside the <c>EditForm</c>: inside it, Enter in an autofill field would submit.
 /// </para>
 /// </remarks>
 public partial class ActivityDetail : IDisposable

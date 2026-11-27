@@ -71,12 +71,19 @@
                         <DataAnnotationsValidator />
                         <ActivityDetailsFields Model="form" Changed="OnDetailsChanged" />
                     </EditForm>
-
-                    <PlacementBuilder Model="model!" PlacedCount="@PlacedCount" OnPlace="OnPlace" />
                 </fieldset>
             </RadzenColumn>
             <RadzenColumn Size="12" SizeLG="5">
-                <PlacementTree Roots="@model!.Roots" IsBusy="@WriteBlocked" OnRemove="RemoveAsync" />
+                <RadzenStack Gap="1rem">
+                    @if (model!.Roots.Count > 0)
+                    {
+                        <PlacementTree Roots="@model.Roots" IsBusy="@WriteBlocked" OnRemove="RemoveAsync" />
+                    }
+
+                    <fieldset class="ad-editable" disabled="@permissionLost">
+                        <PlacementBuilder Model="model" PlacedCount="@PlacedCount" OnPlace="OnPlace" />
+                    </fieldset>
+                </RadzenStack>
             </RadzenColumn>
         </RadzenRow>
         break;

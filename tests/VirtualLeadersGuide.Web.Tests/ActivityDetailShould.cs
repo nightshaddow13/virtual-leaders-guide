@@ -101,13 +101,14 @@ public class ActivityDetailShould : BunitContext
     }
 
     [Fact]
-    public void ShowTheEmptyTreeAndKeepSaveDisabled_WhenTheActivityHasNoPlacements_ForOnParametersSetAsync()
+    public void ShowOnlyTheBuilderAndKeepSaveDisabled_WhenNothingIsPlacedYet_ForOnParametersSetAsync()
     {
         Register();
 
         IRenderedComponent<ActivityDetail> cut = RenderPage("Admin");
 
-        Assert.Contains("Not placed anywhere yet", cut.Markup, StringComparison.Ordinal);
+        Assert.Contains("Add a placement", cut.Markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("WHERE IT APPEARS", cut.Markup, StringComparison.Ordinal);
         Assert.True(SaveButton(cut).HasAttribute("disabled"));
     }
 
@@ -400,7 +401,7 @@ public class ActivityDetailShould : BunitContext
 
         cut.WaitForAssertion(() => Assert.Contains("You no longer have permission", cut.Markup, StringComparison.Ordinal), Patience);
         Assert.Equal("Canoe Basics", cut.Find(".ptn-lit").TextContent.Trim());
-        Assert.DoesNotContain("Not placed anywhere yet", cut.Markup, StringComparison.Ordinal);
+        Assert.NotEmpty(cut.FindAll(".ptn-tab"));
     }
 
     [Fact]
