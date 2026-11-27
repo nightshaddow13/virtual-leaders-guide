@@ -10,6 +10,7 @@ using VirtualLeadersGuide.Identity.Contracts;
 using VirtualLeadersGuide.Web.Components.Pages;
 using VirtualLeadersGuide.Web.Markdown;
 using VirtualLeadersGuide.Web.PublicGuide;
+using static VirtualLeadersGuide.Web.Tests.GuideBuilder;
 
 namespace VirtualLeadersGuide.Web.Tests;
 
@@ -22,7 +23,7 @@ namespace VirtualLeadersGuide.Web.Tests;
 /// (<c>EventGuide.razor.cs</c>'s own remarks): an Admin sees the same dark state a visitor does.
 /// </remarks>
 /// <remarks>
-/// P4-1 (#23): the Unlocked state's InfoPages content. Sanitization itself is not re-tested here -
+/// P5-14 (#88): the Unlocked state's guide content. Sanitization itself is not re-tested here -
 /// <c>MarkdownRendererShould</c> owns it; these tests only confirm the rendered output actually reaches the
 /// page.
 /// </remarks>
@@ -95,7 +96,7 @@ public class EventGuideShould : BunitContext
 
         IRenderedComponent<EventGuide> cut = Render<EventGuide>(Parameters());
 
-        Assert.Contains("This guide is unlocked", cut.Markup, StringComparison.Ordinal);
+        Assert.NotNull(cut.Find(".vlg-guide-heading"));
     }
 
     [Fact]
@@ -109,7 +110,7 @@ public class EventGuideShould : BunitContext
 
         IRenderedComponent<EventGuide> cut = Render<EventGuide>(Parameters());
 
-        Assert.Contains("This guide is unlocked", cut.Markup, StringComparison.Ordinal);
+        Assert.NotNull(cut.Find(".vlg-guide-heading"));
     }
 
     [Fact]
@@ -137,7 +138,7 @@ public class EventGuideShould : BunitContext
 
         IRenderedComponent<EventGuide> cut = Render<EventGuide>(Parameters(readContext));
 
-        Assert.Contains("This guide is unlocked", cut.Markup, StringComparison.Ordinal);
+        Assert.NotNull(cut.Find(".vlg-guide-heading"));
     }
 
     [Fact]
@@ -181,107 +182,137 @@ public class EventGuideShould : BunitContext
         cut.Find("#Input\\.Passcode").Change("TigerLantern");
         cut.Find("form").Submit();
 
-        Assert.Contains("This guide is unlocked", cut.Markup, StringComparison.Ordinal);
+        Assert.NotNull(cut.Find(".vlg-guide-heading"));
         Assert.True(httpContext.Response.Headers.ContainsKey("Set-Cookie"));
     }
 
     [Fact]
-    public void ShowEachInfoPagesTitleAndRenderedContent_WhenUnlocked_ForLoadAsync()
+    public void ShowTheFirstTabsScreen_WhenUnlockedWithNoQueryString_ForLoadAsync()
     {
-        RegisterServices(_ => JsonResponse(EventDto()), infoPages:
-        [
-            new PublicInfoPageDto { Id = Guid.NewGuid(), Title = "About", MarkdownContent = "Welcome to **camp**!" }
-        ]);
+        RegisterServices(_ => JsonResponse(EventDto()), TwoTabGuide());
 
         IRenderedComponent<EventGuide> cut = RenderAlreadyUnlocked();
 
-        Assert.Contains("About", cut.Markup, StringComparison.Ordinal);
-        Assert.Contains("<strong>camp</strong>", cut.Markup, StringComparison.Ordinal);
+        Assert.Contains("Opening", cut.Markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("Bring boots", cut.Markup, StringComparison.Ordinal);
+        Assert.Empty(cut.FindAll(".rz-alert"));
     }
 
     [Fact]
-    public void ShowAnInfoPagesTitle_WhenItsContentIsEmpty_ForLoadAsync()
+    public void ShowTheRequestedScreen_WhenTheQueryStringNamesIt_ForLoadAsync()
     {
-        RegisterServices(_ => JsonResponse(EventDto()), infoPages:
-        [
-            new PublicInfoPageDto { Id = Guid.NewGuid(), Title = "Coming Soon", MarkdownContent = "" }
-        ]);
+        RegisterServices(_ => JsonResponse(EventDto()), TwoTabGuide());
+        NavigateTo("e/summer-camporee?tab=Packing");
 
         IRenderedComponent<EventGuide> cut = RenderAlreadyUnlocked();
 
-        Assert.Contains("Coming Soon", cut.Markup, StringComparison.Ordinal);
+        Assert.Contains("Bring boots", cut.Markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("Opening", cut.Markup, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void ShowTheEmptyGuideMessage_WhenTheEventHasNoInfoPages_ForLoadAsync()
+    public void SayWhereTheVisitorIs_WhenOnASubTab_ForLoadAsync()
+    {
+        RegisterServices(
+            _ => JsonResponse(EventDto()), Guide(Tab("Day", Screen("Opening"), SubTab("Round Robin", Screen("Rotation")))));
+        NavigateTo("e/summer-camporee?tab=Day&sub=Round%20Robin");
+
+        IRenderedComponent<EventGuide> cut = RenderAlreadyUnlocked();
+
+        Assert.Equal("Day › Round Robin", cut.Find(".vlg-guide-location").TextContent.Trim());
+    }
+
+    [Fact]
+    public void ShowANoticeAndAFallbackScreen_WhenTheQueryStringIsStale_ForLoadAsync()
+    {
+        RegisterServices(_ => JsonResponse(EventDto()), TwoTabGuide());
+        NavigateTo("e/summer-camporee?tab=Evening");
+
+        IRenderedComponent<EventGuide> cut = RenderAlreadyUnlocked();
+
+        Assert.Contains("available anymore", cut.Markup, StringComparison.Ordinal);
+        Assert.Contains("Opening", cut.Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShowTheEmptyGuideMessage_WhenNothingIsPlaced_ForLoadAsync()
     {
         RegisterServices(_ => JsonResponse(EventDto()));
 
         IRenderedComponent<EventGuide> cut = RenderAlreadyUnlocked();
 
         Assert.Contains("haven't been added yet", cut.Markup, StringComparison.Ordinal);
+        Assert.Empty(cut.FindAll("nav"));
     }
 
     [Fact]
-    public void ShowTheSameInfoPages_WhenASignedInAdminReachesUnlockedViaTheStaffBypass_ForLoadAsync()
+    public void ShowTheSameGuide_WhenASignedInAdminReachesUnlockedViaTheStaffBypass_ForLoadAsync()
     {
-        RegisterServices(_ => JsonResponse(EventDto()), infoPages:
-        [
-            new PublicInfoPageDto { Id = Guid.NewGuid(), Title = "About", MarkdownContent = "Hi" }
-        ]);
+        RegisterServices(_ => JsonResponse(EventDto()), TwoTabGuide());
         BunitAuthorizationContext auth = this.AddAuthorization();
         auth.SetAuthorized("admin-1");
         auth.SetRoles("Admin");
 
         IRenderedComponent<EventGuide> cut = Render<EventGuide>(Parameters());
 
-        Assert.Contains("About", cut.Markup, StringComparison.Ordinal);
+        Assert.Contains("Opening", cut.Markup, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void ShowAnInlineErrorButStayUnlocked_WhenTheInfoPagesFetchFails_ForLoadAsync()
+    public void ShowTheGuide_WhenThePasscodeMatches_ForUnlockAsync()
     {
-        RegisterServicesThrowingOnInfoPages();
+        RegisterServices(
+            request => request.Method == HttpMethod.Post
+                ? JsonResponse(new PasscodeCheckResult { Matched = true, EventId = EventId, PasscodeVersion = 1 })
+                : JsonResponse(EventDto()),
+            TwoTabGuide());
+        NavigateTo("e/summer-camporee?tab=Packing");
+        IRenderedComponent<EventGuide> cut = Render<EventGuide>(Parameters());
+
+        cut.Find("#Input\\.Passcode").Change("TigerLantern");
+        cut.Find("form").Submit();
+
+        Assert.Contains("Bring boots", cut.Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShowAnInlineErrorButStayUnlocked_WhenTheGuideFetchFails_ForLoadAsync()
+    {
+        RegisterServices(_ => JsonResponse(EventDto()), guideFails: true);
 
         IRenderedComponent<EventGuide> cut = RenderAlreadyUnlocked();
 
-        Assert.Contains("This guide is unlocked", cut.Markup, StringComparison.Ordinal);
+        Assert.NotNull(cut.Find(".vlg-guide-heading"));
         Assert.Contains("didn't load", cut.Markup, StringComparison.Ordinal);
     }
 
     /// <remarks>
-    /// Intercepts the InfoPages call before it ever reaches <paramref name="responder"/> - every existing
-    /// call site here only ever wrote a responder for the event-lookup/passcode paths, so this keeps them
-    /// working unchanged (defaulting to an empty InfoPages list) rather than requiring every test to also
-    /// handle a third path it isn't testing. <see cref="RegisterServicesThrowingOnInfoPages"/> is the one
-    /// exception, for the test that specifically needs the InfoPages call itself to fail.
+    /// Intercepts the guide call before it ever reaches <paramref name="responder"/>, so a responder only has to
+    /// handle the event-lookup/passcode paths. The guide defaults to one with no Tabs.
     /// </remarks>
     private void RegisterServices(
-        Func<HttpRequestMessage, HttpResponseMessage> responder, IReadOnlyList<PublicInfoPageDto>? infoPages = null)
+        Func<HttpRequestMessage, HttpResponseMessage> responder, PublicGuideDto? guide = null, bool guideFails = false)
     {
-        IReadOnlyList<PublicInfoPageDto> infoPagesResponse = infoPages ?? [];
+        PublicGuideDto guideResponse = guide ?? Guide();
         Services.AddSingleton(new PublicEventClient(new StubHttpClientFactory(new StubHttpMessageHandler(request =>
-            request.RequestUri!.AbsolutePath.EndsWith("/infoPages", StringComparison.Ordinal)
-                ? JsonResponse(infoPagesResponse)
-                : responder(request)))));
+            !request.RequestUri!.AbsolutePath.EndsWith("/guide", StringComparison.Ordinal)
+                ? responder(request)
+                : guideFails
+                    ? throw new HttpRequestException("simulated Api outage")
+                    : JsonResponse(guideResponse)))));
         Services.AddSingleton(new PasscodeUnlockCookie(DataProtectionProvider.Create("VirtualLeadersGuide.Web.Tests")));
         Services.AddSingleton(new MarkdownRenderer());
     }
 
-    private void RegisterServicesThrowingOnInfoPages()
-    {
-        Services.AddSingleton(new PublicEventClient(new StubHttpClientFactory(new StubHttpMessageHandler(request =>
-            request.RequestUri!.AbsolutePath.EndsWith("/infoPages", StringComparison.Ordinal)
-                ? throw new HttpRequestException("simulated Api outage")
-                : JsonResponse(EventDto())))));
-        Services.AddSingleton(new PasscodeUnlockCookie(DataProtectionProvider.Create("VirtualLeadersGuide.Web.Tests")));
-        Services.AddSingleton(new MarkdownRenderer());
-    }
+    private static PublicGuideDto TwoTabGuide() => Guide(
+        Tab("Day", Screen("Opening")),
+        Tab("Packing", InfoPageScreen("Packing List", "Bring boots.")));
+
+    private void NavigateTo(string uri) => Services.GetRequiredService<NavigationManager>().NavigateTo(uri);
 
     /// <remarks>
     /// Same cookie setup as <see cref="ShowUnlocked_WhenTheVisitorAlreadyHasAValidCookie_ForLoadAsync"/> -
-    /// call after <see cref="RegisterServices"/> (or <see cref="RegisterServicesThrowingOnInfoPages"/>) so
-    /// <see cref="PasscodeUnlockCookie"/> is already registered.
+    /// call after <see cref="RegisterServices"/> so <see cref="PasscodeUnlockCookie"/> is already registered.
     /// </remarks>
     private IRenderedComponent<EventGuide> RenderAlreadyUnlocked()
     {

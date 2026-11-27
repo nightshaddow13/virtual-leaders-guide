@@ -1,13 +1,47 @@
-@* See ADR-0034 for why every control here is a real <a>/<form>, never a Radzen component. *@
+@using Microsoft.AspNetCore.Components.Sections
+@using VirtualLeadersGuide.Identity.Contracts
+@using VirtualLeadersGuide.Web.Authorization
+@using VirtualLeadersGuide.Web.Components.PublicGuide
+
+@* See ADR-0034 for why every control here is a real <a>/<form>/<details>, never an interactive Radzen component. *@
 
 <header class="vlg-header">
-    <div class="vlg-brand-row">
-        <a class="vlg-brand" href="">
+    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Wrap="FlexWrap.Wrap" Gap="1.5rem"
+                 class="vlg-bar rz-mx-auto rz-px-4 rz-py-3">
+        <a class="vlg-brand rz-display-flex rz-align-items-center" href="">
             <span class="vlg-logo-mark" aria-hidden="true"></span>
             <span class="vlg-brand-text">Virtual Leaders Guide</span>
         </a>
 
-        <div class="vlg-header-actions">
+        @if (IsOnAGuide)
+        {
+            <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Wrap="FlexWrap.Wrap" Gap="0.5rem">
+                <SectionOutlet SectionName="@GuideNav.HeaderSection" />
+            </RadzenStack>
+        }
+        else
+        {
+            <AuthorizeView>
+                <Authorized>
+                    @if (context.User.IsStaff())
+                    {
+                        <nav class="rz-display-flex" aria-label="Main">
+                            <a class="@NavButton.Classes(CurrentSection == Section.Dashboard)" href="dashboard"
+                               aria-current="@Current(Section.Dashboard)">Dashboard</a>
+                            @if (context.User.IsInRole(RoleNames.Admin))
+                            {
+                                <a class="@NavButton.Classes(CurrentSection == Section.Facilities)" href="dashboard/facilities"
+                                   aria-current="@Current(Section.Facilities)">Facilities</a>
+                                <a class="@NavButton.Classes(CurrentSection == Section.Users)" href="dashboard/users"
+                                   aria-current="@Current(Section.Users)">Users</a>
+                            }
+                        </nav>
+                    }
+                </Authorized>
+            </AuthorizeView>
+        }
+
+        <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem" class="rz-ms-auto">
             <button type="button" id="vlg-theme-toggle" class="vlg-theme-toggle" aria-label="Toggle color theme">
                 <svg class="vlg-icon-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2" /><path stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" /></svg>
                 <svg class="vlg-icon-moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z" /></svg>
@@ -15,35 +49,13 @@
 
             <AuthorizeView>
                 <Authorized>
-                    <nav class="vlg-account-actions" aria-label="Account">
-                        <AuthorizeView Roles="Admin" Context="adminContext">
-                            <Authorized>
-                                <NavLink class="rz-button rz-button-sm rz-variant-text rz-base rz-shade-default"
-                                         href="dashboard/facilities">
-                                    <span class="rz-button-box"><span class="rz-button-text">Facilities</span></span>
-                                </NavLink>
-                                <NavLink class="rz-button rz-button-sm rz-variant-text rz-base rz-shade-default"
-                                         href="dashboard/users">
-                                    <span class="rz-button-box"><span class="rz-button-text">Users</span></span>
-                                </NavLink>
-                            </Authorized>
-                        </AuthorizeView>
-                        <NavLink class="rz-button rz-button-sm rz-variant-text rz-base rz-shade-default"
-                                 href="Account/Manage">
-                            <span class="rz-button-box"><span class="rz-button-text">Manage account</span></span>
-                        </NavLink>
-                        <SignOutForm />
-                    </nav>
+                    <AccountMenu User="context.User" />
                 </Authorized>
                 <NotAuthorized>
-                    <NavLink class="rz-button rz-button-md rz-variant-outlined rz-primary rz-shade-default vlg-signin"
-                             href="Account/Login">
-                        <span class="rz-button-box"><span class="rz-button-text">Staff sign in</span></span>
-                    </NavLink>
+                    <a class="rz-button rz-button-sm rz-variant-outlined rz-primary rz-shade-default"
+                       href="Account/Login">Sign in</a>
                 </NotAuthorized>
             </AuthorizeView>
-        </div>
-    </div>
-
-    <SignedInContextStrip />
+        </RadzenStack>
+    </RadzenStack>
 </header>

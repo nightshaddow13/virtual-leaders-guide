@@ -1,0 +1,4 @@
+/* ::deep because RadzenText renders the heading, so it carries no scope attribute. */
+article ::deep .vlg-activity-name {
+    font-weight: 600;
+}

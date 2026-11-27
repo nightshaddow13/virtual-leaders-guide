@@ -84,7 +84,7 @@ public class DashboardAuthorizationScenarios : E2ETestBase
             await SignInAsAdminAsync();
             await ExpectDashboardAsync();
 
-            await HeaderSignOutButton.ClickAsync();
+            await ClickHeaderSignOutAsync();
 
             await Expect(Page).ToHaveURLAsync(RedirectToLoginWithReturnUrl());
             await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = "Log in", Exact = true }))
