@@ -211,6 +211,18 @@ public class EventGuideShould : BunitContext
     }
 
     [Fact]
+    public void SayWhereTheVisitorIs_WhenOnASubTab_ForLoadAsync()
+    {
+        RegisterServices(
+            _ => JsonResponse(EventDto()), Guide(Tab("Day", Screen("Opening"), SubTab("Round Robin", Screen("Rotation")))));
+        NavigateTo("e/summer-camporee?tab=Day&sub=Round%20Robin");
+
+        IRenderedComponent<EventGuide> cut = RenderAlreadyUnlocked();
+
+        Assert.Equal("Day › Round Robin", cut.Find(".vlg-guide-location").TextContent.Trim());
+    }
+
+    [Fact]
     public void ShowANoticeAndAFallbackScreen_WhenTheQueryStringIsStale_ForLoadAsync()
     {
         RegisterServices(_ => JsonResponse(EventDto()), TwoTabGuide());

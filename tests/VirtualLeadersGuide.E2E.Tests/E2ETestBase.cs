@@ -419,14 +419,21 @@ public abstract class E2ETestBase : PageTest
     protected Task ExpectDashboardAsync() =>
         Expect(Page).ToHaveURLAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
 
-    /// <summary>The site header's "Sign out" button.</summary>
+    /// <summary>The top bar's account menu button - present exactly when someone is signed in.</summary>
+    protected ILocator AccountMenuButton => Page.Locator("header summary[aria-label='Account menu']");
+
+    /// <summary>Opens the account menu and clicks its "Sign out" button.</summary>
     /// <remarks>
-    /// Scoped to the header's Account nav because <c>Account/NoAccess</c> has a second "Sign out" button of its
+    /// Scoped to the menu's Account nav because <c>Account/NoAccess</c> has a second "Sign out" button of its
     /// own - and that's where signing in with no returnUrl now leaves a User holding no Role (P2-22, #212).
     /// </remarks>
-    protected ILocator HeaderSignOutButton =>
-        Page.GetByRole(AriaRole.Navigation, new PageGetByRoleOptions { Name = "Account" })
-            .GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Sign out" });
+    protected async Task ClickHeaderSignOutAsync()
+    {
+        await AccountMenuButton.ClickAsync();
+        await Page.GetByRole(AriaRole.Navigation, new PageGetByRoleOptions { Name = "Account" })
+            .GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Sign out" })
+            .ClickAsync();
+    }
 
     /// <summary>Signs the current session out via the site header's real sign-out form.</summary>
     /// <remarks>
@@ -439,7 +446,7 @@ public abstract class E2ETestBase : PageTest
     protected async Task SignOutAsync()
     {
         await Page.GotoAsync(Fixture.WebBaseUrl.ToString());
-        await HeaderSignOutButton.ClickAsync();
+        await ClickHeaderSignOutAsync();
     }
 
     /// <remarks>

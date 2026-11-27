@@ -1,9 +1,11 @@
 @page "/e/{Slug}"
 @attribute [ExcludeFromInteractiveRouting]
 
+@using Microsoft.AspNetCore.Components.Sections
 @using VirtualLeadersGuide.Identity.Contracts
 @using VirtualLeadersGuide.Web.Components.Account.Shared
 @using VirtualLeadersGuide.Web.Components.PublicGuide
+@using VirtualLeadersGuide.Web.PublicGuide
 
 @* See EventGuide.razor.cs's own /// remarks for why this is static SSR and never uses RadzenButton. *@
 
@@ -103,7 +105,15 @@
                              Text="That part of the guide isn't available anymore." />
             }
 
-            <GuideTabStrip Slug="@Slug" Guide="guide!" Selection="selection" />
+            <SectionContent SectionName="@GuideNav.HeaderSection">
+                <GuideNav Slug="@Slug" Guide="guide!" Selection="selection" />
+            </SectionContent>
+
+            @* Said on the page whenever the bar can't say it: on a Sub Tab, or a Tab tucked under More. *@
+            @if (selection.SubTab is not null || guide!.Tabs.Skip(GuideMenu.ShownCount(guide)).Contains(selection.Tab))
+            {
+                <RadzenText TextStyle="TextStyle.Caption" TagName="TagName.P" class="vlg-guide-location">@selection.Tab.Name @(selection.SubTab is null ? "" : $"› {selection.SubTab.Name}")</RadzenText>
+            }
             <GuideScreen Screen="selection.Screen" />
         }
         break;

@@ -7,7 +7,7 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// Covers P4-2 (#72): the public entry path at <c>/</c> and <c>/e/{slug}</c> - event lookup, passcode entry,
 /// and the landing states around it (wrong passcode, unknown address, Cancelled/Draft, the signed-in staff
 /// bypass, and a Passcode rotation revoking an existing Unlock). Also covers P5-14 (#88): once unlocked, the
-/// guide shows its content behind Tab and Sub Tab strips.
+/// guide shows its content behind the Tabs in the top bar (#241).
 /// </summary>
 /// <remarks>
 /// Every Event here goes through the real UI (<see cref="E2ETestBase.CreateEventAsync"/>), same discipline as
@@ -126,8 +126,8 @@ public class PublicGuideScenarios : E2ETestBase
         await RunAsync(async () =>
         {
             (Guid eventId, string slug, string passcode) = await CreateAndPublishEventReturningIdAsync("Guide Tabs");
-            string day = Unique("Day");
-            string packing = Unique("Packing");
+            const string day = "Day";
+            const string packing = "Packing";
             string section = Unique("Ranges");
             string subSection = Unique("Archery");
             string loose = await CreatePlacedActivityAsync(eventId, "Opening", day);
@@ -141,7 +141,7 @@ public class PublicGuideScenarios : E2ETestBase
             await Expect(Page.Locator(".vlg-screen").Locator("h2, h3, h4"))
                 .ToHaveTextAsync([loose, section, sectioned, subSection, nested]);
 
-            await Page.Locator(".vlg-tabs").GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = packing }).ClickAsync();
+            await TopBarTabs().GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = packing }).ClickAsync();
 
             await Expect(Page.Locator(".vlg-screen h2")).ToHaveTextAsync(title);
             await Expect(Page.Locator(".vlg-screen strong")).ToHaveTextAsync("camp");
@@ -159,15 +159,17 @@ public class PublicGuideScenarios : E2ETestBase
             string rotation = await CreatePlacedActivityAsync(eventId, "Rotation", day, subTab: roundRobin);
             await SignOutAsync();
             await SubmitOnHomeAsync(slug, passcode);
-            ILocator subTabs = Page.Locator(".vlg-subtabs");
+            ILocator dropdown = TopBarTabs().Locator("summary", new LocatorLocatorOptions { HasText = day });
             ILocator activities = Page.Locator(".vlg-screen h3");
 
             await Expect(activities).ToHaveTextAsync(loose);
 
-            await subTabs.GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = roundRobin }).ClickAsync();
+            await dropdown.ClickAsync();
+            await TopBarTabs().GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = roundRobin }).ClickAsync();
             await Expect(activities).ToHaveTextAsync(rotation);
 
-            await subTabs.GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = day }).ClickAsync();
+            await dropdown.ClickAsync();
+            await TopBarTabs().GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = day }).ClickAsync();
             await Expect(activities).ToHaveTextAsync(loose);
         });
 
@@ -186,8 +188,12 @@ public class PublicGuideScenarios : E2ETestBase
             await Expect(UnlockedHeading()).ToBeVisibleAsync();
             await Page.SetViewportSizeAsync(375, 600);
             await Page.EvaluateAsync("window.scrollTo(0, 1500)");
+            Assert.Equal(0, (await Page.Locator("header").BoundingBoxAsync())!.Y);
 
-            await Page.Locator(".vlg-tabs").GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = secondTab }).ClickAsync();
+            await GuideMenuButton().ClickAsync();
+            LocatorBoundingBoxResult panel = (await GuideMenu().BoundingBoxAsync())!;
+            Assert.True(panel.X >= 0 && panel.X + panel.Width <= 375, $"The menu runs off the screen: {panel.X} + {panel.Width}");
+            await GuideMenu().GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = secondTab }).ClickAsync();
 
             await Expect(Page.Locator(".vlg-screen h2")).ToHaveTextAsync(secondTitle);
             await Page.WaitForFunctionAsync("window.scrollY === 0", null, new PageWaitForFunctionOptions { Timeout = 5_000 });
@@ -204,6 +210,71 @@ public class PublicGuideScenarios : E2ETestBase
 
             await Expect(Page.GetByText("haven't been added yet")).ToBeVisibleAsync();
         });
+
+    /// <remarks>Only a real browser runs <c>menus.js</c> and shows which of the two navigations CSS displays.</remarks>
+    [Fact(DisplayName = "Given a signed-in Admin on a guide, when they open a dropdown and click elsewhere, then it closes and no management links are offered")]
+    public async Task GivenASignedInAdminOnAGuide_WhenTheyClickOutsideAnOpenDropdown_ThenItClosesAndNoManagementLinksShow() =>
+        await RunAsync(async () =>
+        {
+            (Guid eventId, string slug, _) = await CreateAndPublishEventReturningIdAsync("Guide Staff");
+            string day = Unique("Day");
+            string roundRobin = Unique("Round Robin");
+            await CreatePlacedActivityAsync(eventId, "Rotation", day, subTab: roundRobin);
+            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, $"e/{slug}").ToString());
+            ILocator subTabLink = TopBarTabs().GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = roundRobin });
+
+            await Expect(AccountMenuButton).ToBeVisibleAsync();
+            await Expect(Page.GetByRole(AriaRole.Navigation, new PageGetByRoleOptions { Name = "Main" })).ToHaveCountAsync(0);
+            await Expect(GuideMenuButton()).ToBeHiddenAsync();
+            await TopBarTabs().Locator("summary").ClickAsync();
+            await Expect(subTabLink).ToBeVisibleAsync();
+
+            await Page.Mouse.ClickAsync(1200, 500);
+
+            await Expect(subTabLink).ToBeHiddenAsync();
+        });
+
+    /// <remarks>Only a real browser shows how tall the bar is, where a menu lands and where focus goes.</remarks>
+    [Fact(DisplayName = "Given a guide with more Tabs than fit, when a visitor uses More by keyboard, then the bar stays one row, the menu stays on screen and Escape returns focus to it")]
+    public async Task GivenMoreTabsThanFit_WhenAVisitorUsesMore_ThenTheBarStaysOneRowAndFocusReturns() =>
+        await RunAsync(async () =>
+        {
+            (Guid eventId, string slug, _) = await CreateAndPublishEventReturningIdAsync("Guide Overflow");
+            string[] tabs = ["Day", "Packing and Gear", "Saturday Morning Program", "Maps and Directions", "Health and Safety"];
+            foreach (string tab in tabs)
+            {
+                await CreatePlacedActivityAsync(eventId, "Item", tab);
+            }
+
+            await Page.SetViewportSizeAsync(1040, 720);
+            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, $"e/{slug}").ToString());
+            ILocator more = TopBarTabs().Locator("summary", new LocatorLocatorOptions { HasText = "More" });
+            ILocator last = TopBarTabs().GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = tabs[^1] });
+
+            Assert.True((await Page.Locator("header").BoundingBoxAsync())!.Height < 90, "The top bar wrapped.");
+            await more.PressAsync("Enter");
+            LocatorBoundingBoxResult box = (await last.BoundingBoxAsync())!;
+            Assert.True(box.X >= 0 && box.X + box.Width <= 1040, $"The menu runs off the screen: {box.X} + {box.Width}");
+
+            await Page.Keyboard.PressAsync("Tab");
+            await Page.Keyboard.PressAsync("Escape");
+            await Expect(last).ToBeHiddenAsync();
+            await Expect(more).ToBeFocusedAsync();
+
+            await more.PressAsync("Enter");
+            await Page.Locator("header a.vlg-brand").FocusAsync();
+            await Expect(last).ToBeHiddenAsync();
+
+            await more.PressAsync("Enter");
+            await last.ClickAsync();
+            await Expect(Page.Locator(".vlg-guide-location")).ToHaveTextAsync(tabs[^1]);
+        });
+
+    private ILocator TopBarTabs() => Page.GetByRole(AriaRole.Navigation, new PageGetByRoleOptions { Name = "Tabs" });
+
+    private ILocator GuideMenuButton() => Page.Locator("header summary[aria-label='Guide menu']");
+
+    private ILocator GuideMenu() => Page.GetByRole(AriaRole.Navigation, new PageGetByRoleOptions { Name = "Guide menu" });
 
     private static string Unique(string label) => $"e2e-{label} {Guid.NewGuid():n}";
 

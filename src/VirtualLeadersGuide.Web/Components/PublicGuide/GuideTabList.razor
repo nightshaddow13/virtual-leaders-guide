@@ -1,0 +1,37 @@
+@using VirtualLeadersGuide.Identity.Contracts
+@using VirtualLeadersGuide.Web.Components.Layout
+@using VirtualLeadersGuide.Web.PublicGuide
+
+@* Tabs listed down a menu, each one's screens indented under its name. *@
+@foreach (PublicGuideTabDto tab in Tabs)
+{
+    @if (tab.SubTabs.Count == 0)
+    {
+        <GuideLink Href="@GuideMenu.Href(Slug, tab, null)" Label="@tab.Name" IsSelected="tab == Selection.Tab"
+                   Class="@NavButton.MenuItem" />
+    }
+    else
+    {
+        <RadzenText TextStyle="TextStyle.Overline" TagName="TagName.Div" class="rz-px-2 rz-mt-2">@tab.Name</RadzenText>
+        @foreach ((string name, PublicGuideSubTabDto? subTab) in GuideMenu.Screens(tab))
+        {
+            <GuideLink Href="@GuideMenu.Href(Slug, tab, subTab)" Label="@name"
+                       IsSelected="tab == Selection.Tab && subTab == Selection.SubTab"
+                       Class="@($"{NavButton.MenuItem} rz-ms-4")" />
+        }
+    }
+}
+
+@code {
+    /// <summary>The Event's Slug.</summary>
+    [Parameter, EditorRequired]
+    public string Slug { get; set; } = "";
+
+    /// <summary>The Tabs to list.</summary>
+    [Parameter, EditorRequired]
+    public IEnumerable<PublicGuideTabDto> Tabs { get; set; } = [];
+
+    /// <summary>The screen currently shown.</summary>
+    [Parameter, EditorRequired]
+    public GuideSelection Selection { get; set; } = default!;
+}

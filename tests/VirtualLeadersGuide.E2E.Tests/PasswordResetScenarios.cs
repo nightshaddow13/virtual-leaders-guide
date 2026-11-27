@@ -30,7 +30,7 @@ public class PasswordResetScenarios : E2ETestBase
             await Expect(Page).ToHaveURLAsync(new Uri(Fixture.WebBaseUrl, "Account/ResetPasswordConfirmation").ToString());
 
             await new LoginPage(Page).SignInAsync(Fixture.WebBaseUrl, email, TestCredentials.RotatedPassword);
-            await Expect(HeaderSignOutButton).ToBeVisibleAsync();
+            await Expect(AccountMenuButton).ToBeVisibleAsync();
 
             await new LoginPage(Page).SignInAsync(Fixture.WebBaseUrl, email, TestCredentials.KnownPassword);
             await Expect(Page.GetByText("Error: Invalid login attempt.")).ToBeVisibleAsync();

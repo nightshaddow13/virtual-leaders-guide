@@ -56,11 +56,4 @@ public class GuideSelectionShould
         Assert.Equal("Campfire", selection.SubTab?.Name);
         Assert.False(selection.WasStale);
     }
-
-    [Theory]
-    [InlineData("Day", true)]
-    [InlineData("Evening", false)]
-    [InlineData("Logistics", false)]
-    public void ReportWhetherToLeadWithABareEntry_WhenATabIsSelected_ForShowsBareEntry(string tab, bool expected) =>
-        Assert.Equal(expected, GuideSelection.Resolve(TwoTabs, tab, null)!.ShowsBareEntry);
 }

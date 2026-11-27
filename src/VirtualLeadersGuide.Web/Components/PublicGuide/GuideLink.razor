@@ -1,0 +1,21 @@
+@using VirtualLeadersGuide.Web.Components.Layout
+
+<a class="@NavButton.Classes(IsSelected) @Class" href="@Href" aria-current="@(IsSelected ? "page" : null)">@Label</a>
+
+@code {
+    /// <summary>Where the entry goes.</summary>
+    [Parameter, EditorRequired]
+    public string Href { get; set; } = "";
+
+    /// <summary>The Tab or Sub Tab name shown.</summary>
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = "";
+
+    /// <summary>Whether this is the screen being shown.</summary>
+    [Parameter]
+    public bool IsSelected { get; set; }
+
+    /// <summary>Extra classes for where the entry sits.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+}

@@ -17,9 +17,6 @@ public sealed record GuideSelection(PublicGuideTabDto Tab, PublicGuideSubTabDto?
     /// <summary>The selected screen.</summary>
     public PublicGuideScreenDto Screen => SubTab?.Screen ?? Tab.Screen;
 
-    /// <summary>Whether the Sub Tab strip leads with an entry for the bare Tab's screen.</summary>
-    public bool ShowsBareEntry => Tab.SubTabs.Count > 0 && !Tab.Screen.IsEmpty;
-
     /// <summary>Resolves a query string against the guide.</summary>
     /// <param name="guide">The Event's guide.</param>
     /// <param name="tab">The requested Tab name, if any.</param>

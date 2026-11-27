@@ -11,7 +11,7 @@ namespace VirtualLeadersGuide.Web.Components.Pages;
 
 /// <summary>
 /// An Event's public gated guide - wireframes 1c (locked splash, P4-2 #72) and 1g (wrong-passcode error, P4-2
-/// #72), and, once unlocked, its guide one screen at a time behind Tab and Sub Tab strips (wireframes 3a/3c,
+/// #72), and, once unlocked, its guide one screen at a time, picked from the Tabs in the top bar (wireframe 3a, as changed by #241;
 /// P5-14 #88), selected by the <c>tab</c>/<c>sub</c> query string (ADR-0080).
 /// </summary>
 /// <remarks>
