@@ -50,14 +50,14 @@ public class DisabledTooltipShould : BunitContext
     }
 
     [Fact]
-    public void BeFocusableAndDescribedByTheReason_WhenRendered_ForBuildRenderTree()
+    public void BeFocusableAndNamedByTheReason_WhenRendered_ForBuildRenderTree()
     {
         IRenderedComponent<DisabledTooltip> cut = RenderWrapper();
 
         IElement wrapper = cut.Find("[role=group]");
 
         Assert.Equal("0", wrapper.GetAttribute("tabindex"));
-        Assert.Equal(Reason, cut.Find($"#{wrapper.GetAttribute("aria-describedby")}").TextContent);
+        Assert.Equal(Reason, cut.Find($"#{wrapper.GetAttribute("aria-labelledby")}").TextContent);
     }
 
     private IRenderedComponent<DisabledTooltip> RenderWrapper() =>

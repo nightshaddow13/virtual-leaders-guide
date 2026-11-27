@@ -5,12 +5,12 @@ namespace VirtualLeadersGuide.Web.Components.Shared;
 
 /// <summary>
 /// Explains why the control inside it is disabled: a tooltip on hover or keyboard focus, and the same text as the
-/// wrapper's accessible description.
+/// wrapper's accessible name.
 /// </summary>
 /// <remarks>See ADR-0052 for why a wrapper element owns the triggers rather than the disabled control.</remarks>
 public partial class DisabledTooltip
 {
-    private readonly string descriptionId = $"disabled-reason-{Guid.NewGuid():n}";
+    private readonly string reasonId = $"disabled-reason-{Guid.NewGuid():n}";
     private ElementReference anchor;
 
     [Inject]

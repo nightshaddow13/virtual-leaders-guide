@@ -520,6 +520,12 @@ public class EventManagementScenarios : E2ETestBase
 
             await wrapper.FocusAsync();
             await Expect(tooltip).ToContainTextAsync("Go live to open this guide.");
+
+            // Radzen rewrites attributes on its anchor as a tooltip opens and closes; the name has to survive that.
+            await wrapper.BlurAsync();
+            await Expect(tooltip).ToHaveCountAsync(0);
+            await Expect(row.GetByRole(AriaRole.Group, new LocatorGetByRoleOptions { Name = "Draft guides can't be previewed yet" }))
+                .ToBeVisibleAsync();
         });
 
     private async Task<string> GoLiveAsync(Guid eventId)

@@ -45,4 +45,7 @@ writing the `<span>` again. It injects `TooltipService` and holds its own `Eleme
 inject the service for this and a row in a loop needs no dictionary.
 
 The wrapper is also focusable, opens the tooltip on focus and closes it on blur, and carries the same text as its
-accessible description. Hover alone left keyboard and screen reader users with a disabled control and no reason.
+accessible name. Hover alone left keyboard and screen reader users with a disabled control and no reason.
+
+The text is wired with `aria-labelledby`, not `aria-describedby`: Radzen's tooltip script overwrites and then removes
+`aria-describedby` on the element it anchors to.
