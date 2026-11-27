@@ -25,7 +25,8 @@ public class PlacementManagementScenarios : E2ETestBase
             string tab = $"e2e-Morning {Guid.NewGuid():n}";
 
             await Page.GotoAsync(ActivityUrl(eventId, activityId));
-            await Expect(Page.GetByText("Not placed anywhere yet")).ToBeVisibleAsync(InteractiveVisible());
+            await Expect(Page.GetByText("Add a placement")).ToBeVisibleAsync(InteractiveVisible());
+            await Expect(Page.GetByText("WHERE IT APPEARS")).ToHaveCountAsync(0);
             await PlaceAsync(tab);
 
             await Expect(Page.Locator(".ptn-pending")).ToBeVisibleAsync(InteractiveVisible());
@@ -116,7 +117,7 @@ public class PlacementManagementScenarios : E2ETestBase
             await PlaceAsync($"e2e-Evening {Guid.NewGuid():n}");
 
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Cancel" }).ClickAsync();
-            await Expect(Page.GetByText("Discard unsaved placements?")).ToBeVisibleAsync(InteractiveVisible());
+            await Expect(Page.GetByText("Discard unsaved changes?")).ToBeVisibleAsync(InteractiveVisible());
             await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Keep editing" }).ClickAsync();
             await Expect(Page).ToHaveURLAsync(ActivityUrl(eventId, activityId));
             await Expect(Page.Locator(".ptn-pending")).ToBeVisibleAsync(InteractiveVisible());

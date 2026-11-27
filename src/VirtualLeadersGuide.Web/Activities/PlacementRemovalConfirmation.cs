@@ -60,13 +60,13 @@ internal static class PlacementRemovalConfirmation
     /// </summary>
     /// <param name="activityName">The Activity, named in the question.</param>
     /// <param name="impact">What deleting the Activity does, from <see cref="PlacementTreeModel.DescribeDeletion"/>.</param>
-    /// <param name="pendingGhosts">How many unsaved placements are waiting - they're discarded along with the Activity, and the bullet says so.</param>
+    /// <param name="unsaved">What the page holds unsaved - discarded along with the Activity, and the bullets say so.</param>
     /// <returns>The parameter dictionary for <c>DialogService.OpenAsync&lt;ConfirmDialog&gt;</c>.</returns>
     public static Dictionary<string, object?> ForLastPlacement(
-        string activityName, ActivityDeletionImpact impact, int pendingGhosts) => new()
+        string activityName, ActivityDeletionImpact impact, UnsavedWork unsaved = default) => new()
     {
         [nameof(ConfirmDialog.Message)] = $"An activity needs at least one placement. Delete {activityName} instead?",
-        [nameof(ConfirmDialog.Consequences)] = ActivityDeleteConfirmation.Consequences(impact, pendingGhosts),
+        [nameof(ConfirmDialog.Consequences)] = ActivityDeleteConfirmation.Consequences(impact, unsaved),
         [nameof(ConfirmDialog.ConfirmText)] = "Delete activity",
         [nameof(ConfirmDialog.DismissText)] = "Keep it"
     };

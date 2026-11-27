@@ -13,11 +13,10 @@ namespace VirtualLeadersGuide.Web.Components.Pages;
 /// <remarks>
 /// Since P5-11 (#96) a "Placed under" column renders one chip per Placement (the criterion #93 deferred to
 /// that story, see the comments left on #93/#96) and the header counts Placements alongside Activities.
-/// Row click opens the Activity's page (<c>ActivityDetail</c>), which hosts the Placement builder and tree -
-/// the wireframe's "row click opens the detail form". The row actions are Edit (P5-8, #94), which opens
-/// <c>ActivityEditor</c> at <c>/{id}/edit</c> because <c>/{id}</c> belongs to the detail page, and Delete
-/// (P5-9, #95), which confirms through <see cref="ActivityDeleteConfirmation"/> - the same bullets the Activity
-/// page's last-Placement dialog shows. The empty state is a <c>RadzenCard</c> via <c>&lt;EmptyTemplate&gt;</c>, not the
+/// Row click opens the Activity's page (<c>ActivityDetail</c>), the only place an existing Activity is edited
+/// (P5-23, #206) - so the one row action is Delete (P5-9, #95), which confirms through
+/// <see cref="ActivityDeleteConfirmation"/>, the same bullets the Activity page's last-Placement dialog shows.
+/// The empty state is a <c>RadzenCard</c> via <c>&lt;EmptyTemplate&gt;</c>, not the
 /// <c>EmptyText</c> string <c>InfoPageList</c>/<c>Dashboard</c>/<c>Users</c> all use - wireframe turn 1a
 /// explicitly overrides that convention ("the copy has to teach the inline-create model").
 /// </remarks>
@@ -45,10 +44,9 @@ public partial class ActivityList
     private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
 
     /// <remarks>
-    /// Two icon-only buttons' width (ADR-0037): <c>InfoPageList.razor.cs</c>'s arithmetic of 76px for one button
-    /// plus 48px per extra, so Edit and Delete together are 124px.
+    /// One icon-only button's width (ADR-0037), per <c>InfoPageList.razor.cs</c>'s arithmetic.
     /// </remarks>
-    private const string ActionColumnWidth = "124px";
+    private const string ActionColumnWidth = "76px";
 
     private enum PageState { Loading, Denied, Unavailable, Ready }
 

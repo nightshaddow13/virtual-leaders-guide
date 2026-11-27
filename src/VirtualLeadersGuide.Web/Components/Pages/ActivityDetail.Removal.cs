@@ -29,6 +29,11 @@ public partial class ActivityDetail
     /// </remarks>
     private async Task RemoveAsync(PlacementLeaf leaf)
     {
+        if (permissionLost)
+        {
+            return;
+        }
+
         saveErrorMessage = null;
 
         if (leaf.IsPending)
@@ -41,7 +46,7 @@ public partial class ActivityDetail
         RemovalImpact? impact = leaf.PlacementId is { } id ? model!.DescribeRemoval(id) : null;
         if (impact is null)
         {
-            await RefreshTreeAsync();
+            await RefreshOrReportAsync();
             return;
         }
 
@@ -67,7 +72,7 @@ public partial class ActivityDetail
             switch (await PlacementClient.DeleteAsync(leaf.PlacementId!.Value, CancellationToken.None))
             {
                 case PlacementRemoveOutcome.Forbidden:
-                    state = PageState.Denied;
+                    permissionLost = true;
                     return;
                 case PlacementRemoveOutcome.LastPlacement when await OfferActivityDeletionAsync():
                     return;
@@ -87,7 +92,7 @@ public partial class ActivityDetail
                     break;
             }
 
-            await RefreshTreeAsync();
+            await RefreshOrReportAsync();
         }
         catch (ActivityDataUnavailableException)
         {
@@ -102,10 +107,18 @@ public partial class ActivityDetail
     /// <remarks>
     /// Re-creates the removed Placement by name, then restores its <c>SortOrder</c> (decision 3). A failed
     /// reposition is silent: order is advisory until P5-13 (#98), so the row simply stays at the end of its
-    /// bucket. A 409 means it's already back (a double click, or another tab restored it).
+    /// bucket. A 409 means it's already back (a double click, or another tab restored it). The toast outlives a
+    /// loss of permission, so the click is ignored then - the banner already says why. It also outlives the start
+    /// of a Save, so Undo waits for that to finish rather than writing alongside it.
     /// </remarks>
     private async Task UndoRemovalAsync(PlacementLeaf removed)
     {
+        await saveFinished;
+        if (permissionLost || abandoned)
+        {
+            return;
+        }
+
         isRemoving = true;
         try
         {
@@ -115,20 +128,27 @@ public partial class ActivityDetail
 
             if (outcome == PlacementWriteOutcome.Forbidden)
             {
-                state = PageState.Denied;
+                permissionLost = true;
                 return;
             }
 
             if (outcome == PlacementWriteOutcome.Success && created is not null)
             {
-                await PlacementClient.UpdateSortOrderAsync(created.Id, removed.SortOrder, CancellationToken.None);
+                if (await PlacementClient.UpdateSortOrderAsync(created.Id, removed.SortOrder, CancellationToken.None)
+                    == PlacementWriteOutcome.Forbidden)
+                {
+                    permissionLost = true;
+                    savedSinceLoad.Add((created.Id, path));
+                    RebuildModel();
+                    return;
+                }
             }
             else if (outcome == PlacementWriteOutcome.Invalid)
             {
                 saveErrorMessage = $"Couldn't restore \"{path.Display}\". Add it again with the builder.";
             }
 
-            await RefreshTreeAsync();
+            await RefreshOrReportAsync();
         }
         catch (ActivityDataUnavailableException)
         {
@@ -152,17 +172,18 @@ public partial class ActivityDetail
     /// The last-Placement dialog (ADR-0050): removing an Activity's final row would strand it at zero, so this
     /// offers to delete the whole Activity instead and, if confirmed, does (P5-9, #95).
     /// </summary>
-    /// <returns><see langword="true"/> when the page is finished - the Activity was deleted, or the caller turned out to have no access - and the caller should stop touching it.</returns>
+    /// <returns><see langword="true"/> when there is nothing more for the caller to do - the Activity was deleted, or the caller turned out to have lost access.</returns>
     /// <remarks>
     /// The dialog's consequences come from the loaded tree, like the reap dialog's; Api reaps regardless, so a
-    /// stale tree can at worst under-describe the deletion. Pending ghosts are named in the dialog and
-    /// discarded with the Activity - cleared first so leaving doesn't prompt a second time.
+    /// stale tree can at worst under-describe the deletion. Pending ghosts and unsaved Name/Description edits
+    /// are named in the dialog and discarded with the Activity - cleared first so leaving doesn't prompt a
+    /// second time.
     /// </remarks>
     private async Task<bool> OfferActivityDeletionAsync()
     {
         bool? confirmed = await DialogService.OpenAsync<ConfirmDialog>(
             "Last placement",
-            PlacementRemovalConfirmation.ForLastPlacement(activity!.Name, model!.DescribeDeletion(ActivityId), ghosts.Count));
+            PlacementRemovalConfirmation.ForLastPlacement(activity!.Name, model!.DescribeDeletion(ActivityId), new UnsavedWork(ghosts.Count, IsDirty)));
         if (confirmed is not true)
         {
             return false;
@@ -173,10 +194,11 @@ public partial class ActivityDetail
         {
             if (await ActivityClient.DeleteAsync(ActivityId, CancellationToken.None) == ActivityWriteOutcome.Forbidden)
             {
-                state = PageState.Denied;
+                permissionLost = true;
                 return true;
             }
 
+            ResetForm();
             ghosts.Clear();
             NotificationService.Notify(NotificationSeverity.Success, "Activity deleted");
             NavigateToList();
@@ -193,19 +215,31 @@ public partial class ActivityDetail
         }
     }
 
-    /// <summary>Reloads the tree from Api after a removal or undo, keeping any pending ghosts.</summary>
-    private async Task RefreshTreeAsync()
+    /// <summary>Reloads the tree from Api, keeping any pending ghosts.</summary>
+    /// <returns><see langword="false"/> if it couldn't be read, leaving the tree as it was.</returns>
+    private async Task<bool> TryRefreshTreeAsync()
     {
+        bool refreshed = true;
         try
         {
             await LoadTreeAsync();
         }
         catch (ActivityDataUnavailableException)
         {
-            saveErrorMessage = "Couldn't refresh the placements. Reload the page.";
+            refreshed = false;
         }
 
         RebuildModel();
         await InvokeAsync(StateHasChanged);
+        return refreshed;
+    }
+
+    /// <summary><see cref="TryRefreshTreeAsync"/> for the removal paths, which report a failed reload as the page's error.</summary>
+    private async Task RefreshOrReportAsync()
+    {
+        if (!await TryRefreshTreeAsync())
+        {
+            saveErrorMessage = RefreshFailedText;
+        }
     }
 }
