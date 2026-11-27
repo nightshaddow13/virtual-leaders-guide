@@ -30,6 +30,7 @@ public partial class ActivityDetail
     private async Task RemoveAsync(PlacementLeaf leaf)
     {
         saveErrorMessage = null;
+        ClearMoveFeedback();
 
         if (leaf.IsPending)
         {
@@ -100,12 +101,13 @@ public partial class ActivityDetail
     }
 
     /// <remarks>
-    /// Re-creates the removed Placement by name, then restores its <c>SortOrder</c> (decision 3). A failed
-    /// reposition is silent: order is advisory until P5-13 (#98), so the row simply stays at the end of its
-    /// bucket. A 409 means it's already back (a double click, or another tab restored it).
+    /// Re-creates the removed Placement by name, then moves it back to the position it held (ADR-0079). A
+    /// failed move is silent: the row is restored, just at the end of its path. A 409 means it's already back
+    /// (a double click, or another tab restored it).
     /// </remarks>
     private async Task UndoRemovalAsync(PlacementLeaf removed)
     {
+        ClearMoveFeedback();
         isRemoving = true;
         try
         {
@@ -121,7 +123,13 @@ public partial class ActivityDetail
 
             if (outcome == PlacementWriteOutcome.Success && created is not null)
             {
-                await PlacementClient.UpdateSortOrderAsync(created.Id, removed.SortOrder, CancellationToken.None);
+                try
+                {
+                    await PlacementClient.MoveAsync(created.Id, removed.Position, CancellationToken.None);
+                }
+                catch (ActivityDataUnavailableException)
+                {
+                }
             }
             else if (outcome == PlacementWriteOutcome.Invalid)
             {

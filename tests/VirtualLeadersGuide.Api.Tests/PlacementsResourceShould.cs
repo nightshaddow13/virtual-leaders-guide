@@ -345,19 +345,102 @@ public class PlacementsResourceShould : IAsyncLifetime
     [Fact]
     public async Task SucceedWithNoContentAndPersistTheNewSortOrder_WhenAnAssignedDirectorPatchesSortOrder_ForPatch()
     {
-        Event @event = await _factory.CreateEventAsync();
-        Activity activity = await _factory.CreateActivityAsync(@event.Id);
-        Tab tab = await _factory.CreateTabAsync(@event.Id);
-        ActivityPlacement placement = await _factory.CreateActivityPlacementAsync(@event.Id, activity.Id, tab.Id);
-        using HttpClient client = DirectorClient(@event.Id);
-        var body = new { data = new { type = "placements", id = placement.Id.ToString(), attributes = new { sortOrder = 5 } } };
+        (Guid eventId, Guid tabId, ActivityPlacement[] rows) = await SeedBucketAsync(("Archery", 0), ("Canoeing", 1), ("Swimming", 2));
+        using HttpClient client = DirectorClient(eventId);
 
-        HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/placements/{placement.Id}", body);
+        HttpResponseMessage response = await PatchSortOrderAsync(client, rows[0].Id, 1);
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
-        using IServiceScope scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
-        Assert.Equal(5, (await db.ActivityPlacements.AsNoTracking().SingleAsync(p => p.Id == placement.Id)).SortOrder);
+        Assert.Equal([rows[1].Id, rows[0].Id, rows[2].Id], await OrderOfTabAsync(tabId));
+    }
+
+    [Theory]
+    [InlineData(2, 0)]
+    [InlineData(0, 2)]
+    public async Task MoveTheRowAndRenumberTheBucketDensely_WhenPatchedToAnotherPosition_ForPatch(int from, int to)
+    {
+        (_, Guid tabId, ActivityPlacement[] rows) = await SeedBucketAsync(("Archery", 1), ("Canoeing", 4), ("Swimming", 9));
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await PatchSortOrderAsync(client, rows[from].Id, to);
+
+        Assert.True(response.IsSuccessStatusCode);
+        List<Guid> expected = [.. rows.Select(r => r.Id)];
+        expected.RemoveAt(from);
+        expected.Insert(to, rows[from].Id);
+        Assert.Equal(expected, await OrderOfTabAsync(tabId));
+        Assert.Equal([0, 1, 2], await SortOrdersOfTabAsync(tabId));
+    }
+
+    /// <remarks>JsonApiDotNetCore answers 200 with the resource when the stored value differs from the one sent - which a clamp always does.</remarks>
+    [Theory]
+    [InlineData(-1, 0)]
+    [InlineData(99, 2)]
+    public async Task ClampTheTargetPositionAndRespondWithOk_WhenPatchedOutOfRange_ForPatch(int sent, int landsAt)
+    {
+        (_, Guid tabId, ActivityPlacement[] rows) = await SeedBucketAsync(("Archery", 0), ("Canoeing", 1), ("Swimming", 2));
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await PatchSortOrderAsync(client, rows[1].Id, sent);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(landsAt, (await OrderOfTabAsync(tabId)).IndexOf(rows[1].Id));
+        Assert.Equal([0, 1, 2], await SortOrdersOfTabAsync(tabId));
+    }
+
+    [Fact]
+    public async Task BreakSortOrderTiesByActivityNameIgnoringCase_WhenRenumbering_ForPatch()
+    {
+        (_, Guid tabId, ActivityPlacement[] rows) = await SeedBucketAsync(("Cooking", 5), ("Banana Boats", 0), ("apple picking", 0));
+        using HttpClient client = AdminClient();
+
+        await PatchSortOrderAsync(client, rows[0].Id, 2);
+
+        Assert.Equal([rows[2].Id, rows[1].Id, rows[0].Id], await OrderOfTabAsync(tabId));
+        Assert.Equal([0, 1, 2], await SortOrdersOfTabAsync(tabId));
+    }
+
+    [Fact]
+    public async Task LeaveTheBucketAsItWas_WhenThePatchNamesNoSortOrder_ForPatch()
+    {
+        (_, Guid tabId, ActivityPlacement[] rows) = await SeedBucketAsync(("Archery", 1), ("Canoeing", 4), ("Swimming", 9));
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Patch, $"/api/placements/{rows[1].Id}",
+            new { data = new { type = "placements", id = rows[1].Id.ToString(), attributes = new { } } });
+
+        Assert.True(response.IsSuccessStatusCode);
+        Assert.Equal([1, 4, 9], await SortOrdersOfTabAsync(tabId));
+    }
+
+    [Fact]
+    public async Task LeaveTheSameActivitysOtherBucketUntouched_WhenOneOfItsPlacementsIsMoved_ForPatch()
+    {
+        (Guid eventId, Guid tabId, ActivityPlacement[] rows) = await SeedBucketAsync(("Archery", 0), ("Canoeing", 1));
+        Tab afternoon = await _factory.CreateTabAsync(eventId);
+        Activity neighbour = await _factory.CreateActivityAsync(eventId, "Swimming");
+        ActivityPlacement elsewhere = await _factory.CreateActivityPlacementAsync(
+            eventId, rows[1].ActivityId, afternoon.Id, sortOrder: 7);
+        ActivityPlacement alsoElsewhere = await _factory.CreateActivityPlacementAsync(eventId, neighbour.Id, afternoon.Id, sortOrder: 3);
+        using HttpClient client = AdminClient();
+
+        await PatchSortOrderAsync(client, rows[1].Id, 0);
+
+        Assert.Equal([rows[1].Id, rows[0].Id], await OrderOfTabAsync(tabId));
+        Assert.Equal([alsoElsewhere.Id, elsewhere.Id], await OrderOfTabAsync(afternoon.Id));
+        Assert.Equal([3, 7], await SortOrdersOfTabAsync(afternoon.Id));
+    }
+
+    [Fact]
+    public async Task AssignOnePastTheHighestSortOrder_WhenAnEarlierPlacementWasRemoved_ForPost()
+    {
+        (Guid eventId, Guid tabId, _) = await SeedBucketAsync(("Canoeing", 1), ("Swimming", 2));
+        Activity added = await _factory.CreateActivityAsync(eventId, "Archery");
+        using HttpClient client = AdminClient();
+
+        await SendAsync(client, HttpMethod.Post, "/api/placements", PlacementBody(added.Id, new { tabId }));
+
+        Assert.Equal([1, 2, 3], await SortOrdersOfTabAsync(tabId));
     }
 
     [Fact]
@@ -650,6 +733,41 @@ public class PlacementsResourceShould : IAsyncLifetime
         HttpResponseMessage response = await SendAsync(client, HttpMethod.Post, $"/api/{resource}", body);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    /// <summary>Seeds one Event with one Tab holding a Placement per <paramref name="rows"/> entry, returned in the order given.</summary>
+    private async Task<(Guid EventId, Guid TabId, ActivityPlacement[] Rows)> SeedBucketAsync(params (string Name, int SortOrder)[] rows)
+    {
+        Event @event = await _factory.CreateEventAsync();
+        Tab tab = await _factory.CreateTabAsync(@event.Id);
+        var placements = new List<ActivityPlacement>();
+        foreach ((string name, int sortOrder) in rows)
+        {
+            Activity activity = await _factory.CreateActivityAsync(@event.Id, name);
+            placements.Add(await _factory.CreateActivityPlacementAsync(@event.Id, activity.Id, tab.Id, sortOrder: sortOrder));
+        }
+
+        return (@event.Id, tab.Id, [.. placements]);
+    }
+
+    private static Task<HttpResponseMessage> PatchSortOrderAsync(HttpClient client, Guid placementId, int sortOrder) =>
+        SendAsync(client, HttpMethod.Patch, $"/api/placements/{placementId}",
+            new { data = new { type = "placements", id = placementId.ToString(), attributes = new { sortOrder } } });
+
+    private async Task<List<Guid>> OrderOfTabAsync(Guid tabId)
+    {
+        using IServiceScope scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        return await db.ActivityPlacements.AsNoTracking()
+            .Where(p => p.TabId == tabId).OrderBy(p => p.SortOrder).Select(p => p.Id).ToListAsync();
+    }
+
+    private async Task<List<int>> SortOrdersOfTabAsync(Guid tabId)
+    {
+        using IServiceScope scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        return await db.ActivityPlacements.AsNoTracking()
+            .Where(p => p.TabId == tabId).Select(p => p.SortOrder).OrderBy(o => o).ToListAsync();
     }
 
     private HttpClient AdminClient() =>

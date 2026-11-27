@@ -110,9 +110,11 @@ public class ActivityPlacement : Identifiable<Guid>
 
     /// <summary>
     /// This Placement's position among every other Placement sharing its exact Tier path - independent of
-    /// any other Placement of the same Activity (ADR-0050). Reordered by P5-13 (#98); this story only ever
-    /// assigns an initial value.
+    /// any other Placement of the same Activity (ADR-0050).
     /// </summary>
+    /// <remarks>
+    /// A PATCHed value is a position to move to, not necessarily the value stored (ADR-0079, P5-13 #98).
+    /// </remarks>
     [Attr]
     public int SortOrder { get; set; }
 

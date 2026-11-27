@@ -145,12 +145,16 @@ public sealed class ApiPlacementClient(InternalApiClient apiClient)
         return PlacementRemoveOutcome.Success;
     }
 
-    /// <summary>Sets one Placement's <c>SortOrder</c> - used by Undo to put a restored Placement back where it was.</summary>
-    /// <param name="placementId">The Placement to reposition.</param>
-    /// <param name="sortOrder">Its new position among Placements sharing its exact Tier path.</param>
+    /// <summary>Moves one Placement to a position among those sharing its exact Tier path; Api renumbers the rest (ADR-0079).</summary>
+    /// <param name="placementId">The Placement to move.</param>
+    /// <param name="position">Zero-based target position, sent as <c>sortOrder</c>. Api clamps an out-of-range value.</param>
     /// <param name="cancellationToken">Propagated to the underlying HTTP call.</param>
-    /// <returns>Whether Api accepted it. Never throws for a rejected PATCH: order is advisory until P5-13 (#98), so Undo treats a failure as "stayed at the end".</returns>
-    public async Task<bool> UpdateSortOrderAsync(Guid placementId, int sortOrder, CancellationToken cancellationToken)
+    /// <returns>
+    /// <see cref="PlacementWriteOutcome.Success"/>; <see cref="PlacementWriteOutcome.Forbidden"/>; or
+    /// <see cref="PlacementWriteOutcome.Invalid"/> if the Placement no longer exists.
+    /// </returns>
+    /// <remarks>Success is 204, or 200 with the resource when Api stored a different value than the one sent (it clamped).</remarks>
+    public async Task<PlacementWriteOutcome> MoveAsync(Guid placementId, int position, CancellationToken cancellationToken)
     {
         var body = new TierDocument<PlacementAttributesDto>
         {
@@ -158,13 +162,22 @@ public sealed class ApiPlacementClient(InternalApiClient apiClient)
             {
                 Type = PlacementsResourceType,
                 Id = placementId.ToString(),
-                Attributes = new PlacementAttributesDto { SortOrder = sortOrder }
+                Attributes = new PlacementAttributesDto { SortOrder = position }
             }
         };
         using var request = NewRequest(HttpMethod.Patch, $"{PlacementsPath}/{placementId}", body);
         using HttpResponseMessage response = await SendAsync(request, cancellationToken);
 
-        return response.StatusCode == HttpStatusCode.NoContent;
+        switch (response.StatusCode)
+        {
+            case HttpStatusCode.Forbidden:
+                return PlacementWriteOutcome.Forbidden;
+            case HttpStatusCode.NotFound:
+                return PlacementWriteOutcome.Invalid;
+        }
+
+        EnsureExpectedStatus(response, HttpStatusCode.NoContent, HttpStatusCode.OK);
+        return PlacementWriteOutcome.Success;
     }
 
     private async Task<List<TierResourceObject<TAttributes>>> ListAsync<TAttributes>(

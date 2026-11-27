@@ -50,7 +50,7 @@
                 <RadzenButton Text="Cancel" ButtonStyle="ButtonStyle.Light" ButtonType="ButtonType.Button"
                               Disabled="@isSaving" Click="NavigateToList" />
                 <RadzenButton Text="Save changes" ButtonType="ButtonType.Button"
-                              Disabled="@(isSaving || isRemoving || ghosts.Count == 0)" Click="SaveAsync" />
+                              Disabled="@(IsBusy || ghosts.Count == 0)" Click="SaveAsync" />
             </RadzenStack>
         </RadzenStack>
 
@@ -64,7 +64,9 @@
                 <PlacementBuilder Model="model!" PlacedCount="@PlacedCount" OnPlace="OnPlace" />
             </RadzenColumn>
             <RadzenColumn Size="12" SizeLG="5">
-                <PlacementTree Roots="@model!.Roots" IsBusy="@(isSaving || isRemoving)" OnRemove="RemoveAsync" />
+                <PlacementTree Roots="@model!.Roots" IsBusy="IsBusy"
+                               OnRemove="RemoveAsync" OnMove="MoveAsync"
+                               FocusRequest="focusRequest" Announcement="@announcement" />
             </RadzenColumn>
         </RadzenRow>
         break;

@@ -33,6 +33,9 @@ namespace VirtualLeadersGuide.Api.Data;
 /// On <see cref="WriteOperationKind.DeleteResource"/> (P5-12, #97) the same seam refuses to remove an
 /// Activity's only Placement and has <see cref="TierReaper"/> mark every Tier the removal empties for
 /// deletion, in that same single save - see <see cref="GuardLastPlacementAndReapTiersAsync"/>.
+/// On <see cref="WriteOperationKind.UpdateResource"/> (P5-13, #98) a patched
+/// <see cref="ActivityPlacement.SortOrder"/> is a target position, not a stored value (ADR-0079) - see
+/// <see cref="RepositionInBucketAsync"/>.
 /// </remarks>
 public sealed class ActivityPlacementResourceDefinition : JsonApiResourceDefinition<ActivityPlacement, Guid>
 {
@@ -42,17 +45,20 @@ public sealed class ActivityPlacementResourceDefinition : JsonApiResourceDefinit
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly VirtualLeadersGuideDbContext _dbContext;
     private readonly TierReaper _tierReaper;
+    private readonly ITargetedFields _targetedFields;
 
     /// <summary>Constructs the definition with the services it needs to authorize and resolve Placement writes.</summary>
     /// <param name="resourceGraph">Passed through to <see cref="JsonApiResourceDefinition{TResource,TId}"/>.</param>
     /// <param name="httpContextAccessor">Resolves the current request's <see cref="System.Security.Claims.ClaimsPrincipal"/> for <see cref="CurrentPolicy"/>.</param>
     /// <param name="dbContext">Backs every resolve-or-create lookup below, and <see cref="StoredEventIdAsync"/>'s re-read.</param>
     /// <param name="tierReaper">Marks the Tiers a deleted Placement leaves empty for removal (P5-12, #97).</param>
+    /// <param name="targetedFields">Which attributes the current request names, so only a <c>sortOrder</c> PATCH moves a row (P5-13, #98).</param>
     public ActivityPlacementResourceDefinition(
         IResourceGraph resourceGraph, IHttpContextAccessor httpContextAccessor, VirtualLeadersGuideDbContext dbContext,
-        TierReaper tierReaper)
+        TierReaper tierReaper, ITargetedFields targetedFields)
         : base(resourceGraph)
     {
+        _targetedFields = targetedFields;
         _httpContextAccessor = httpContextAccessor;
         _dbContext = dbContext;
         _tierReaper = tierReaper;
@@ -137,6 +143,10 @@ public sealed class ActivityPlacementResourceDefinition : JsonApiResourceDefinit
         {
             await GuardLastPlacementAndReapTiersAsync(resource.Id, cancellationToken);
         }
+        else if (writeOperation == WriteOperationKind.UpdateResource && PatchesSortOrder())
+        {
+            await RepositionInBucketAsync(resource, cancellationToken);
+        }
 
         await base.OnWritingAsync(resource, writeOperation, cancellationToken);
     }
@@ -173,6 +183,44 @@ public sealed class ActivityPlacementResourceDefinition : JsonApiResourceDefinit
         await _tierReaper.ReapEmptiedTiersAsync([stored], cancellationToken);
     }
 
+    /// <summary>Whether this PATCH names <c>sortOrder</c> - one that doesn't must not move the row.</summary>
+    private bool PatchesSortOrder() =>
+        _targetedFields.Attributes.Any(attribute => attribute.Property.Name == nameof(ActivityPlacement.SortOrder));
+
+    /// <summary>Moves <paramref name="resource"/> within its Tier path and renumbers that path (ADR-0079).</summary>
+    /// <param name="resource">The tracked Placement, already carrying the requested position.</param>
+    /// <param name="cancellationToken">Propagated to the bucket query.</param>
+    /// <remarks>
+    /// JsonApiDotNetCore applies the patched attribute to the tracked database instance before calling
+    /// <see cref="OnWritingAsync"/>, so every renumbered row rides its one <c>SaveChangesAsync</c> (ADR-0072).
+    /// Names are compared in memory so this uses the same comparison as the Web tree.
+    /// </remarks>
+    private async Task RepositionInBucketAsync(ActivityPlacement resource, CancellationToken cancellationToken)
+    {
+        int target = resource.SortOrder;
+        List<ActivityPlacement> others = await Bucket(resource.TabId!.Value, resource.SubTabId, resource.SectionId, resource.SubSectionId)
+            .Where(placement => placement.Id != resource.Id)
+            .Include(placement => placement.Activity)
+            .ToListAsync(cancellationToken);
+
+        List<ActivityPlacement> ordered =
+        [
+            .. others.OrderBy(placement => placement.SortOrder)
+                .ThenBy(placement => placement.Activity!.Name, StringComparer.OrdinalIgnoreCase)
+        ];
+        ordered.Insert(Math.Clamp(target, 0, ordered.Count), resource);
+
+        for (int position = 0; position < ordered.Count; position++)
+        {
+            ordered[position].SortOrder = position;
+        }
+    }
+
+    /// <summary>Every Placement at exactly this Tier path - the set <see cref="ActivityPlacement.SortOrder"/> orders.</summary>
+    private IQueryable<ActivityPlacement> Bucket(Guid tabId, Guid? subTabId, Guid? sectionId, Guid? subSectionId) =>
+        _dbContext.ActivityPlacements.Where(placement => placement.TabId == tabId && placement.SubTabId == subTabId
+            && placement.SectionId == sectionId && placement.SubSectionId == subSectionId);
+
     /// <remarks>
     /// A missing <see cref="ActivityPlacement.ActivityId"/> resolves to <see cref="NoEventSentinel"/>, which
     /// fails every non-Admin's authorization below and lets an Admin through to
@@ -185,7 +233,7 @@ public sealed class ActivityPlacementResourceDefinition : JsonApiResourceDefinit
             .Select(activity => activity.EventId)
             .FirstOrDefaultAsync(cancellationToken);
 
-    /// <summary>Resolves the Tier path, runs the exclusivity/uniqueness rules, and assigns <see cref="ActivityPlacement.SortOrder"/> - everything <see cref="OnWritingAsync"/> does on create once authorization has already passed.</summary>
+    /// <summary>Resolves the Tier path, runs the exclusivity/uniqueness rules, and assigns <see cref="ActivityPlacement.SortOrder"/> (ADR-0079) - everything <see cref="OnWritingAsync"/> does on create once authorization has already passed.</summary>
     private async Task ResolvePlacementAsync(ActivityPlacement resource, Guid eventId, CancellationToken cancellationToken)
     {
         await ValidateActivityExistsAsync(resource.ActivityId, eventId, cancellationToken);
@@ -204,9 +252,9 @@ public sealed class ActivityPlacementResourceDefinition : JsonApiResourceDefinit
         await ValidateNoInfoPageConflictAsync(tabId, subTabId, cancellationToken);
         await ValidateNoDuplicatePlacementAsync(resource.ActivityId, tabId, subTabId, sectionId, subSectionId, cancellationToken);
 
-        resource.SortOrder = await _dbContext.ActivityPlacements.AsNoTracking()
-            .CountAsync(placement => placement.TabId == tabId && placement.SubTabId == subTabId
-                && placement.SectionId == sectionId && placement.SubSectionId == subSectionId, cancellationToken);
+        int? last = await Bucket(tabId, subTabId, sectionId, subSectionId)
+            .MaxAsync(placement => (int?)placement.SortOrder, cancellationToken);
+        resource.SortOrder = last + 1 ?? 0;
     }
 
     /// <remarks>Runs after authorization (see <see cref="ResolveEventIdForCreateAsync"/>'s remarks) - a non-Admin never learns whether an unknown Activity exists.</remarks>

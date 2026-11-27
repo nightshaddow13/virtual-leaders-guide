@@ -215,8 +215,10 @@ public class ApiPlacementClientShould
         await Assert.ThrowsAsync<ActivityDataUnavailableException>(() => client.DeleteAsync(Guid.NewGuid(), CancellationToken.None));
     }
 
-    [Fact]
-    public async Task PatchOnlyTheSortOrderAndReturnTrue_WhenApiRespondsWithNoContent_ForUpdateSortOrderAsync()
+    [Theory]
+    [InlineData(HttpStatusCode.NoContent)]
+    [InlineData(HttpStatusCode.OK)]
+    public async Task PatchOnlyTheSortOrderAndSucceed_WhenApiAcceptsTheMove_ForMoveAsync(HttpStatusCode status)
     {
         Guid placementId = Guid.NewGuid();
         HttpRequestMessage? seen = null;
@@ -225,12 +227,12 @@ public class ApiPlacementClientShould
         {
             seen = request;
             body = request.Content!.ReadAsStringAsync().Result;
-            return new HttpResponseMessage(HttpStatusCode.NoContent);
+            return new HttpResponseMessage(status);
         }));
 
-        bool accepted = await client.UpdateSortOrderAsync(placementId, 3, CancellationToken.None);
+        PlacementWriteOutcome outcome = await client.MoveAsync(placementId, 3, CancellationToken.None);
 
-        Assert.True(accepted);
+        Assert.Equal(PlacementWriteOutcome.Success, outcome);
         Assert.Equal(HttpMethod.Patch, seen!.Method);
         using JsonDocument document = JsonDocument.Parse(body!);
         JsonElement data = document.RootElement.GetProperty("data");
@@ -240,12 +242,22 @@ public class ApiPlacementClientShould
         Assert.Single(attributes.EnumerateObject());
     }
 
-    [Fact]
-    public async Task ReturnFalseWithoutThrowing_WhenApiRejectsTheReorder_ForUpdateSortOrderAsync()
+    [Theory]
+    [InlineData(HttpStatusCode.Forbidden, PlacementWriteOutcome.Forbidden)]
+    [InlineData(HttpStatusCode.NotFound, PlacementWriteOutcome.Invalid)]
+    public async Task MapTheStatusToAnOutcome_WhenApiRefusesTheMove_ForMoveAsync(HttpStatusCode status, PlacementWriteOutcome expected)
     {
-        ApiPlacementClient client = CreateClient(StubHttpMessageHandler.RespondingWith(HttpStatusCode.UnprocessableEntity));
+        ApiPlacementClient client = CreateClient(StubHttpMessageHandler.RespondingWith(status));
 
-        Assert.False(await client.UpdateSortOrderAsync(Guid.NewGuid(), 3, CancellationToken.None));
+        Assert.Equal(expected, await client.MoveAsync(Guid.NewGuid(), 3, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ThrowActivityDataUnavailableException_WhenApiRespondsWithAnUnexpectedStatus_ForMoveAsync()
+    {
+        ApiPlacementClient client = CreateClient(StubHttpMessageHandler.RespondingWith(HttpStatusCode.InternalServerError));
+
+        await Assert.ThrowsAsync<ActivityDataUnavailableException>(() => client.MoveAsync(Guid.NewGuid(), 3, CancellationToken.None));
     }
 
     private static ApiPlacementClient CreateClient(HttpMessageHandler apiHandler) =>

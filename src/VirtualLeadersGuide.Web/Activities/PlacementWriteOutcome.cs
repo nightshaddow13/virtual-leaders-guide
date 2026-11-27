@@ -1,6 +1,6 @@
 namespace VirtualLeadersGuide.Web.Activities;
 
-/// <summary>Outcomes <see cref="ApiPlacementClient.CreateAsync"/> distinguishes.</summary>
+/// <summary>Outcomes <see cref="ApiPlacementClient.CreateAsync"/> and <see cref="ApiPlacementClient.MoveAsync"/> distinguish.</summary>
 public enum PlacementWriteOutcome
 {
     Success,
@@ -8,7 +8,7 @@ public enum PlacementWriteOutcome
     /// <remarks>The caller isn't an Admin or an assigned Director (ADR-0069's posture, extended to Placement).</remarks>
     Forbidden,
 
-    /// <remarks>Api's <c>ActivityPlacementResourceDefinition</c> rejected the path with 422 - a missing Tab, or a Sub Section with no Section. The builder's own gating normally prevents both.</remarks>
+    /// <remarks>On create, Api rejected the path with 422 - a missing Tab, or a Sub Section with no Section; the builder's own gating normally prevents both. On a move, the Placement no longer exists (404).</remarks>
     Invalid,
 
     /// <remarks>The same Activity is already placed at this exact path (ADR-0046) - normally caught earlier by the builder's own duplicate check, so this is the race/stale-tree case.</remarks>

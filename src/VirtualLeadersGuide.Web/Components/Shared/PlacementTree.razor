@@ -34,6 +34,7 @@
                         {
                             <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.25rem">
                                 <RadzenBadge BadgeStyle="BadgeStyle.Success" class="ptn-lit">@lit.ActivityName</RadzenBadge>
+                                <PlacementReorderButtons Leaf="lit" Disabled="IsBusy" OnMove="OnMove" FocusRequest="FocusRequest" />
                                 <PlacementRemoveButton Leaf="lit" Disabled="IsBusy" OnRemove="OnRemove" />
                             </RadzenStack>
                         }
@@ -44,6 +45,10 @@
                     </Template>
                 </RadzenTreeLevel>
             </RadzenTree>
+            <div class="ptn-narrow-hint">
+                <RadzenText TextStyle="TextStyle.Caption">Reorder from a wider window.</RadzenText>
+            </div>
         }
+        <div class="ptn-live" role="status" aria-live="polite">@Announcement</div>
     </RadzenStack>
 </RadzenCard>
