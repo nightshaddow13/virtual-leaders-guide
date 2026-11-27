@@ -5,7 +5,7 @@ namespace VirtualLeadersGuide.Web.Tests;
 
 /// <remarks>
 /// Mirrors <see cref="InfoPageDeleteConfirmationShould"/>'s shape - a pure function, not a rendered component.
-/// The irreversibility bullet is the only one until something can exist under a Facility (ADR-0080).
+/// The irreversibility bullet is the only one until something can exist under a Facility (ADR-0081).
 /// </remarks>
 public class FacilityDeleteConfirmationShould
 {

@@ -8,7 +8,7 @@ namespace VirtualLeadersGuide.Web.Facilities;
 /// two call sites can't drift on the consequence copy ADR-0045 governs.
 /// </summary>
 /// <remarks>
-/// No cascade consequence bullet yet - nothing can exist under a Facility until the stories ADR-0080 lists ship,
+/// No cascade consequence bullet yet - nothing can exist under a Facility until the stories ADR-0081 lists ship,
 /// and each of them adds its own bullet here, shown only when it applies (ADR-0045).
 /// </remarks>
 internal static class FacilityDeleteConfirmation
