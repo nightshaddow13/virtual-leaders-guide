@@ -22,6 +22,9 @@ public partial class FacilityEditor
     [Inject]
     private NotificationService NotificationService { get; set; } = default!;
 
+    [Inject]
+    private DialogService DialogService { get; set; } = default!;
+
     private const string FacilityTypeIdPointer = "/data/attributes/facilityTypeId";
 
     /// <summary>The Facility being edited, or <see langword="null"/> when creating a new one.</summary>
@@ -35,6 +38,8 @@ public partial class FacilityEditor
     public Guid? Id { get; set; }
 
     private bool IsEdit => Id is not null;
+
+    private bool IsBusy => isSaving || isDeleting;
 
     private string Heading => IsEdit ? "Edit facility" : "New facility";
 
@@ -55,6 +60,7 @@ public partial class FacilityEditor
     private Dictionary<Guid, string> typeNamesById = new();
     private string? saveErrorMessage;
     private bool isSaving;
+    private bool isDeleting;
     private bool hasLoaded;
     private Guid? loadedForId;
 
@@ -90,6 +96,7 @@ public partial class FacilityEditor
         facilityName = null;
         saveErrorMessage = null;
         isSaving = false;
+        isDeleting = false;
 
         AuthenticationState authState = await AuthenticationStateTask;
         if (!new EventAccessView(authState.User).IsAdmin)
@@ -175,6 +182,11 @@ public partial class FacilityEditor
     /// </remarks>
     private async Task SaveAsync()
     {
+        if (isDeleting)
+        {
+            return;
+        }
+
         isSaving = true;
         saveErrorMessage = null;
 
@@ -237,6 +249,56 @@ public partial class FacilityEditor
         finally
         {
             isSaving = false;
+        }
+    }
+
+    /// <remarks>
+    /// The dialog names <see cref="facilityName"/>, the stored Name, not whatever is typed into the form. A
+    /// Facility that is already gone counts as deleted. <see cref="saveErrorMessage"/> is cleared only once the
+    /// delete is confirmed, so cancelling leaves a "pick a Type" alert in place. <see cref="isDeleting"/> holds
+    /// Save, Cancel and Delete disabled from the first click, and stays set once the delete has succeeded, so
+    /// nothing can be pressed while the browser is leaving the page.
+    /// </remarks>
+    private async Task DeleteAsync()
+    {
+        if (IsBusy)
+        {
+            return;
+        }
+
+        isDeleting = true;
+        bool deleted = false;
+
+        try
+        {
+            var parameters = FacilityDeleteConfirmation.BuildDialogParameters(facilityName!);
+            bool? confirmed = await DialogService.OpenAsync<ConfirmDialog>(FacilityDeleteConfirmation.Title, parameters);
+            if (confirmed is not true)
+            {
+                return;
+            }
+
+            saveErrorMessage = null;
+
+            FacilityWriteOutcome outcome = await FacilityClient.DeleteAsync(Id!.Value, CancellationToken.None);
+
+            if (outcome == FacilityWriteOutcome.Forbidden)
+            {
+                state = PageState.Denied;
+                return;
+            }
+
+            deleted = true;
+            NotificationService.Notify(NotificationSeverity.Success, "Facility deleted");
+            NavigationManager.NavigateTo("dashboard/facilities", forceLoad: true);
+        }
+        catch (FacilityDataUnavailableException)
+        {
+            saveErrorMessage = FacilityDeleteConfirmation.FailureMessage;
+        }
+        finally
+        {
+            isDeleting = deleted;
         }
     }
 

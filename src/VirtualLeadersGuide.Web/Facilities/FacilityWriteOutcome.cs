@@ -1,6 +1,9 @@
 namespace VirtualLeadersGuide.Web.Facilities;
 
-/// <summary>Outcomes <see cref="ApiFacilityClient.CreateAsync"/> and <see cref="ApiFacilityClient.UpdateAsync"/> distinguish.</summary>
+/// <summary>
+/// Outcomes <see cref="ApiFacilityClient.CreateAsync"/>, <see cref="ApiFacilityClient.UpdateAsync"/> and
+/// <see cref="ApiFacilityClient.DeleteAsync"/> distinguish.
+/// </summary>
 public enum FacilityWriteOutcome
 {
     Success,
@@ -21,8 +24,8 @@ public enum FacilityWriteOutcome
 
     /// <summary>The Facility being written no longer exists.</summary>
     /// <remarks>
-    /// The Facility vanished between the edit form loading and Save. Only <see cref="ApiFacilityClient.UpdateAsync"/>
-    /// produces it today; P8-5's delete will join it.
+    /// The Facility vanished between the page loading and the write. Only
+    /// <see cref="ApiFacilityClient.UpdateAsync"/> and <see cref="ApiFacilityClient.DeleteAsync"/> produce it.
     /// </remarks>
     NotFound
 }

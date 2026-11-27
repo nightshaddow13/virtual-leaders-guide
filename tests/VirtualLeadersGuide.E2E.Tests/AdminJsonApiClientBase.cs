@@ -4,10 +4,11 @@ using System.Text.Json;
 namespace VirtualLeadersGuide.E2E.Tests;
 
 /// <summary>
-/// Shared request plumbing for <see cref="EventsApiClient"/> and <see cref="UsersApiClient"/> - the two
-/// test-side clients that call Admin-gated <c>/api/*</c> JSON:API resources directly, each minting its own
-/// bearer token per request via <see cref="InternalAdminJwt"/> (ADR-0039). See either derived class's own
-/// remarks for why <c>/api/*</c> needs a bearer token at all, unlike <see cref="IdentityApiClient"/>'s plain
+/// Shared request plumbing for the test-side clients that call <c>/api/*</c> JSON:API resources directly
+/// (<see cref="EventsApiClient"/>, <see cref="UsersApiClient"/> and <see cref="FacilitiesApiClient"/> among
+/// them), minting a bearer token per request via <see cref="InternalJwt"/> (ADR-0039) - an Admin's, unless a
+/// caller asks for <see cref="NewDirectorRequest"/>. See <see cref="EventsApiClient"/>'s remarks for why
+/// <c>/api/*</c> needs a bearer token at all, unlike <see cref="IdentityApiClient"/>'s plain
 /// <c>X-Internal-Key</c> channel over <c>/internal/*</c>.
 /// </summary>
 public abstract class AdminJsonApiClientBase(HttpClient httpClient, string internalJwtSigningKey)
@@ -28,12 +29,21 @@ public abstract class AdminJsonApiClientBase(HttpClient httpClient, string inter
     /// <param name="method">The HTTP method to use.</param>
     /// <param name="uri">The relative URI to request.</param>
     /// <returns>The request, ready to send or to attach a body to.</returns>
-    protected HttpRequestMessage NewRequest(HttpMethod method, string uri)
+    protected HttpRequestMessage NewRequest(HttpMethod method, string uri) =>
+        NewRequestBearing(method, uri, InternalJwt.MintAdmin(internalJwtSigningKey));
+
+    /// <summary>Builds the same request as <see cref="NewRequest"/>, carrying a Director's token instead of an Admin's.</summary>
+    /// <param name="method">The HTTP method to use.</param>
+    /// <param name="uri">The relative URI to request.</param>
+    /// <returns>The request, ready to send.</returns>
+    protected HttpRequestMessage NewDirectorRequest(HttpMethod method, string uri) =>
+        NewRequestBearing(method, uri, InternalJwt.MintDirector(internalJwtSigningKey));
+
+    private static HttpRequestMessage NewRequestBearing(HttpMethod method, string uri, string token)
     {
         var request = new HttpRequestMessage(method, uri);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(JsonApiMediaType));
-        request.Headers.Authorization =
-            new AuthenticationHeaderValue("Bearer", InternalAdminJwt.Mint(internalJwtSigningKey));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return request;
     }
 

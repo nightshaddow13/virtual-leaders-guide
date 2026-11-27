@@ -14,18 +14,17 @@ namespace VirtualLeadersGuide.Web.Components.Pages;
 /// (ADR-0070) - the gate here is this page's own choice, narrower than its Api, because
 /// <c>FacilityTypeResourceDefinition</c> stays Admin-only on every verb (ADR-0071): a Director could read
 /// every Facility row but never resolve a single Type name, which this grid's Type column needs. See
-/// ADR-0070's amendment for the full reasoning. The row-action column holds one icon-only Edit button
-/// (ADR-0037) and nothing else yet: the Name stays plain text until P9's detail page exists to link to
-/// (ADR-0073), and P8-5 (#169) adds Delete beside Edit.
+/// ADR-0070's amendment for the full reasoning. The row-action column holds icon-only Edit and Delete buttons
+/// (ADR-0037); the Name stays plain text until P9's detail page exists to link to (ADR-0073).
 /// </remarks>
 public partial class FacilityList
 {
     /// <remarks>
-    /// One icon-only button, so the same width <c>Users.razor.cs</c> uses for its own single-button column -
+    /// Two icon-only buttons, so the same width <c>InfoPageList.razor.cs</c> documents the arithmetic for -
     /// <c>RadzenDataGrid</c>'s fixed table layout clips a column too narrow for its content rather than growing
-    /// it (ADR-0037). P8-5's second button will need the two-button width <c>InfoPageList.razor.cs</c> documents.
+    /// it (ADR-0037).
     /// </remarks>
-    private const string ActionColumnWidth = "76px";
+    private const string ActionColumnWidth = "124px";
 
     [Inject]
     private NavigationManager NavigationManager { get; set; } = default!;
@@ -35,6 +34,9 @@ public partial class FacilityList
 
     [Inject]
     private ApiFacilityTypeClient FacilityTypeClient { get; set; } = default!;
+
+    [Inject]
+    private DialogService DialogService { get; set; } = default!;
 
     [CascadingParameter]
     private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
@@ -51,6 +53,8 @@ public partial class FacilityList
     private int totalCount;
     private bool isLoading;
     private string? loadErrorMessage;
+    private string? deleteErrorMessage;
+    private bool isDeleting;
 
     /// <remarks>
     /// The same flat <c>EventAccessView.IsAdmin</c> gate <c>FacilityEditor.razor.cs</c>/<c>Users.razor.cs</c>
@@ -129,6 +133,50 @@ public partial class FacilityList
         finally
         {
             isLoading = false;
+        }
+    }
+
+    /// <remarks>
+    /// A Facility that is already gone counts as deleted: the grid reloads and the row drops out either way.
+    /// <see cref="isDeleting"/> ignores further clicks until this one is finished, so a double click can't stack
+    /// two dialogs.
+    /// </remarks>
+    private async Task DeleteAsync(FacilityDto item)
+    {
+        if (isDeleting)
+        {
+            return;
+        }
+
+        isDeleting = true;
+        deleteErrorMessage = null;
+
+        try
+        {
+            var parameters = FacilityDeleteConfirmation.BuildDialogParameters(item.Name);
+            bool? confirmed = await DialogService.OpenAsync<ConfirmDialog>(FacilityDeleteConfirmation.Title, parameters);
+            if (confirmed is not true)
+            {
+                return;
+            }
+
+            FacilityWriteOutcome outcome = await FacilityClient.DeleteAsync(item.Id, CancellationToken.None);
+            if (outcome is FacilityWriteOutcome.Success or FacilityWriteOutcome.NotFound)
+            {
+                await grid!.Reload();
+            }
+            else if (outcome == FacilityWriteOutcome.Forbidden)
+            {
+                deleteErrorMessage = "You don't have permission to delete this Facility.";
+            }
+        }
+        catch (FacilityDataUnavailableException)
+        {
+            deleteErrorMessage = FacilityDeleteConfirmation.FailureMessage;
+        }
+        finally
+        {
+            isDeleting = false;
         }
     }
 

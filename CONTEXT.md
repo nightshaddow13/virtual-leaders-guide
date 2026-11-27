@@ -133,7 +133,8 @@ _Avoid_: Assignment, Slot (Slot reads time-based)
 A physical property where Events happen — a camp, retreat center, or any other venue — created and managed
 independently of any Event, and persisting across as many Events (and years) as reuse it. Has a Name and a
 Facility Type. An Event may be assigned any number of Facilities, and a Facility any number of Events; neither
-owns the other. Distinct from Event: a Facility is the place, an Event is the gathering held there.
+owns the other. Distinct from Event: a Facility is the place, an Event is the gathering held there. Deleting a
+Facility removes everything within it.
 _Avoid_: Camp (a Facility Type *value*, not this concept — a Facility might be a hotel or community center
 instead), Venue, Site (already avoided for Leaders Guide)
 
