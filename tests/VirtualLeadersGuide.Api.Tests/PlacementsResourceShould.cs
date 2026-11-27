@@ -770,6 +770,87 @@ public class PlacementsResourceShould : IAsyncLifetime
             .Where(p => p.TabId == tabId).Select(p => p.SortOrder).OrderBy(o => o).ToListAsync();
     }
 
+    [Fact]
+    public async Task RejectWithSlotHasInfoPageAndCreateNothing_WhenAnInfoPageFillsTheScreen_ForPost()
+    {
+        Event @event = await _factory.CreateEventAsync();
+        Activity activity = await _factory.CreateActivityAsync(@event.Id);
+        InfoPage page = await _factory.CreateInfoPageAsync(@event.Id);
+        Tab tab = await _factory.CreateTabAsync(@event.Id, "Logistics");
+        await _factory.CreateInfoPagePlacementAsync(@event.Id, page.Id, tab.Id);
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Post, "/api/placements",
+            PlacementBody(activity.Id, new { tabName = "logistics", sectionName = "Water" }));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        await AssertErrorCodeAsync(response, PlacementErrors.SlotHasInfoPage);
+        using IServiceScope scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        Assert.False(await db.ActivityPlacements.AnyAsync());
+        Assert.False(await db.Sections.AnyAsync());
+    }
+
+    [Fact]
+    public async Task Succeed_WhenTheInfoPageFillsADifferentSubTabOfTheSameTab_ForPost()
+    {
+        Event @event = await _factory.CreateEventAsync();
+        Activity activity = await _factory.CreateActivityAsync(@event.Id);
+        InfoPage page = await _factory.CreateInfoPageAsync(@event.Id);
+        Tab tab = await _factory.CreateTabAsync(@event.Id, "Logistics");
+        SubTab arrival = await _factory.CreateSubTabAsync(@event.Id, tab.Id, "Arrival");
+        await _factory.CreateInfoPagePlacementAsync(@event.Id, page.Id, tab.Id, arrival.Id);
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Post, "/api/placements",
+            PlacementBody(activity.Id, new { tabName = "Logistics" }));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CarryTheDuplicateCode_WhenTheExactPathIsAlreadyPlaced_ForPost()
+    {
+        Event @event = await _factory.CreateEventAsync();
+        Activity activity = await _factory.CreateActivityAsync(@event.Id);
+        using HttpClient client = AdminClient();
+        await SendAsync(client, HttpMethod.Post, "/api/placements", PlacementBody(activity.Id, new { tabName = "Morning" }));
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Post, "/api/placements",
+            PlacementBody(activity.Id, new { tabName = "Morning" }));
+
+        await AssertErrorCodeAsync(response, PlacementErrors.Duplicate);
+    }
+
+    [Fact]
+    public async Task KeepTheTab_WhenAnInfoPageStillFillsOneOfItsSubTabs_ForDelete()
+    {
+        Event @event = await _factory.CreateEventAsync();
+        Activity activity = await _factory.CreateActivityAsync(@event.Id);
+        InfoPage page = await _factory.CreateInfoPageAsync(@event.Id);
+        Tab keptTab = await _factory.CreateTabAsync(@event.Id);
+        Tab tab = await _factory.CreateTabAsync(@event.Id);
+        SubTab subTab = await _factory.CreateSubTabAsync(@event.Id, tab.Id);
+        await _factory.CreateInfoPagePlacementAsync(@event.Id, page.Id, tab.Id, subTab.Id);
+        await _factory.CreateActivityPlacementAsync(@event.Id, activity.Id, keptTab.Id);
+        ActivityPlacement removed = await _factory.CreateActivityPlacementAsync(@event.Id, activity.Id, tab.Id);
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(client, HttpMethod.Delete, $"/api/placements/{removed.Id}");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        using IServiceScope scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        Assert.True(await db.Tabs.AnyAsync(t => t.Id == tab.Id));
+        Assert.True(await db.SubTabs.AnyAsync(s => s.Id == subTab.Id));
+    }
+
+    private static async Task AssertErrorCodeAsync(HttpResponseMessage response, string expectedCode)
+    {
+        using JsonDocument document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(expectedCode, document.RootElement.GetProperty("errors")[0].GetProperty("code").GetString());
+    }
+
     private HttpClient AdminClient() =>
         _factory.CreateUserClient(roleClaims: [ApiWebApplicationFactory.AdminRoleClaim()]);
 

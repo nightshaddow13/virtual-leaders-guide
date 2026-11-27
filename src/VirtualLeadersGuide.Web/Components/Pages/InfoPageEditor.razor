@@ -4,6 +4,7 @@
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 
 @using VirtualLeadersGuide.Web.InfoPages
+@using VirtualLeadersGuide.Web.Components.Shared
 
 <PageTitle>@(InfoPageId is null ? "New info page" : "Info page")</PageTitle>
 
@@ -66,6 +67,47 @@
                 </div>
 
                 <MarkdownField Label="Content" FieldId="MarkdownContent" @bind-Value="model!.MarkdownContent" />
+
+                <section class="ipe-placement">
+                    <h2>Placement</h2>
+
+                    @if (InfoPageId is null)
+                    {
+                        <RadzenText TextStyle="TextStyle.Body2">You can place this page once it's created.</RadzenText>
+                    }
+                    else if (picker?.Current is { } current && !isChangingPlacement)
+                    {
+                        <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.75rem"
+                                     Wrap="FlexWrap.Wrap" class="ipe-placed">
+                            <RadzenText TagName="TagName.Span" class="rz-mb-0">Placed on <b>@current.Display</b></RadzenText>
+                            <RadzenButton Text="Change" ButtonStyle="ButtonStyle.Light" ButtonType="ButtonType.Button"
+                                          Disabled="@isSaving" Click="ChangePlacement" />
+                            <RadzenButton Text="Remove" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Text"
+                                          ButtonType="ButtonType.Button" Disabled="@isSaving" Click="RemovePlacementAsync" />
+                        </RadzenStack>
+                    }
+                    else if (picker is not null)
+                    {
+                        <RadzenText TextStyle="TextStyle.Body2">Where this page shows in the guide. Saved with your changes.</RadzenText>
+
+                        <PlacementTierField Label="Tab" Name="PlacementTab" Noun="tab" Required="true"
+                                            Placeholder="Search or type a tab name"
+                                            Options="@picker.TabOptions()" Annotate="@(tab => picker.Annotate(tab, null))"
+                                            Value="@placementTab" ValueChanged="OnPlacementTabChanged" />
+
+                        <PlacementTierField Label="Sub Tab" Name="PlacementSubTab" Noun="sub tab"
+                                            Enabled="@HasPlacementTab" LockedHint="pick a tab first"
+                                            Options="@(HasPlacementTab ? picker.SubTabOptions(placementTab!) : [])"
+                                            Annotate="@(subTab => picker.Annotate(placementTab!, subTab))"
+                                            @bind-Value="placementSubTab" />
+
+                        @if (isChangingPlacement)
+                        {
+                            <RadzenButton Text="Keep current placement" Variant="Variant.Text" ButtonType="ButtonType.Button"
+                                          Disabled="@isSaving" Click="KeepPlacement" />
+                        }
+                    }
+                </section>
             </fieldset>
         </EditForm>
 

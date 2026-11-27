@@ -1,3 +1,7 @@
+---
+status: amended by P5-24 (#208)
+---
+
 # InfoPage Placement stops at Sub Tab, and owns its Tab/Sub Tab screen exclusively
 
 Phase 5's original plan had InfoPage share the exact same four-tier Placement shape as Activity (Tab/Sub
@@ -33,3 +37,18 @@ already-InfoPage-owned Tab/Sub Tab is rejected too.
   InfoPage can never occupy the same bucket to begin with. Those issue bodies need correcting.
 - The public view (#88) needs a per-Tab/Sub-Tab render-mode branch (Activities-with-Sections vs. one
   InfoPage) rather than one uniform template.
+
+## Amendment (P5-24, #208)
+
+Building the InfoPage Placement settled what this ADR left open.
+
+- **The exclusive screen is the exact (Tab, Sub Tab) pair.** A bare Tab (no Sub Tab) is its own screen, and each
+  of its Sub Tabs is another. An InfoPage on bare "Logistics" coexists with Activities under
+  "Logistics › Arrival", and the reverse.
+- **An InfoPage has at most one Placement, and that Placement has no SortOrder** - a screen holds one InfoPage,
+  so there is nothing to order.
+- **Moving an InfoPage is one atomic PATCH.** Delete-then-create would leave the page unplaced when the new
+  screen is rejected, which is exactly the expected rejection.
+- **Every Placement conflict is a 409 with a stable JSON:API error `code`**, so a client picks its own wording
+  without matching on titles or showing server prose: `placement-duplicate`, `slot-has-infopage`,
+  `slot-has-activities`, `slot-has-other-infopage`, `infopage-already-placed`.

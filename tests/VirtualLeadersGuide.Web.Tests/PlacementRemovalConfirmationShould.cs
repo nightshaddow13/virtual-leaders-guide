@@ -12,6 +12,19 @@ public class PlacementRemovalConfirmationShould
     private static RemovalImpact Impact(IReadOnlyList<TierRef> reaped, IReadOnlyList<TierRef> surviving, int others) =>
         new(new PlacementPath("Morning", null, "Waterfront", "Kayaking"), reaped, surviving, others);
 
+    [Fact]
+    public void NotCreditActivities_WhenOnlyAnInfoPageHoldsTheSurvivor_ForForReap()
+    {
+        IReadOnlyList<string> bullets = Bullets(PlacementRemovalConfirmation.ForReap(
+            new RemovalImpact(
+                new PlacementPath("Logistics", "Arrival", null, null),
+                [new TierRef(TierKind.SubTab, "Arrival")], [new TierRef(TierKind.Tab, "Logistics")], 1,
+                SurvivorHeldByInfoPageOnly: true),
+            "Canoe Basics"));
+
+        Assert.Contains("Logistics stays — other content still uses it.", bullets);
+    }
+
     private static IReadOnlyList<string> Bullets(Dictionary<string, object?> parameters) =>
         (IReadOnlyList<string>)parameters[nameof(ConfirmDialog.Consequences)]!;
 

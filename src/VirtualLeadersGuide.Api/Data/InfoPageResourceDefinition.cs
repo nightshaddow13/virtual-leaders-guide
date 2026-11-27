@@ -42,17 +42,21 @@ public sealed class InfoPageResourceDefinition : JsonApiResourceDefinition<InfoP
 
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly VirtualLeadersGuideDbContext _dbContext;
+    private readonly TierReaper _tierReaper;
 
     /// <summary>Constructs the definition with the services it needs to authorize InfoPage reads and writes.</summary>
     /// <param name="resourceGraph">Passed through to <see cref="JsonApiResourceDefinition{TResource,TId}"/>.</param>
     /// <param name="httpContextAccessor">Resolves the current request's <see cref="System.Security.Claims.ClaimsPrincipal"/> for <see cref="CurrentPolicy"/>.</param>
     /// <param name="dbContext">Backs <see cref="StoredEventId"/>/<see cref="StoredEventIdAsync"/>'s re-reads and <see cref="ValidateEventExistsAsync"/>'s pre-check.</param>
+    /// <param name="tierReaper">Marks the Tiers a deleted InfoPage's Placement leaves empty for removal (P5-24, #208).</param>
     public InfoPageResourceDefinition(
-        IResourceGraph resourceGraph, IHttpContextAccessor httpContextAccessor, VirtualLeadersGuideDbContext dbContext)
+        IResourceGraph resourceGraph, IHttpContextAccessor httpContextAccessor, VirtualLeadersGuideDbContext dbContext,
+        TierReaper tierReaper)
         : base(resourceGraph)
     {
         _httpContextAccessor = httpContextAccessor;
         _dbContext = dbContext;
+        _tierReaper = tierReaper;
     }
 
     /// <inheritdoc/>
@@ -161,8 +165,25 @@ public sealed class InfoPageResourceDefinition : JsonApiResourceDefinition<InfoP
             FillServerGeneratedDefaults(resource);
             await ValidateEventExistsAsync(resource.EventId, cancellationToken);
         }
+        else if (writeOperation == WriteOperationKind.DeleteResource)
+        {
+            await RemovePlacementAndReapTiersAsync(resource.Id, cancellationToken);
+        }
 
         await base.OnWritingAsync(resource, writeOperation, cancellationToken);
+    }
+
+    /// <remarks>
+    /// Explicit rather than left to the database cascade, which would orphan the Placement's Tiers. EF also needs
+    /// the row tracked to order its delete before the <c>Restrict</c>ed Tier deletes.
+    /// </remarks>
+    private async Task RemovePlacementAndReapTiersAsync(Guid infoPageId, CancellationToken cancellationToken)
+    {
+        List<InfoPagePlacement> placements = await _dbContext.InfoPagePlacements
+            .Where(placement => placement.InfoPageId == infoPageId)
+            .ToListAsync(cancellationToken);
+        _dbContext.InfoPagePlacements.RemoveRange(placements);
+        await _tierReaper.ReapEmptiedTiersAsync(placements, keep: null, cancellationToken);
     }
 
     /// <remarks>

@@ -1,3 +1,5 @@
+using VirtualLeadersGuide.Web.InfoPages;
+
 namespace VirtualLeadersGuide.Web.Activities;
 
 /// <summary>The dashboard's view of a <c>/api/tabs</c> row (P5-11, #96).</summary>
@@ -109,6 +111,9 @@ public sealed class PlacementTreeDto
 
     /// <summary>Every Placement on the Event, across all of its Activities.</summary>
     public IReadOnlyList<PlacementDto> Placements { get; init; } = [];
+
+    /// <summary>Every InfoPage Placement on the Event (P5-24, #208) - they keep Tabs and Sub Tabs alive too.</summary>
+    public IReadOnlyList<InfoPagePlacementDto> InfoPagePlacements { get; init; } = [];
 
     /// <summary>Each Activity's Placements as name paths, in display order - the Activities list's "Placed under" chips (wireframe turn 1a).</summary>
     /// <returns>A lookup by Activity id; an Activity with no Placement has no entry.</returns>

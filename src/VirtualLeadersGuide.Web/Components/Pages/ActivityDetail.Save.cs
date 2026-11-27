@@ -184,7 +184,8 @@ public partial class ActivityDetail
     /// introduces a Tab is already persisted when a later ghost reuses it by name (Api resolves each by name,
     /// ADR-0072). Stops at the first rejection and keeps that ghost and every later one pending, so nothing
     /// the user placed is lost to a partial failure; a 409 (already placed - the stale-tree race) is dropped as
-    /// satisfied rather than treated as a failure. When only some got saved, the saved ones are named too.
+    /// satisfied rather than treated as a failure, and one whose screen an InfoPage fills (P5-24, #208) is dropped
+    /// and reported. When only some got saved, the saved ones are named too.
     /// Leaving mid-save stops the loop; the request already sent can't be recalled.
     /// </remarks>
     /// <returns>Whether every ghost was newly saved - <see langword="false"/> if any was rejected, skipped or never sent.</returns>
@@ -192,6 +193,7 @@ public partial class ActivityDetail
     {
         var saved = new List<string>();
         var alreadyPlaced = new List<string>();
+        var onInfoPageScreens = new List<string>();
         bool stopped = false;
 
         try
@@ -227,6 +229,12 @@ public partial class ActivityDetail
                     continue;
                 }
 
+                if (outcome == PlacementWriteOutcome.SlotHasInfoPage)
+                {
+                    onInfoPageScreens.Add(ghost.Display);
+                    continue;
+                }
+
                 saved.Add(ghost.Display);
                 savedSinceLoad.Add((created!.Id, ghost));
             }
@@ -242,7 +250,12 @@ public partial class ActivityDetail
             problems.Add($"Already placed, so skipped: {string.Join(", ", alreadyPlaced)}.");
         }
 
-        bool allSaved = !stopped && alreadyPlaced.Count == 0;
+        if (onInfoPageScreens.Count > 0)
+        {
+            problems.Add($"Skipped, because an Info page is shown there: {string.Join(", ", onInfoPageScreens)}.");
+        }
+
+        bool allSaved = !stopped && alreadyPlaced.Count == 0 && onInfoPageScreens.Count == 0;
         if (!allSaved && saved.Count > 0)
         {
             problems.Add($"Saved: {string.Join(", ", saved)}.");

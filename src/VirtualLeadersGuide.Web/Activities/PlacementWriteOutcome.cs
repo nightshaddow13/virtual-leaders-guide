@@ -12,7 +12,10 @@ public enum PlacementWriteOutcome
     Invalid,
 
     /// <remarks>The same Activity is already placed at this exact path (ADR-0046) - normally caught earlier by the builder's own duplicate check, so this is the race/stale-tree case.</remarks>
-    Conflict
+    Conflict,
+
+    /// <remarks>An InfoPage fills that screen, so no Activity can go there (ADR-0047; P5-24, #208).</remarks>
+    SlotHasInfoPage
 }
 
 /// <summary>Outcomes <see cref="ApiPlacementClient.DeleteAsync"/> distinguishes (P5-12, #97).</summary>

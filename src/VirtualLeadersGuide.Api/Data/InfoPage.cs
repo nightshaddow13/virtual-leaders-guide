@@ -10,8 +10,8 @@ namespace VirtualLeadersGuide.Api.Data;
 /// Exposed at <c>/api/infoPages</c> (P5-16, #21), full CRUD, scoped Admin/assigned-Director the same as
 /// <c>/api/events</c> - see <see cref="InfoPageResourceDefinition"/> for the enforcement and ADR-0059 for why
 /// a Director's write authority here is broader than <see cref="Authorization.EventAccessPolicy.CanUpdate"/>'s
-/// Admin-only rule. May exist with no Placement at all - Placement (#86/#91/#92) is a separate resource, and
-/// "written but not yet placed" is a normal state, not a draft one.
+/// Admin-only rule. May exist with no Placement at all - "written but not yet placed" is a normal state, not a draft one -
+/// and has at most one: <see cref="InfoPagePlacement"/> (P5-24, #208).
 /// </remarks>
 [Resource]
 public class InfoPage : Page

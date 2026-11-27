@@ -413,6 +413,27 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>
+    /// Creates and persists a new <see cref="InfoPagePlacement"/> from an already-resolved path (P5-24, #208),
+    /// bypassing <see cref="InfoPagePlacementResourceDefinition"/> entirely.
+    /// </summary>
+    /// <param name="eventId">The Event to scope the Placement to.</param>
+    /// <param name="infoPageId">The InfoPage being placed - see <see cref="CreateInfoPageAsync"/>.</param>
+    /// <param name="tabId">The resolved Tab.</param>
+    /// <param name="subTabId">The resolved Sub Tab, if any.</param>
+    /// <returns>The newly persisted Placement.</returns>
+    public async Task<InfoPagePlacement> CreateInfoPagePlacementAsync(
+        Guid eventId, Guid infoPageId, Guid tabId, Guid? subTabId = null)
+    {
+        using IServiceScope scope = Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<VirtualLeadersGuideDbContext>();
+        InfoPagePlacement placement = InfoPagePlacement.Create(eventId, infoPageId, tabId, subTabId);
+
+        dbContext.InfoPagePlacements.Add(placement);
+        await dbContext.SaveChangesAsync();
+        return placement;
+    }
+
+    /// <summary>
     /// A pre-formatted platform-wide <c>Admin</c> role claim (see <see cref="RoleClaimValue.Format"/>), ready
     /// to pass to <see cref="CreateUserClient"/> - for tests (P2-7, #16) exercising Admin-only access to
     /// <c>/api/events</c> without hand-building a <see cref="RoleGrantDto"/>.
