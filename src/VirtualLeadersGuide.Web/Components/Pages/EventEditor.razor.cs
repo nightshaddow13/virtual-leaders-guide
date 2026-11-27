@@ -29,9 +29,6 @@ public partial class EventEditor
     private DialogService DialogService { get; set; } = default!;
 
     [Inject]
-    private TooltipService TooltipService { get; set; } = default!;
-
-    [Inject]
     private BrowserTimeZoneAccessor TimeZoneAccessor { get; set; } = default!;
 
     /// <remarks>
@@ -80,15 +77,6 @@ public partial class EventEditor
     private bool isAddingDirector;
     private bool isRemovingDirector;
     private string? directorErrorMessage;
-
-    /// <remarks>
-    /// Anchors the "why is this disabled" tooltip (ADR-0052) to the specific row hovered - a single shared
-    /// field would only ever hold the last row's <see cref="ElementReference"/> once <see cref="LoadDirectorsAsync"/>
-    /// finishes rendering every row in the loop, which is wrong for every row but the last. Keyed by
-    /// <see cref="EventDirectorDto.GrantId"/> rather than index, so a reload that reorders the list can't
-    /// point a tooltip at the wrong row.
-    /// </remarks>
-    private readonly Dictionary<Guid, ElementReference> adminGuardAnchors = [];
 
     private const string AdminGuardTooltipText =
         "Admins have access to every event. Remove them from the admin allowlist instead.";
@@ -535,7 +523,6 @@ public partial class EventEditor
     private async Task LoadDirectorsAsync()
     {
         directorErrorMessage = null;
-        adminGuardAnchors.Clear();
 
         try
         {

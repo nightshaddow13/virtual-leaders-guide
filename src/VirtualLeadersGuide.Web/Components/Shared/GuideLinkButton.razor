@@ -1,0 +1,17 @@
+@using VirtualLeadersGuide.Web.Events
+
+@* A Dashboard row's "Open guide" action (P2-23). The anchor copies the classes and inner markup RadzenButton
+   renders for an icon-only Light button, so it matches the row's other actions; a bUnit test compares the two. *@
+@if (Status == EventStatus.Draft)
+{
+    <DisabledTooltip Text="@DraftTooltipText">
+        <RadzenButton Icon="@IconName" ButtonStyle="ButtonStyle.Light" Disabled="true" aria-label="@Label" />
+    </DisabledTooltip>
+}
+else
+{
+    <a class="rz-button rz-button-md rz-variant-filled rz-light rz-shade-default rz-button-icon-only"
+       href="e/@Slug" target="_blank" rel="noopener" aria-label="@Label">
+        <span class="rz-button-box"><i class="notranslate rz-button-icon-left rzi" aria-hidden="true">@IconName</i></span>
+    </a>
+}
