@@ -20,7 +20,8 @@ public static class PublicGuideRoutes
 
     public const string PasscodeCheck = "/events/{slug}/passcode";
 
-    public const string InfoPagesByEvent = "/events/{slug}/infoPages";
+    /// <summary>The route, under <see cref="GroupPrefix"/>, that returns an Event's whole guide.</summary>
+    public const string GuideByEvent = "/events/{slug}/guide";
 
     public static string ForEventBySlug(string slug) =>
         $"{GroupPrefix}/events/{Uri.EscapeDataString(slug)}";
@@ -28,6 +29,9 @@ public static class PublicGuideRoutes
     public static string ForPasscodeCheck(string slug) =>
         $"{GroupPrefix}/events/{Uri.EscapeDataString(slug)}/passcode";
 
-    public static string ForInfoPagesByEvent(string slug) =>
-        $"{GroupPrefix}/events/{Uri.EscapeDataString(slug)}/infoPages";
+    /// <summary>The path a caller requests for <see cref="GuideByEvent"/>.</summary>
+    /// <param name="slug">The Event's Slug, escaped here.</param>
+    /// <returns>The path, including <see cref="GroupPrefix"/>.</returns>
+    public static string ForGuideByEvent(string slug) =>
+        $"{GroupPrefix}/events/{Uri.EscapeDataString(slug)}/guide";
 }

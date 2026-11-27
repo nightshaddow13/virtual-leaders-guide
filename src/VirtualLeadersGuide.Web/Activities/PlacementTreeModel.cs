@@ -139,6 +139,11 @@ public sealed record PathLevel(TierKind Kind, string Name, bool IsNew);
 /// the tree is the union of every Placement's path. Matching is by name, case-insensitively, scoped by the
 /// parent chain - the same rules <c>ActivityPlacementResourceDefinition</c> applies server-side, so the two
 /// can't disagree about whether a typed name is an existing Tier.
+/// <para>
+/// Api's <c>PublicGuideAssembler</c> orders the public guide by the same rules as this tree: change one, change
+/// the other, and keep their paired test cases (<c>PlacementTreeModelShould</c> /
+/// <c>PublicGuideEndpointsShould</c>) in step.
+/// </para>
 /// </remarks>
 public sealed class PlacementTreeModel
 {

@@ -6,8 +6,8 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// <summary>
 /// Covers P4-2 (#72): the public entry path at <c>/</c> and <c>/e/{slug}</c> - event lookup, passcode entry,
 /// and the landing states around it (wrong passcode, unknown address, Cancelled/Draft, the signed-in staff
-/// bypass, and a Passcode rotation revoking an existing Unlock). Also covers P4-1 (#23): once unlocked, the
-/// guide renders the Event's InfoPages.
+/// bypass, and a Passcode rotation revoking an existing Unlock). Also covers P5-14 (#88): once unlocked, the
+/// guide shows its content behind Tab and Sub Tab strips.
 /// </summary>
 /// <remarks>
 /// Every Event here goes through the real UI (<see cref="E2ETestBase.CreateEventAsync"/>), same discipline as
@@ -30,7 +30,7 @@ public class PublicGuideScenarios : E2ETestBase
             await SubmitOnHomeAsync(slug, passcode);
 
             await Expect(Page).ToHaveURLAsync(new Uri(Fixture.WebBaseUrl, $"e/{slug}").ToString());
-            await Expect(Page.GetByText("This guide is unlocked")).ToBeVisibleAsync(InteractiveVisible());
+            await Expect(UnlockedHeading()).ToBeVisibleAsync(InteractiveVisible());
         });
 
     [Fact(DisplayName = "Given a Live Event's address but the wrong passcode, when a visitor submits them on /, then they see an inline error and stay on /")]
@@ -96,7 +96,7 @@ public class PublicGuideScenarios : E2ETestBase
 
             await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, $"e/{slug}").ToString());
 
-            await Expect(Page.GetByText("This guide is unlocked")).ToBeVisibleAsync();
+            await Expect(UnlockedHeading()).ToBeVisibleAsync();
         });
 
     [Fact(DisplayName = "Given a visitor who already unlocked an Event's guide, when an Admin then rotates its Passcode, then the visitor is locked again on their next visit")]
@@ -106,7 +106,7 @@ public class PublicGuideScenarios : E2ETestBase
             (Guid eventId, string slug, string passcode) = await CreateAndPublishEventReturningIdAsync("Rotate Me");
             await SignOutAsync();
             await SubmitOnHomeAsync(slug, passcode);
-            await Expect(Page.GetByText("This guide is unlocked")).ToBeVisibleAsync();
+            await Expect(UnlockedHeading()).ToBeVisibleAsync();
 
             await SignInAsAdminAsync();
             string newPasscode = $"Testcode{Guid.NewGuid():n}";
@@ -121,23 +121,80 @@ public class PublicGuideScenarios : E2ETestBase
             await Expect(Page.GetByText("Unlock this guide")).ToBeVisibleAsync();
         });
 
-    [Fact(DisplayName = "Given an Event with an InfoPage, when a visitor unlocks its guide, then the InfoPage's title and rendered content appear on /e/{slug}")]
-    public async Task GivenAnEventWithAnInfoPage_WhenAVisitorUnlocksItsGuide_ThenTheInfoPagesTitleAndRenderedContentAppearOnE() =>
+    [Fact(DisplayName = "Given Activities under a Tab, a Section and a Sub Section and an InfoPage on a second Tab, when a visitor unlocks and picks the second Tab, then each screen shows its own content in order")]
+    public async Task GivenActivitiesOnOneTabAndAnInfoPageOnAnother_WhenAVisitorPicksTheSecondTab_ThenEachScreenShowsItsContentInOrder() =>
         await RunAsync(async () =>
         {
-            (Guid eventId, string slug, string passcode) = await CreateAndPublishEventReturningIdAsync("Info Page Guide");
-            string title = await CreateInfoPageWithContentAsync(eventId, "About", "Welcome to **camp**!");
+            (Guid eventId, string slug, string passcode) = await CreateAndPublishEventReturningIdAsync("Guide Tabs");
+            string day = Unique("Day");
+            string packing = Unique("Packing");
+            string section = Unique("Ranges");
+            string subSection = Unique("Archery");
+            string loose = await CreatePlacedActivityAsync(eventId, "Opening", day);
+            string sectioned = await CreatePlacedActivityAsync(eventId, "Safety Talk", day, section: section);
+            string nested = await CreatePlacedActivityAsync(eventId, "Far Butts", day, section: section, subSection: subSection);
+            string title = await CreatePlacedInfoPageAsync(eventId, "Welcome to **camp**!", packing);
             await SignOutAsync();
 
             await SubmitOnHomeAsync(slug, passcode);
 
-            await Expect(Page).ToHaveURLAsync(new Uri(Fixture.WebBaseUrl, $"e/{slug}").ToString());
-            await Expect(Page.GetByText(title)).ToBeVisibleAsync();
-            await Expect(Page.Locator("strong", new PageLocatorOptions { HasText = "camp" })).ToBeVisibleAsync();
+            await Expect(Page.Locator(".vlg-screen").Locator("h2, h3, h4"))
+                .ToHaveTextAsync([loose, section, sectioned, subSection, nested]);
+
+            await Page.Locator(".vlg-tabs").GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = packing }).ClickAsync();
+
+            await Expect(Page.Locator(".vlg-screen h2")).ToHaveTextAsync(title);
+            await Expect(Page.Locator(".vlg-screen strong")).ToHaveTextAsync("camp");
+            await Expect(Page.Locator(".vlg-screen article")).ToHaveCountAsync(0);
         });
 
-    [Fact(DisplayName = "Given an Event with no InfoPages, when a visitor unlocks its guide, then they see the empty-guide message")]
-    public async Task GivenAnEventWithNoInfoPages_WhenAVisitorUnlocksItsGuide_ThenTheySeeTheEmptyGuideMessage() =>
+    [Fact(DisplayName = "Given a Tab with a directly placed Activity and a Sub Tab, when a visitor picks the Sub Tab and then the Tab-named entry, then each screen shows only its own Activities")]
+    public async Task GivenATabWithBareContentAndASubTab_WhenAVisitorSwitchesBetweenThem_ThenEachScreenShowsOnlyItsOwnActivities() =>
+        await RunAsync(async () =>
+        {
+            (Guid eventId, string slug, string passcode) = await CreateAndPublishEventReturningIdAsync("Guide Sub Tabs");
+            string day = Unique("Day");
+            string roundRobin = Unique("Round Robin");
+            string loose = await CreatePlacedActivityAsync(eventId, "Opening", day);
+            string rotation = await CreatePlacedActivityAsync(eventId, "Rotation", day, subTab: roundRobin);
+            await SignOutAsync();
+            await SubmitOnHomeAsync(slug, passcode);
+            ILocator subTabs = Page.Locator(".vlg-subtabs");
+            ILocator activities = Page.Locator(".vlg-screen h3");
+
+            await Expect(activities).ToHaveTextAsync(loose);
+
+            await subTabs.GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = roundRobin }).ClickAsync();
+            await Expect(activities).ToHaveTextAsync(rotation);
+
+            await subTabs.GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = day }).ClickAsync();
+            await Expect(activities).ToHaveTextAsync(loose);
+        });
+
+    /// <remarks>Only a real browser shows this: Blazor's enhanced navigation keeps the scroll position when only the query string changes.</remarks>
+    [Fact(DisplayName = "Given a visitor scrolled down a long screen on a phone, when they pick another Tab, then the new screen starts at the top")]
+    public async Task GivenAVisitorScrolledDownALongScreen_WhenTheyPickAnotherTab_ThenTheNewScreenStartsAtTheTop() =>
+        await RunAsync(async () =>
+        {
+            (Guid eventId, string slug, string passcode) = await CreateAndPublishEventReturningIdAsync("Guide Scroll");
+            string longContent = string.Join("\n\n", Enumerable.Range(1, 60).Select(n => $"Paragraph {n}"));
+            await CreatePlacedInfoPageAsync(eventId, longContent, Unique("A First"));
+            string secondTab = Unique("B Second");
+            string secondTitle = await CreatePlacedInfoPageAsync(eventId, longContent, secondTab);
+            await SignOutAsync();
+            await SubmitOnHomeAsync(slug, passcode);
+            await Expect(UnlockedHeading()).ToBeVisibleAsync();
+            await Page.SetViewportSizeAsync(375, 600);
+            await Page.EvaluateAsync("window.scrollTo(0, 1500)");
+
+            await Page.Locator(".vlg-tabs").GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = secondTab }).ClickAsync();
+
+            await Expect(Page.Locator(".vlg-screen h2")).ToHaveTextAsync(secondTitle);
+            await Page.WaitForFunctionAsync("window.scrollY === 0", null, new PageWaitForFunctionOptions { Timeout = 5_000 });
+        });
+
+    [Fact(DisplayName = "Given an Event with nothing placed, when a visitor unlocks its guide, then they see the empty-guide message")]
+    public async Task GivenAnEventWithNothingPlaced_WhenAVisitorUnlocksItsGuide_ThenTheySeeTheEmptyGuideMessage() =>
         await RunAsync(async () =>
         {
             (string slug, string passcode) = await CreateAndPublishEventAsync("Empty Guide Host");
@@ -148,22 +205,59 @@ public class PublicGuideScenarios : E2ETestBase
             await Expect(Page.GetByText("haven't been added yet")).ToBeVisibleAsync();
         });
 
-    /// <remarks>
-    /// Kept local, not shared - mirrors <c>InfoPageManagementScenarios.CreateInfoPageAsync</c>'s own precedent
-    /// for the same reason (that class's header remarks). Fills MarkdownContent too, unlike that helper, since
-    /// this suite needs real rendered content to assert against on the public side. Assumes the caller is
-    /// already signed in as Admin (matching <see cref="CreateAndPublishEventReturningIdAsync"/>'s own
-    /// contract of leaving the session signed in).
-    /// </remarks>
-    private async Task<string> CreateInfoPageWithContentAsync(Guid eventId, string label, string markdownContent)
+    private static string Unique(string label) => $"e2e-{label} {Guid.NewGuid():n}";
+
+    /// <remarks>The heading only the unlocked state renders.</remarks>
+    private ILocator UnlockedHeading() => Page.Locator(".vlg-guide-heading");
+
+    private async Task FillTierAsync(string selector, string? value)
     {
-        string title = $"e2e-{label} {Guid.NewGuid():n}";
+        if (value is not null)
+        {
+            await Page.Locator(selector).FillAsync(value);
+            await Page.Locator(selector).PressAsync("Tab");
+        }
+    }
+
+    /// <remarks>Creates and places through the real forms, as <c>PlacementManagementScenarios</c> does; assumes an Admin is signed in.</remarks>
+    private async Task<string> CreatePlacedActivityAsync(
+        Guid eventId, string label, string tab, string? subTab = null, string? section = null, string? subSection = null)
+    {
+        string name = Unique(label);
+        await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, $"dashboard/events/{eventId}/activities/new").ToString());
+        await Page.Locator("#Name").FillAsync(name);
+        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create activity" }).ClickAsync();
+        await Expect(Page).ToHaveURLAsync(new Regex($"/dashboard/events/{eventId}/activities/[0-9a-f-]{{36}}$"), InteractiveUrl());
+
+        await Expect(Page.Locator("#PlacementTab")).ToBeVisibleAsync(InteractiveVisible());
+        await FillTierAsync("#PlacementTab", tab);
+        await FillTierAsync("#PlacementSubTab", subTab);
+        await FillTierAsync("#PlacementSection", section);
+        await FillTierAsync("#PlacementSubSection", subSection);
+        await Expect(Page.Locator(".pb-path")).ToContainTextAsync(subSection ?? section ?? subTab ?? tab, InteractiveContainText());
+        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Place it" }).ClickAsync();
+        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" }).ClickAsync();
+        await Expect(Page.Locator(".ptn-pending")).ToHaveCountAsync(0, InteractiveCount());
+
+        return name;
+    }
+
+    /// <remarks>Saving a Placement lands on the InfoPage list; waiting for it keeps the next navigation from cutting the write off.</remarks>
+    private async Task<string> CreatePlacedInfoPageAsync(Guid eventId, string markdownContent, string tab)
+    {
+        string title = Unique("About");
 
         await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, $"dashboard/events/{eventId}/info-pages/new").ToString());
         await Page.Locator("#Title").FillAsync(title);
         await Page.Locator("#MarkdownContent").FillAsync(markdownContent);
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create page" }).ClickAsync();
         await Expect(Page).ToHaveURLAsync(new Regex(@"info-pages/[0-9a-f-]{36}$"), InteractiveUrl());
+
+        await Expect(Page.Locator(".ipe-placement")).ToBeVisibleAsync(InteractiveVisible());
+        await FillTierAsync("#PlacementTab", tab);
+        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save changes" }).ClickAsync();
+        await Expect(Page).ToHaveURLAsync(
+            new Uri(Fixture.WebBaseUrl, $"dashboard/events/{eventId}/info-pages").ToString(), InteractiveUrl());
 
         return title;
     }

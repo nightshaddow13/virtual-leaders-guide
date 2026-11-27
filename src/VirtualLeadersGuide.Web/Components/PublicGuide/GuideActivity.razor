@@ -1,0 +1,7 @@
+@using VirtualLeadersGuide.Web.Markdown
+
+<article class="rz-mb-4">
+    <RadzenText TextStyle="TextStyle.Subtitle1" TagName="@(InSubSection ? TagName.H4 : TagName.H3)"
+                class="vlg-activity-name rz-mb-2">@Activity.Name</RadzenText>
+    <div class="vlg-prose">@MarkdownRenderer.RenderToHtml(Activity.Description)</div>
+</article>

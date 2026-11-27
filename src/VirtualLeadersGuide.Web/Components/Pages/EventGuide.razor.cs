@@ -5,15 +5,14 @@ using Microsoft.AspNetCore.Components.Forms;
 using VirtualLeadersGuide.Identity.Contracts;
 using VirtualLeadersGuide.Web.Authorization;
 using VirtualLeadersGuide.Web.Events;
-using VirtualLeadersGuide.Web.Markdown;
 using VirtualLeadersGuide.Web.PublicGuide;
 
 namespace VirtualLeadersGuide.Web.Components.Pages;
 
 /// <summary>
 /// An Event's public gated guide - wireframes 1c (locked splash, P4-2 #72) and 1g (wrong-passcode error, P4-2
-/// #72), and, once unlocked, its InfoPages (P4-1, #23) as a flat, Title-sorted list with no Tab navigation -
-/// P5-14 (#88) replaces this wholesale once InfoPage Placement and Activities exist.
+/// #72), and, once unlocked, its guide one screen at a time behind Tab and Sub Tab strips (wireframes 3a/3c,
+/// P5-14 #88), selected by the <c>tab</c>/<c>sub</c> query string (ADR-0080).
 /// </summary>
 /// <remarks>
 /// Static SSR, same reasoning as <c>Home.razor</c> - the passcode form POSTs back here, and a
@@ -32,13 +31,16 @@ public partial class EventGuide
     private PasscodeUnlockCookie UnlockCookie { get; set; } = default!;
 
     [Inject]
-    private MarkdownRenderer MarkdownRenderer { get; set; } = default!;
-
-    [Inject]
     private NavigationManager NavigationManager { get; set; } = default!;
 
     [Parameter]
     public string Slug { get; set; } = "";
+
+    [SupplyParameterFromQuery(Name = GuideSelection.TabParameter)]
+    private string? RequestedTab { get; set; }
+
+    [SupplyParameterFromQuery(Name = GuideSelection.SubTabParameter)]
+    private string? RequestedSubTab { get; set; }
 
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
@@ -59,7 +61,8 @@ public partial class EventGuide
     private PageState state = PageState.Loading;
     private PublicEventDto? loadedEvent;
     private string? passcodeErrorMessage;
-    private IReadOnlyList<PublicInfoPageDto> infoPages = [];
+    private PublicGuideDto? guide;
+    private GuideSelection? selection;
     private string? contentErrorMessage;
 
     /// <remarks>
@@ -86,13 +89,13 @@ public partial class EventGuide
     /// exists purely for convenience). Past both of those, a signed-in Admin/Director's own access
     /// (<see cref="IsStaffForThisEventAsync"/>) reaches <see cref="PageState.Unlocked"/> with no cookie
     /// involved - checked first, short-circuiting <see cref="PasscodeUnlockCookie.IsUnlocked"/> for staff, so
-    /// staff and an already-unlocked visitor land on the exact same state and see the exact same InfoPages
-    /// (<see cref="LoadInfoPagesAsync"/>, P4-1 #23).
+    /// staff and an already-unlocked visitor land on the exact same state and see the exact same guide
+    /// (<see cref="LoadGuideAsync"/>).
     /// <para>
     /// Deliberate gap, confirmed with the user: this lookup is the same anonymous endpoint for every caller,
     /// staff included, so a <see cref="EventStatus.Draft"/> Event reads as <see cref="PageState.NotFound"/>
     /// even for the Admin who owns it - the staff bypass is only ever reachable once an Event is
-    /// Live/Past/Cancelled, so there is still no way to preview a Draft Event's InfoPages before publishing
+    /// Live/Past/Cancelled, so there is still no way to preview a Draft Event's guide before publishing
     /// (tracked as a follow-up, #196, not closed by this story).
     /// </para>
     /// </remarks>
@@ -127,7 +130,7 @@ public partial class EventGuide
             }
 
             state = PageState.Unlocked;
-            await LoadInfoPagesAsync();
+            await LoadGuideAsync();
         }
         catch (PublicGuideUnavailableException)
         {
@@ -137,20 +140,21 @@ public partial class EventGuide
 
     /// <remarks>
     /// A separate <c>try</c>/<c>catch</c> from <see cref="LoadAsync"/>'s own, deliberately (ADR-0068's plan,
-    /// grilled decision): a visitor who already unlocked the guide keeps that state on a failed InfoPages
+    /// grilled decision): a visitor who already unlocked the guide keeps that state on a failed guide
     /// fetch, seeing an inline error where the content would be, rather than being dropped onto the full-page
     /// <see cref="PageState.Unavailable"/> dead-end - that state is reserved for the Event lookup itself never
     /// responding, a different failure than content not loading after the gate already succeeded.
     /// </remarks>
-    private async Task LoadInfoPagesAsync()
+    private async Task LoadGuideAsync()
     {
         try
         {
-            infoPages = await EventClient.GetInfoPagesAsync(Slug, CancellationToken.None);
+            guide = await EventClient.GetGuideAsync(Slug, CancellationToken.None);
+            selection = GuideSelection.Resolve(guide, RequestedTab, RequestedSubTab);
         }
         catch (PublicGuideUnavailableException)
         {
-            contentErrorMessage = "This guide's info pages didn't load. Try refreshing the page.";
+            contentErrorMessage = "This guide didn't load. Try refreshing the page.";
         }
     }
 
@@ -204,6 +208,7 @@ public partial class EventGuide
 
             UnlockCookie.Unlock(HttpContext, eventId.Value, passcodeVersion.Value, loadedEvent.EndsAt, loadedEvent.StartsAt);
             state = PageState.Unlocked;
+            await LoadGuideAsync();
         }
         catch (PublicGuideUnavailableException)
         {

@@ -112,27 +112,26 @@ public class PublicEventClientShould
     }
 
     [Fact]
-    public async Task ReturnTheInfoPages_WhenApiRespondsWithOk_ForGetInfoPagesAsync()
+    public async Task ReturnTheGuide_WhenApiRespondsWithOk_ForGetGuideAsync()
     {
-        var handler = StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new List<PublicInfoPageDto>
-        {
-            new() { Id = Guid.NewGuid(), Title = "About", MarkdownContent = "Welcome!" }
-        });
+        var handler = StubHttpMessageHandler.RespondingWithJson(
+            HttpStatusCode.OK, GuideBuilder.Guide(GuideBuilder.Tab("Day", GuideBuilder.InfoPageScreen("About", "Welcome!"))));
         PublicEventClient client = CreateClient(handler);
 
-        IReadOnlyList<PublicInfoPageDto> infoPages = await client.GetInfoPagesAsync("summer-camporee", CancellationToken.None);
+        PublicGuideDto guide = await client.GetGuideAsync("summer-camporee", CancellationToken.None);
 
-        Assert.Equal("About", Assert.Single(infoPages).Title);
+        PublicGuideTabDto tab = Assert.Single(guide.Tabs);
+        Assert.Equal("About", tab.Screen.InfoPage!.Title);
     }
 
     [Fact]
-    public async Task ThrowPublicGuideUnavailable_WhenTheTransportFails_ForGetInfoPagesAsync()
+    public async Task ThrowPublicGuideUnavailable_WhenTheTransportFails_ForGetGuideAsync()
     {
         var handler = StubHttpMessageHandler.ThrowingOn(() => new HttpRequestException("boom"));
         PublicEventClient client = CreateClient(handler);
 
         await Assert.ThrowsAsync<PublicGuideUnavailableException>(
-            () => client.GetInfoPagesAsync("summer-camporee", CancellationToken.None));
+            () => client.GetGuideAsync("summer-camporee", CancellationToken.None));
     }
 
     private static PublicEventClient CreateClient(HttpMessageHandler handler) =>

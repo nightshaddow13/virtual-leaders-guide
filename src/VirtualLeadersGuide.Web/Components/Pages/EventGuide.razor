@@ -3,6 +3,7 @@
 
 @using VirtualLeadersGuide.Identity.Contracts
 @using VirtualLeadersGuide.Web.Components.Account.Shared
+@using VirtualLeadersGuide.Web.Components.PublicGuide
 
 @* See EventGuide.razor.cs's own /// remarks for why this is static SSR and never uses RadzenButton. *@
 
@@ -78,37 +79,32 @@
         break;
 
     case PageState.Unlocked:
-        <div class="vlg-guide-banner">
-            <RadzenText TextStyle="TextStyle.Overline">Event</RadzenText>
-            <h1>@loadedEvent!.Name</h1>
+        <div class="vlg-guide-heading">
+            <RadzenText TextStyle="TextStyle.H5" TagName="TagName.H1" class="rz-mb-1">@loadedEvent!.Name</RadzenText>
             @if (DateRangeText is { Length: > 0 })
             {
-                <p class="vlg-guide-dates">@DateRangeText</p>
+                <RadzenText TextStyle="TextStyle.Caption" TagName="TagName.P">@DateRangeText</RadzenText>
             }
         </div>
-
-        <RadzenAlert AlertStyle="AlertStyle.Success" Variant="Variant.Flat" AllowClose="false"
-                     Text="This guide is unlocked. Its schedule and map aren't published yet." />
 
         @if (contentErrorMessage is not null)
         {
             <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" AllowClose="false" Text="@contentErrorMessage" />
         }
-        else if (infoPages.Count == 0)
+        else if (selection is null)
         {
-            <p class="vlg-guide-helper">This guide's info pages haven't been added yet. Check back soon.</p>
+            <p class="vlg-guide-helper">This guide's activities and info pages haven't been added yet. Check back soon.</p>
         }
         else
         {
-            <div class="vlg-guide-pages">
-                @foreach (PublicInfoPageDto infoPage in infoPages)
-                {
-                    <section class="vlg-guide-page">
-                        <h2>@infoPage.Title</h2>
-                        <div class="vlg-guide-page-content">@MarkdownRenderer.RenderToHtml(infoPage.MarkdownContent)</div>
-                    </section>
-                }
-            </div>
+            @if (selection.WasStale)
+            {
+                <RadzenAlert AlertStyle="AlertStyle.Info" Variant="Variant.Flat" AllowClose="false"
+                             Text="That part of the guide isn't available anymore." />
+            }
+
+            <GuideTabStrip Slug="@Slug" Guide="guide!" Selection="selection" />
+            <GuideScreen Screen="selection.Screen" />
         }
         break;
 }

@@ -337,3 +337,13 @@ h1:focus {
         right: 0.75rem;
         top: 0.5rem;
     }
+
+/* Rendered markdown (MarkdownRenderer output): no stray margin above the first block or below the last.
+   Shared by the editor preview and the public guide. */
+.vlg-prose :first-child {
+    margin-block-start: 0;
+}
+
+.vlg-prose :last-child {
+    margin-block-end: 0;
+}

@@ -1,0 +1,31 @@
+.vlg-screen {
+    max-width: 42rem;
+    padding-block-start: 1.5rem;
+    line-height: 1.75;
+    overflow-wrap: anywhere;
+}
+
+/* ::deep because RadzenText renders the headings, so they carry no scope attribute. */
+.vlg-screen ::deep .vlg-screen-heading {
+    font-weight: 600;
+    font-size: 1.3125rem;
+    padding-block-end: 0.5rem;
+    border-block-end: 1px solid var(--vlg-line);
+}
+
+.vlg-section {
+    margin-block-start: 2rem;
+}
+
+    .vlg-section:first-child {
+        margin-block-start: 0;
+    }
+
+.vlg-screen ::deep .vlg-subsection-heading {
+    color: var(--vlg-campfire);
+}
+
+.vlg-subsection {
+    padding-inline-start: 0.875rem;
+    border-inline-start: 2px solid var(--vlg-campfire-tint);
+}

@@ -1,0 +1,27 @@
+@using VirtualLeadersGuide.Identity.Contracts
+@using VirtualLeadersGuide.Web.PublicGuide
+
+<nav class="vlg-tabs" aria-label="Tabs" data-enhance-nav="false">
+    @foreach (PublicGuideTabDto tab in Guide.Tabs)
+    {
+        <a class="vlg-tab" href="@Href(tab, GuideSelection.DefaultSubTab(tab))"
+           aria-current="@Current(tab == Selection.Tab)">@tab.Name</a>
+    }
+</nav>
+
+@if (Selection.Tab.SubTabs.Count > 0)
+{
+    <nav class="vlg-subtabs" aria-label="Sub tabs" data-enhance-nav="false">
+        @if (Selection.ShowsBareEntry)
+        {
+            <a class="vlg-subtab" href="@Href(Selection.Tab, null)"
+               aria-current="@Current(Selection.SubTab is null)">@Selection.Tab.Name</a>
+        }
+
+        @foreach (PublicGuideSubTabDto subTab in Selection.Tab.SubTabs)
+        {
+            <a class="vlg-subtab" href="@Href(Selection.Tab, subTab)"
+               aria-current="@Current(subTab == Selection.SubTab)">@subTab.Name</a>
+        }
+    </nav>
+}
