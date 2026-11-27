@@ -102,6 +102,7 @@ public partial class ActivityDetail
         var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         saveFinished = finished.Task;
         saveErrorMessage = null;
+        ClearMoveFeedback();
         var problems = new List<string>();
 
         try

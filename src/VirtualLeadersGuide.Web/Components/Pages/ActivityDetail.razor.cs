@@ -13,11 +13,12 @@ namespace VirtualLeadersGuide.Web.Components.Pages;
 /// The one page for an existing Activity (P5-23, #206; wireframe turn 2, Direction C): Name, Description and
 /// beside the live "Where it appears" tree with the Placement builder under it. "Place it" adds an unsaved ghost row;
 /// <see cref="SaveAsync"/> commits the Name/Description and the ghosts from one button; leaving with either
-/// pending asks once first. Removing a saved row (P5-12, #97) writes immediately - see <see cref="RemoveAsync"/>.
+/// pending asks once first. Removing a saved row (P5-12, #97) writes immediately - see <see cref="RemoveAsync"/> -
+/// and so does reordering one (P5-13, #98) - see <see cref="MoveAsync"/>.
 /// </summary>
 /// <remarks>
 /// Loading and page state live here, saving and the leave guard in <c>ActivityDetail.Save.cs</c>, removal in
-/// <c>ActivityDetail.Removal.cs</c>. Everything that displays the Activity's name - tree rows, ghosts, dialogs,
+/// <c>ActivityDetail.Removal.cs</c>, reordering in <c>ActivityDetail.Reorder.cs</c>. Everything that displays the Activity's name - tree rows, ghosts, dialogs,
 /// breadcrumb, title - shows the saved <see cref="activity"/>, never what is being typed into <see cref="form"/>.
 /// <para>
 /// The builder sits under the tree rather than under the Description where the wireframe draws it (asked for
@@ -72,6 +73,9 @@ public partial class ActivityDetail : IDisposable
     /// <summary>Placements written since <see cref="tree"/> was last read, so they stay drawn when it can't be read again (access lost, or the read failed).</summary>
     private readonly List<(Guid Id, PlacementPath Path)> savedSinceLoad = [];
 
+    /// <summary>Set when a reload failed: the rows drawn may no longer be where Api has them, so they can't be moved (a move sends a position).</summary>
+    private bool treeStale;
+
     private PlacementTreeModel? model;
     private readonly ActivityFormModel form = new();
     private EditContext editContext = default!;
@@ -81,7 +85,7 @@ public partial class ActivityDetail : IDisposable
     private const string PermissionLostText = "You no longer have permission to edit this Activity.";
     private const string RefreshFailedText = "Couldn't refresh the placements, so the tree may be out of date. Reload the page.";
 
-    private bool WriteBlocked => isSaving || isRemoving || permissionLost;
+    private bool WriteBlocked => isSaving || isRemoving || isReordering || permissionLost;
 
     private int PlacedCount => tree.Placements.Count(p => p.ActivityId == ActivityId) + savedSinceLoad.Count + ghosts.Count;
 
@@ -161,6 +165,7 @@ public partial class ActivityDetail : IDisposable
     private Task OnPlace(PlacementPath path)
     {
         saveErrorMessage = null;
+        ClearMoveFeedback();
         ghosts.Add(path);
         RebuildModel();
         return Task.CompletedTask;
@@ -176,6 +181,7 @@ public partial class ActivityDetail : IDisposable
         (IReadOnlyList<ActivityDto> activities, _) =
             await ActivityClient.GetActivitiesForEventAsync(EventId, 1, 9999, null, CancellationToken.None);
         activityNames = activities.ToDictionary(a => a.Id, a => a.Name);
+        treeStale = false;
     }
 
     private void RebuildModel() =>

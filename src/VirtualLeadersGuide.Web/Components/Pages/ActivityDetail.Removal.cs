@@ -9,8 +9,8 @@ namespace VirtualLeadersGuide.Web.Components.Pages;
 /// <summary>
 /// The removal half of <see cref="ActivityDetail"/>: removing a saved or pending row and Undo (P5-12, #97),
 /// and the last-Placement dialog that offers to delete the whole Activity instead (P5-9, #95). Split out so
-/// the page's load/save/leave-guard flow in <c>ActivityDetail.razor.cs</c> stays readable; the two halves
-/// share the page's state (<c>model</c>, <c>ghosts</c>, <c>state</c>).
+/// the page's other flows stay readable; the parts share the page's state (<c>model</c>, <c>ghosts</c>,
+/// <c>state</c>).
 /// </summary>
 public partial class ActivityDetail
 {
@@ -35,6 +35,7 @@ public partial class ActivityDetail
         }
 
         saveErrorMessage = null;
+        ClearMoveFeedback();
 
         if (leaf.IsPending)
         {
@@ -105,12 +106,12 @@ public partial class ActivityDetail
     }
 
     /// <remarks>
-    /// Re-creates the removed Placement by name, then restores its <c>SortOrder</c> (decision 3). A failed
-    /// reposition is silent: order is advisory until P5-13 (#98), so the row simply stays at the end of its
-    /// bucket. A duplicate 409 means it's already back (a double click, or another tab restored it); an InfoPage
-    /// having taken the screen since the removal is reported (P5-24, #208). The toast outlives a loss of
-    /// permission, so the click is ignored then - the banner already says why. It also outlives the start of a
-    /// Save, so Undo waits for that to finish rather than writing alongside it.
+    /// Re-creates the removed Placement by name, then moves it back to the position it held (ADR-0079). A
+    /// failed move is silent: the row is restored, just at the end of its path. A duplicate 409 means it's
+    /// already back (a double click, or another tab restored it); an InfoPage having taken the screen since the
+    /// removal is reported (P5-24, #208). The toast outlives a loss of permission, so the click is ignored then -
+    /// the banner already says why. It also outlives the start of a Save, so Undo waits for that to finish rather
+    /// than writing alongside it.
     /// </remarks>
     private async Task UndoRemovalAsync(PlacementLeaf removed)
     {
@@ -120,6 +121,7 @@ public partial class ActivityDetail
             return;
         }
 
+        ClearMoveFeedback();
         isRemoving = true;
         try
         {
@@ -135,13 +137,19 @@ public partial class ActivityDetail
 
             if (outcome == PlacementWriteOutcome.Success && created is not null)
             {
-                if (await PlacementClient.UpdateSortOrderAsync(created.Id, removed.SortOrder, CancellationToken.None)
-                    == PlacementWriteOutcome.Forbidden)
+                try
                 {
-                    permissionLost = true;
-                    savedSinceLoad.Add((created.Id, path));
-                    RebuildModel();
-                    return;
+                    if (await PlacementClient.MoveAsync(created.Id, removed.Position, CancellationToken.None)
+                        == PlacementWriteOutcome.Forbidden)
+                    {
+                        permissionLost = true;
+                        savedSinceLoad.Add((created.Id, path));
+                        RebuildModel();
+                        return;
+                    }
+                }
+                catch (ActivityDataUnavailableException)
+                {
                 }
             }
             else if (outcome == PlacementWriteOutcome.Invalid)
@@ -232,6 +240,7 @@ public partial class ActivityDetail
         catch (ActivityDataUnavailableException)
         {
             refreshed = false;
+            treeStale = true;
         }
 
         RebuildModel();
@@ -239,7 +248,7 @@ public partial class ActivityDetail
         return refreshed;
     }
 
-    /// <summary><see cref="TryRefreshTreeAsync"/> for the removal paths, which report a failed reload as the page's error.</summary>
+    /// <summary><see cref="TryRefreshTreeAsync"/> for removal and Undo, which report a failed reload as the page's error.</summary>
     private async Task RefreshOrReportAsync()
     {
         if (!await TryRefreshTreeAsync())

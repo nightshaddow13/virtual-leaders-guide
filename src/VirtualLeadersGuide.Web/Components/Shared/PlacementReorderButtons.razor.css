@@ -1,0 +1,6 @@
+/* Wireframe turn 2d: the arrows drop out where the tree sits under the form. */
+@media (max-width: 63.999rem) {
+    .ptn-reorder {
+        display: none;
+    }
+}

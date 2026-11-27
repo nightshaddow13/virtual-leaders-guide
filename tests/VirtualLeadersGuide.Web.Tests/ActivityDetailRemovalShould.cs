@@ -68,7 +68,7 @@ public class ActivityDetailRemovalShould : BunitContext
     }
 
     [Fact]
-    public void RePostThePathAndRestoreItsSortOrder_WhenUndoIsClicked_ForUndoRemovalAsync()
+    public void RePostThePathAndRestoreItsPosition_WhenUndoIsClicked_ForUndoRemovalAsync()
     {
         IRenderedComponent<ActivityDetail> cut = RenderPage();
         RemoveButton(cut, "Morning").Click();
@@ -84,7 +84,7 @@ public class ActivityDetailRemovalShould : BunitContext
 
         cut.WaitForAssertion(() => Assert.Single(_patched), Patience);
         using JsonDocument patch = JsonDocument.Parse(_patched[0]);
-        Assert.Equal(4, patch.RootElement.GetProperty("data").GetProperty("attributes").GetProperty("sortOrder").GetInt32());
+        Assert.Equal(1, patch.RootElement.GetProperty("data").GetProperty("attributes").GetProperty("sortOrder").GetInt32());
     }
 
     [Fact]

@@ -77,7 +77,9 @@
                 <RadzenStack Gap="1rem">
                     @if (model!.Roots.Count > 0)
                     {
-                        <PlacementTree Roots="@model.Roots" IsBusy="@WriteBlocked" OnRemove="RemoveAsync" />
+                        <PlacementTree Roots="@model.Roots" IsBusy="@WriteBlocked" IsStale="treeStale" OnFocused="OnMoveFocused"
+                                       OnRemove="RemoveAsync" OnMove="MoveAsync"
+                                       FocusRequest="focusRequest" Announcement="@announcement" />
                     }
 
                     <fieldset class="ad-editable" disabled="@permissionLost">

@@ -15,7 +15,7 @@ public enum TierKind
 /// <param name="IsThisActivity">Whether this is the Activity whose page is open - drawn lit.</param>
 /// <param name="PlacementId">The saved Placement's id, or <see langword="null"/> for an unsaved ghost row (P5-12, #97).</param>
 /// <param name="Path">The Tier path this row sits at - what a remove names in its dialog, toast, and Undo.</param>
-/// <param name="SortOrder">The saved Placement's position among those sharing its path, restored by Undo; 0 for a ghost.</param>
+/// <param name="SortOrder">What the row is ordered by: the stored value, which may have gaps; <see cref="int.MaxValue"/> for a row saved since the tree was last read, whose value isn't known; 0 for a ghost. Display position is <see cref="Position"/>.</param>
 public sealed record PlacementLeaf(
     Guid ActivityId, string ActivityName, bool IsThisActivity,
     Guid? PlacementId, PlacementPath Path, int SortOrder)
@@ -23,9 +23,41 @@ public sealed record PlacementLeaf(
     /// <summary>Whether this is an unsaved ghost row - drawn dashed. Derived from <see cref="PlacementId"/>, so a row can't claim to be both saved and pending.</summary>
     public bool IsPending => PlacementId is null;
 
+    /// <summary>Zero-based index among the saved rows sharing this path - what a move or Undo sends to Api (ADR-0079); 0 for a ghost.</summary>
+    public int Position { get; init; }
+
+    /// <summary>How many saved rows share this path; 0 for a ghost, which never counts as a neighbour.</summary>
+    public int SavedCount { get; init; }
+
+    /// <summary>Whether there is a saved row above this one to move past.</summary>
+    public bool CanMoveUp => !IsPending && Position > 0;
+
+    /// <summary>Whether there is a saved row below this one to move past.</summary>
+    public bool CanMoveDown => !IsPending && Position < SavedCount - 1;
+
     /// <summary>Always empty - a placed Activity is a leaf. Exists so <c>RadzenTree</c>'s single level can read the same <c>Items</c> property off every row, tier or leaf.</summary>
     public IEnumerable<object> Items => [];
 }
+
+/// <summary>Which way a row moves within its path; the value is the step added to its position.</summary>
+public enum PlacementDirection
+{
+    /// <summary>One place earlier.</summary>
+    Up = -1,
+
+    /// <summary>One place later.</summary>
+    Down = 1
+}
+
+/// <summary>A request to move one saved row a step within its path (P5-13, #98).</summary>
+/// <param name="Leaf">The row to move.</param>
+/// <param name="Direction">Which way.</param>
+public sealed record PlacementMove(PlacementLeaf Leaf, PlacementDirection Direction);
+
+/// <summary>Which arrow should take focus once a move has been redrawn, so keyboard users keep their place (P5-13, #98).</summary>
+/// <param name="PlacementId">The moved row.</param>
+/// <param name="Direction">The direction that was used.</param>
+public sealed record PlacementFocusRequest(Guid PlacementId, PlacementDirection Direction);
 
 /// <summary>One Tier row in the live tree, with whatever hangs beneath it.</summary>
 public sealed class TierNode
@@ -53,7 +85,7 @@ public sealed class TierNode
     /// <summary>Child Tiers, ordered Sub Tabs, Sections, Sub Sections, then by <see cref="SortOrder"/> and name.</summary>
     public IReadOnlyList<TierNode> Children => ChildList;
 
-    /// <summary>Activities placed directly at this Tier.</summary>
+    /// <summary>Activities placed directly at this Tier, saved rows in <c>SortOrder</c> (then name) followed by ghosts.</summary>
     public IReadOnlyList<PlacementLeaf> Leaves => LeafList;
 
     /// <summary>Everything that hangs beneath this Tier - its placed Activities, then its child Tiers - as one list, the shape <c>RadzenTree</c>'s level template walks.</summary>
@@ -165,7 +197,7 @@ public sealed class PlacementTreeModel
             PlacementPath path = Canonicalize(saved);
             TierNode deepest = Insert(path, pending: false, PendingSortOrder, PendingSortOrder, PendingSortOrder, PendingSortOrder);
             deepest.LeafList.Add(new PlacementLeaf(
-                activityId, activityName, IsThisActivity: true, id, path, SortOrder: 0));
+                activityId, activityName, IsThisActivity: true, id, path, SortOrder: PendingSortOrder));
             _thisActivitysPaths.Add(path);
         }
 
@@ -183,6 +215,24 @@ public sealed class PlacementTreeModel
 
     /// <summary>The tree's top level - every Tab - ordered by <see cref="TierNode.SortOrder"/> then name.</summary>
     public IReadOnlyList<TierNode> Roots => _roots;
+
+    /// <summary>The saved row for <paramref name="placementId"/>, or <see langword="null"/> if it isn't in the tree.</summary>
+    /// <param name="placementId">A saved Placement's id.</param>
+    public PlacementLeaf? FindLeaf(Guid placementId)
+    {
+        var pending = new Stack<TierNode>(_roots);
+        while (pending.TryPop(out TierNode? node))
+        {
+            if (node.LeafList.Find(leaf => leaf.PlacementId == placementId) is { } found)
+            {
+                return found;
+            }
+
+            node.ChildList.ForEach(pending.Push);
+        }
+
+        return null;
+    }
 
     /// <summary>Every Tab as an autofill choice.</summary>
     public IReadOnlyList<TierOption> TabOptions() => ToOptions(_roots);
@@ -556,7 +606,27 @@ public sealed class PlacementTreeModel
         foreach (TierNode node in nodes)
         {
             SortRecursively(node.ChildList);
-            node.LeafList.Sort((a, b) => string.Compare(a.ActivityName, b.ActivityName, StringComparison.OrdinalIgnoreCase));
+            OrderLeaves(node.LeafList);
         }
+    }
+
+    /// <summary>
+    /// Orders one path's saved rows the way Api renumbers them (ADR-0079), puts ghosts after them, and stamps
+    /// each saved row with its position.
+    /// </summary>
+    /// <remarks><c>OrderBy</c>, not <c>List.Sort</c>: it is stable, which keeps ghosts in placement order.</remarks>
+    private static void OrderLeaves(List<PlacementLeaf> leaves)
+    {
+        List<PlacementLeaf> saved =
+        [
+            .. leaves.Where(leaf => !leaf.IsPending)
+                .OrderBy(leaf => leaf.SortOrder)
+                .ThenBy(leaf => leaf.ActivityName, StringComparer.OrdinalIgnoreCase)
+        ];
+        List<PlacementLeaf> pending = [.. leaves.Where(leaf => leaf.IsPending)];
+
+        leaves.Clear();
+        leaves.AddRange(saved.Select((leaf, index) => leaf with { Position = index, SavedCount = saved.Count }));
+        leaves.AddRange(pending);
     }
 }

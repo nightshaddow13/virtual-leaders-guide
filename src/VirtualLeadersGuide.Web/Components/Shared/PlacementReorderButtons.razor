@@ -1,0 +1,13 @@
+@using VirtualLeadersGuide.Web.Activities
+
+@* The icon-only arrows that move one of this Activity's saved rows within its path (P5-13; wireframe turn 2a).
+   Hidden on narrow windows by the scoped stylesheet (turn 2d). Not the Light style the sketch notes: it was
+   near-invisible on the light card, as PlacementRemoveButton found. *@
+<span class="ptn-reorder">
+    <RadzenButton @ref="upButton" Icon="arrow_upward" ButtonStyle="ButtonStyle.Primary" Variant="Variant.Text" Size="ButtonSize.ExtraSmall"
+                  Disabled="@(Disabled || !Leaf.CanMoveUp)" aria-label="@($"Move {Leaf.Path.Display} up")"
+                  Click="@(() => OnMove.InvokeAsync(new(Leaf, PlacementDirection.Up)))" />
+    <RadzenButton @ref="downButton" Icon="arrow_downward" ButtonStyle="ButtonStyle.Primary" Variant="Variant.Text" Size="ButtonSize.ExtraSmall"
+                  Disabled="@(Disabled || !Leaf.CanMoveDown)" aria-label="@($"Move {Leaf.Path.Display} down")"
+                  Click="@(() => OnMove.InvokeAsync(new(Leaf, PlacementDirection.Down)))" />
+</span>

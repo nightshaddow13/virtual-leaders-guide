@@ -414,6 +414,87 @@ public class PlacementTreeModelShould
         Assert.Equal("Morning › Round Robin › Waterfront › Canoeing", leaf.Path.Display);
         Assert.Null(Model(new PlacementPath("Evening")).Roots.Single(r => r.Name == "Evening").Leaves.Single().PlacementId);
     }
+
+    /// <summary>One Morning Tab holding this Activity, "Swim Check" and "archery", each at the given stored order.</summary>
+    private PlacementTreeModel Bucket(int thisOrder, int swimOrder, int archeryOrder, out Guid thisPlacement)
+    {
+        var archery = Guid.NewGuid();
+        thisPlacement = Guid.NewGuid();
+        return new PlacementTreeModel(
+            new PlacementTreeDto
+            {
+                Tabs = [new TabDto { Id = _morning, Name = "Morning", SortOrder = 0 }],
+                Placements =
+                [
+                    new PlacementDto { Id = thisPlacement, ActivityId = ThisActivity, TabId = _morning, SortOrder = thisOrder },
+                    new PlacementDto { Id = Guid.NewGuid(), ActivityId = OtherActivity, TabId = _morning, SortOrder = swimOrder },
+                    new PlacementDto { Id = Guid.NewGuid(), ActivityId = archery, TabId = _morning, SortOrder = archeryOrder }
+                ]
+            },
+            ThisActivity, "Canoe Basics", new Dictionary<Guid, string> { [OtherActivity] = "Swim Check", [archery] = "archery" }, []);
+    }
+
+    [Fact]
+    public void OrderRowsBySortOrderRatherThanName_WhenTheTreeIsBuilt_ForPlacementTreeModel() =>
+        Assert.Equal(
+            ["Swim Check", "Canoe Basics", "archery"],
+            Bucket(thisOrder: 4, swimOrder: 1, archeryOrder: 9, out _).Roots[0].Leaves.Select(l => l.ActivityName));
+
+    [Fact]
+    public void BreakTiesByNameIgnoringCase_WhenSortOrdersMatch_ForPlacementTreeModel() =>
+        Assert.Equal(
+            ["archery", "Canoe Basics", "Swim Check"],
+            Bucket(0, 0, 0, out _).Roots[0].Leaves.Select(l => l.ActivityName));
+
+    [Theory]
+    [InlineData(0, 0, false, true)]
+    [InlineData(4, 1, true, true)]
+    [InlineData(20, 2, true, false)]
+    public void PositionTheRowAmongItsNeighbours_WhenTheTreeIsBuilt_ForFindLeaf(int thisOrder, int position, bool up, bool down)
+    {
+        PlacementTreeModel model = Bucket(thisOrder, swimOrder: 2, archeryOrder: 9, out Guid thisPlacement);
+
+        PlacementLeaf leaf = model.FindLeaf(thisPlacement)!;
+
+        Assert.Equal((position, 3, up, down), (leaf.Position, leaf.SavedCount, leaf.CanMoveUp, leaf.CanMoveDown));
+    }
+
+    /// <remarks>Api appends a new Placement to its path, so a row the page couldn't re-read belongs at the end.</remarks>
+    [Fact]
+    public void PutARowSavedSinceTheLoadLast_WhenItSharesAPath_ForPlacementTreeModel()
+    {
+        var added = Guid.NewGuid();
+        var model = new PlacementTreeModel(
+            new PlacementTreeDto
+            {
+                Tabs = [new TabDto { Id = _morning, Name = "Morning", SortOrder = 0 }],
+                Placements = [new PlacementDto { Id = Guid.NewGuid(), ActivityId = OtherActivity, TabId = _morning, SortOrder = 5 }]
+            },
+            ThisActivity, "Canoe Basics", new Dictionary<Guid, string> { [OtherActivity] = "Swim Check" }, [],
+            [(added, new PlacementPath("Morning"))]);
+
+        Assert.Equal(["Swim Check", "Canoe Basics"], model.Roots[0].Leaves.Select(l => l.ActivityName));
+        Assert.Equal(1, model.FindLeaf(added)!.Position);
+    }
+
+    [Fact]
+    public void KeepGhostsLastAndNotCountThemAsNeighbours_WhenOneSharesThePath_ForPlacementTreeModel()
+    {
+        var saved = Guid.NewGuid();
+        var model = new PlacementTreeModel(
+            new PlacementTreeDto
+            {
+                Tabs = [new TabDto { Id = _morning, Name = "Morning", SortOrder = 0 }],
+                Placements = [new PlacementDto { Id = saved, ActivityId = OtherActivity, TabId = _morning, SortOrder = 5 }]
+            },
+            ThisActivity, "Canoe Basics", new Dictionary<Guid, string> { [OtherActivity] = "Swim Check" }, [new PlacementPath("Morning")]);
+
+        Assert.Equal(["Swim Check", "Canoe Basics"], model.Roots[0].Leaves.Select(l => l.ActivityName));
+        Assert.False(model.FindLeaf(saved)!.CanMoveDown);
+        PlacementLeaf ghost = model.Roots[0].Leaves[1];
+        Assert.False(ghost.CanMoveUp || ghost.CanMoveDown);
+    }
+
     // Paired with PlacementsResourceShould's *_ForDelete cases: TierReaper (Api) and DescribeRemoval (Web)
     // apply the same reference rules and can't share code, so each scenario below exists in both suites.
 

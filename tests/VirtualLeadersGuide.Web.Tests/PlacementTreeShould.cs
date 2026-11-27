@@ -5,10 +5,11 @@ using VirtualLeadersGuide.Web.Components.Shared;
 namespace VirtualLeadersGuide.Web.Tests;
 
 /// <remarks>
-/// Renders <see cref="PlacementTree"/> in isolation (P5-12, #97) - the × control on this Activity's rows.
-/// What removing means for a saved row versus a ghost is the host's business and is covered by
-/// <see cref="ActivityDetailRemovalShould"/>; here only the control itself is pinned: which rows carry it, what
-/// it raises, and that <see cref="PlacementTree.IsBusy"/> disables it.
+/// Renders <see cref="PlacementTree"/> in isolation - the × (P5-12, #97) and ↑/↓ (P5-13, #98) controls on this
+/// Activity's rows. What they do is the host's business and is covered by
+/// <see cref="ActivityDetailRemovalShould"/> and <see cref="ActivityDetailReorderShould"/>; here only the
+/// controls themselves are pinned: which rows carry them, what they raise, and that
+/// <see cref="PlacementTree.IsBusy"/> disables them.
 /// </remarks>
 public class PlacementTreeShould : BunitContext
 {
@@ -81,5 +82,60 @@ public class PlacementTreeShould : BunitContext
         IRenderedComponent<PlacementTree> cut = RenderPlacementTree(isBusy: true);
 
         Assert.All(cut.FindAll("button[aria-label^='Remove placement']"), b => Assert.True(b.HasAttribute("disabled")));
+    }
+
+    [Fact]
+    public void OfferArrowsOnlyOnThisActivitysSavedRows_WhenRendered_ForPlacementTree()
+    {
+        IRenderedComponent<PlacementTree> cut = RenderPlacementTree();
+
+        Assert.Equal(
+            ["Move Morning up", "Move Morning down"],
+            cut.FindAll("button[aria-label^='Move ']").Select(b => b.GetAttribute("aria-label")!));
+    }
+
+    /// <remarks>This Activity is first of the two saved rows in Morning.</remarks>
+    [Fact]
+    public void DisableUpAndRaiseOnMoveDownward_WhenTheRowIsFirst_ForPlacementTree()
+    {
+        PlacementMove? raised = null;
+        IRenderedComponent<PlacementTree> cut = Render<PlacementTree>(parameters => parameters
+            .Add(c => c.Roots, Roots())
+            .Add(c => c.OnMove, Microsoft.AspNetCore.Components.EventCallback.Factory.Create<PlacementMove>(this, move => raised = move)));
+        Assert.True(cut.Find("button[aria-label='Move Morning up']").HasAttribute("disabled"));
+
+        cut.Find("button[aria-label='Move Morning down']").Click();
+
+        Assert.Equal((_savedPlacement, PlacementDirection.Down), (raised!.Leaf.PlacementId!.Value, raised.Direction));
+    }
+
+    [Fact]
+    public void DisableTheArrowsButNotRemove_WhenStale_ForPlacementTree()
+    {
+        IRenderedComponent<PlacementTree> cut = Render<PlacementTree>(parameters => parameters
+            .Add(c => c.Roots, Roots())
+            .Add(c => c.IsStale, true));
+
+        Assert.All(cut.FindAll("button[aria-label^='Move ']"), b => Assert.True(b.HasAttribute("disabled")));
+        Assert.All(cut.FindAll("button[aria-label^='Remove placement']"), b => Assert.False(b.HasAttribute("disabled")));
+    }
+
+    [Fact]
+    public void DisableBothArrows_WhenBusy_ForPlacementTree()
+    {
+        IRenderedComponent<PlacementTree> cut = RenderPlacementTree(isBusy: true);
+
+        Assert.All(cut.FindAll("button[aria-label^='Move ']"), b => Assert.True(b.HasAttribute("disabled")));
+    }
+
+    [Fact]
+    public void RenderTheAnnouncementAndTheNarrowWindowHint_WhenRendered_ForPlacementTree()
+    {
+        IRenderedComponent<PlacementTree> cut = Render<PlacementTree>(parameters => parameters
+            .Add(c => c.Roots, Roots())
+            .Add(c => c.Announcement, "Moved to position 1 of 2."));
+
+        Assert.Equal("Moved to position 1 of 2.", cut.Find("[role='status']").TextContent);
+        Assert.Contains("Reorder from a wider window.", cut.Markup, StringComparison.Ordinal);
     }
 }

@@ -289,6 +289,41 @@ public class PlacementManagementScenarios : E2ETestBase
             await Expect(Page.Locator(".rz-autocomplete-panel").GetByText(afternoon)).ToHaveCountAsync(0);
         });
 
+    /// <remarks>
+    /// Swim Check is placed first, so the saved order is the reverse of alphabetical and a pass can't come from
+    /// name sorting. Also the one check that focus really lands on an arrow in a browser, and that the scoped
+    /// stylesheets hide the arrows on a narrow window (wireframe turn 2d).
+    /// </remarks>
+    [Fact(DisplayName = "Given two Activities under one Tab, when an Admin moves the second one up, then the new order survives a reload")]
+    public async Task GivenTwoActivitiesUnderOneTab_WhenAnAdminMovesTheSecondOneUp_ThenTheNewOrderSurvivesAReload() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, _) = await CreateEventAsync("Reorder Host");
+            (_, Guid canoe) = await CreateActivityAsync(eventId, "Canoe Basics");
+            (_, Guid swim) = await CreateActivityAsync(eventId, "Swim Check");
+            string tab = $"e2e-Morning {Guid.NewGuid():n}";
+            await PlaceAndSaveAsync(eventId, swim, tab);
+            await PlaceAndSaveAsync(eventId, canoe, tab);
+
+            await Page.GotoAsync(ActivityUrl(eventId, canoe));
+            ILocator up = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = $"Move {tab} up" });
+            ILocator down = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = $"Move {tab} down" });
+            await Expect(down).ToBeDisabledAsync();
+            await up.ClickAsync();
+
+            await Expect(Page.GetByText("Moved to position 1 of 2.")).ToHaveCountAsync(1, InteractiveCount());
+            await Expect(down).ToBeFocusedAsync();
+
+            await Page.ReloadAsync();
+            await Expect(down).ToBeEnabledAsync();
+            await Expect(up).ToBeDisabledAsync();
+
+            await Page.SetViewportSizeAsync(800, 900);
+            await Expect(up).ToBeHiddenAsync();
+            await Expect(Page.GetByText("Reorder from a wider window.")).ToBeVisibleAsync(InteractiveVisible());
+        });
+
     /// <remarks>Places and saves one Tab at a time on the Activity's page, waiting for each save to clear its ghost so the next "Place it" sees a settled tree.</remarks>
     private async Task PlaceAndSaveAsync(Guid eventId, Guid activityId, params string[] tabs)
     {
