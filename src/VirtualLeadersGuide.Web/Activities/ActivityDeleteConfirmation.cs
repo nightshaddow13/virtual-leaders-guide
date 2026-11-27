@@ -53,7 +53,7 @@ internal static class ActivityDeleteConfirmation
 
             if (impact.Reaped.Count > 0)
             {
-                consequences.Add(DescribeReaped(impact.Reaped));
+                consequences.Add(PlacementRemovalConfirmation.DescribeReaped(impact.Reaped));
             }
         }
 
@@ -71,12 +71,5 @@ internal static class ActivityDeleteConfirmation
 
         consequences.Add("This can't be undone.");
         return consequences;
-    }
-
-    /// <remarks>Shallowest level first, so it reads "the Morning tab and Waterfront section" rather than inside-out.</remarks>
-    private static string DescribeReaped(IReadOnlyList<TierRef> reaped)
-    {
-        string[] named = [.. reaped.OrderBy(tier => tier.Kind).Select(tier => $"{tier.Name} {PlacementRemovalConfirmation.Noun(tier.Kind)}")];
-        return $"The {PlacementRemovalConfirmation.JoinNames(named)} {PlacementRemovalConfirmation.Disappear(named.Length)} from the guide too.";
     }
 }

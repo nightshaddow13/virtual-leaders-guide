@@ -121,6 +121,11 @@ public sealed record RemovalImpact(
 /// <param name="Reaped">Tiers nothing else references afterwards, deepest level first - Api deletes them with the Activity.</param>
 public sealed record ActivityDeletionImpact(int PlacementCount, IReadOnlyList<TierRef> Reaped);
 
+/// <summary>What deleting an InfoPage does to the guide (P5-25, #209).</summary>
+/// <param name="Path">Where the InfoPage is placed, or <see langword="null"/> if it isn't.</param>
+/// <param name="Reaped">Tiers nothing else references afterwards, deepest first - Api deletes them with the InfoPage.</param>
+public sealed record InfoPageDeletionImpact(PlacementPath? Path, IReadOnlyList<TierRef> Reaped);
+
 /// <summary>One level of a resolved path, for the NEW badges (wireframe 1e-7).</summary>
 /// <param name="Kind">Which Tier this level is.</param>
 /// <param name="Name">The name as it will be sent (canonicalized to an existing Tier's casing when one matches).</param>
@@ -402,6 +407,22 @@ public sealed class PlacementTreeModel
                 .Where(tier => reapedIds.Contains(tier.Id))
                 .Select(tier => new TierRef(level.Kind, tier.Name)))
         ];
+    }
+
+    /// <summary>What deleting the InfoPage <paramref name="infoPageId"/> would do to its Placement and Tiers (P5-25, #209).</summary>
+    /// <param name="server">The Event's persisted Tiers and Placements.</param>
+    /// <param name="infoPageId">An InfoPage on the Event.</param>
+    /// <returns>The impact - no path and nothing reaped when the InfoPage isn't placed.</returns>
+    public static InfoPageDeletionImpact DescribeInfoPageDeletion(PlacementTreeDto server, Guid infoPageId)
+    {
+        if (server.InfoPagePlacements.FirstOrDefault(p => p.InfoPageId == infoPageId) is not { } placement)
+        {
+            return new InfoPageDeletionImpact(null, []);
+        }
+
+        return new InfoPageDeletionImpact(
+            server.PathsByInfoPage().GetValueOrDefault(infoPageId),
+            DescribeInfoPagePlacementRemoval(server, placement.Id));
     }
 
     /// <summary>One level of the removed Placement's path: the Tier and its server id, for matching against other Placements and child Tiers.</summary>

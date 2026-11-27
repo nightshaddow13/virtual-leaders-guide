@@ -222,7 +222,8 @@ public partial class InfoPageEditor
     {
         saveErrorMessage = null;
 
-        var parameters = InfoPageDeleteConfirmation.BuildDialogParameters(model!.Title ?? "this page");
+        InfoPageDeletionImpact? impact = await InfoPageDeleteConfirmation.LoadImpactAsync(PlacementClient, EventId, InfoPageId!.Value);
+        var parameters = InfoPageDeleteConfirmation.BuildDialogParameters(model!.Title ?? "this page", impact);
         bool? confirmed = await DialogService.OpenAsync<ConfirmDialog>("Delete info page?", parameters);
         if (confirmed is not true)
         {
