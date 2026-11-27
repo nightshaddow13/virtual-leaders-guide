@@ -35,8 +35,8 @@ Prefer `codebase-memory-mcp` over `Grep`/`Glob` for finding code definitions, im
 ### Wireframes
 
 Stories that add or visibly change UI need a wireframe before planning starts — prompt the user for one if it's
-missing. Doesn't apply to test-only, backend-only, or infra stories. Wireframes and design tokens live in a
-Claude Design project, read via `DesignSync` (not `WebFetch` — it 403s on design URLs). See
+missing. Doesn't apply to test-only, backend-only, or infra stories. Wireframes and design tokens live in
+two Claude artifacts, read via the `Artifact` tool (not `WebFetch` or `DesignSync`). See
 `docs/agents/wireframes.md`.
 
 ### Story planning
