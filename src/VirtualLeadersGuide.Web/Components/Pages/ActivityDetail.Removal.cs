@@ -108,11 +108,13 @@ public partial class ActivityDetail
     /// Re-creates the removed Placement by name, then restores its <c>SortOrder</c> (decision 3). A failed
     /// reposition is silent: order is advisory until P5-13 (#98), so the row simply stays at the end of its
     /// bucket. A 409 means it's already back (a double click, or another tab restored it). The toast outlives a
-    /// loss of permission, so the click is ignored then - the banner already says why.
+    /// loss of permission, so the click is ignored then - the banner already says why. It also outlives the start
+    /// of a Save, so Undo waits for that to finish rather than writing alongside it.
     /// </remarks>
     private async Task UndoRemovalAsync(PlacementLeaf removed)
     {
-        if (permissionLost)
+        await saveFinished;
+        if (permissionLost || abandoned)
         {
             return;
         }
@@ -132,7 +134,14 @@ public partial class ActivityDetail
 
             if (outcome == PlacementWriteOutcome.Success && created is not null)
             {
-                await PlacementClient.UpdateSortOrderAsync(created.Id, removed.SortOrder, CancellationToken.None);
+                if (await PlacementClient.UpdateSortOrderAsync(created.Id, removed.SortOrder, CancellationToken.None)
+                    == PlacementWriteOutcome.Forbidden)
+                {
+                    permissionLost = true;
+                    savedSinceLoad.Add((created.Id, path));
+                    RebuildModel();
+                    return;
+                }
             }
             else if (outcome == PlacementWriteOutcome.Invalid)
             {

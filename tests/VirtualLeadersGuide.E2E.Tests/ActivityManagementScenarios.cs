@@ -215,6 +215,36 @@ public class ActivityManagementScenarios : E2ETestBase
                 InteractiveVisible());
         });
 
+    /// <remarks>
+    /// Links are a different route out than Cancel: the router isn't interactive, so a link click can navigate
+    /// without ever reaching the circuit's location-changing handler. Only a real browser shows which happens.
+    /// </remarks>
+    [Theory(DisplayName = "Given an Activity with an unsaved Name, when an Admin follows a link away, then they are warned and can keep editing or leave")]
+    [InlineData(".rz-breadcrumb", "ACTIVITIES", "/activities$")]
+    [InlineData("body", "Dashboard", "/dashboard$")]
+    public async Task GivenAnActivityWithAnUnsavedName_WhenAnAdminFollowsALinkAway_ThenTheyAreWarned(string scope, string link, string destination) =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, _) = await CreateEventAsync("Link Guard Host");
+            Guid activityId = await CreateActivityAsync(eventId, "Linked Away");
+            string typed = $"e2e-Typed {Guid.NewGuid():n}";
+
+            await Page.GotoAsync(ActivityUrl(eventId, activityId));
+            await Page.Locator("#Name").FillAsync(typed);
+            await Page.Locator(scope).GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = link }).First.ClickAsync();
+
+            await Expect(Page.GetByText("Discard unsaved changes?")).ToBeVisibleAsync(InteractiveVisible());
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Keep editing" }).ClickAsync();
+            await Expect(Page).ToHaveURLAsync(ActivityUrl(eventId, activityId));
+            await Expect(Page.Locator("#Name")).ToHaveValueAsync(typed, InteractiveValue());
+
+            await Page.Locator(scope).GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = link }).First.ClickAsync();
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Discard and leave" }).ClickAsync();
+            await Expect(Page).ToHaveURLAsync(new Regex(destination), InteractiveUrl());
+            await Expect(Page.Locator("#Name")).ToHaveCountAsync(0, InteractiveCount());
+        });
+
     private static Regex ActivityDetailUrlPattern { get; } = new(@"activities/[0-9a-f-]{36}$");
 
     private string ActivityUrl(Guid eventId, Guid activityId) =>

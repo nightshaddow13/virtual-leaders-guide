@@ -32,9 +32,13 @@ public class ActivityDetailShould : BunitContext
     private readonly List<string> _patchedBodies = [];
     private readonly List<HttpMethod> _writes = [];
     private readonly Queue<HttpStatusCode> _postStatuses = new();
+
+    /// <remarks>What Api really does for a Director who has lost the Event: the reads succeed and come back empty.</remarks>
     private bool _emptyReadsAfterAForbiddenWrite;
+
     private bool _failReadsAfterAWrite;
     private TaskCompletionSource? _holdWrites;
+    private bool _activityGoneAfterAWrite;
 
     /// <remarks>Generous on purpose: the solution-level test run executes this project alongside the Api suite, and bUnit's 1 s default is too tight when the machine is busy.</remarks>
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
@@ -357,7 +361,7 @@ public class ActivityDetailShould : BunitContext
     }
 
     [Fact]
-    public void KeepTheSavedNameInTheTree_WhileTheNameFieldIsDirty_ForRender()
+    public void KeepTheSavedNameInTheTree_WhenTheNameFieldIsDirty_ForRender()
     {
         Guid tabId = Guid.NewGuid();
         Register(tree: new Tree(Tabs: [(tabId, "Morning")], PlacedTabIds: [tabId]));
@@ -429,7 +433,7 @@ public class ActivityDetailShould : BunitContext
     }
 
     [Fact]
-    public void AskTheBrowserToConfirmLeaving_OnlyWhileSomethingIsUnsaved_ForRender()
+    public void AskTheBrowserToConfirmLeaving_WhenSomethingIsUnsaved_ForRender()
     {
         Register();
         IRenderedComponent<ActivityDetail> cut = RenderPage("Admin");
@@ -455,6 +459,59 @@ public class ActivityDetailShould : BunitContext
         cut.WaitForAssertion(() => Assert.Contains("A save is still running", cut.Markup, StringComparison.Ordinal), Patience);
         Services.GetRequiredService<DialogService>().Close(false);
         _holdWrites.SetResult();
+    }
+
+    [Fact]
+    public void KeepTheSavedRowDrawn_WhenALaterPlacementIsForbidden_ForSaveAsync()
+    {
+        _postStatuses.Enqueue(HttpStatusCode.Created);
+        _postStatuses.Enqueue(HttpStatusCode.Forbidden);
+        Register();
+        IRenderedComponent<ActivityDetail> cut = RenderPage("Director");
+        PlaceTab(cut, "Evening");
+        PlaceTab(cut, "Night");
+
+        SaveButton(cut).Click();
+
+        cut.WaitForAssertion(() => Assert.Contains("You no longer have permission", cut.Markup, StringComparison.Ordinal), Patience);
+        Assert.Equal("Canoe Basics", cut.Find(".ptn-lit").TextContent.Trim());
+        Assert.Single(cut.FindAll(".ptn-pending"));
+        Assert.Equal("2 SO FAR", cut.Find(".pb-count").TextContent.Trim());
+    }
+
+    [Fact]
+    public void SendNoFurtherPlacements_WhenTheUserLeavesMidSave_ForSaveAsync()
+    {
+        _holdWrites = new TaskCompletionSource();
+        Register();
+        IRenderedComponent<ActivityDetail> cut = RenderPage("Admin");
+        PlaceTab(cut, "Evening");
+        PlaceTab(cut, "Night");
+        SaveButton(cut).Click();
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        cut.InvokeAsync(() => navigation.NavigateTo("dashboard"));
+        cut.WaitForAssertion(() => Assert.Contains("A save is still running", cut.Markup, StringComparison.Ordinal), Patience);
+        Services.GetRequiredService<DialogService>().Close(true);
+        Assert.True(SpinWait.SpinUntil(() => navigation.Uri.EndsWith("dashboard", StringComparison.Ordinal), Patience));
+
+        _holdWrites.SetResult();
+
+        Assert.False(SpinWait.SpinUntil(() => _postedBodies.Count > 1, TimeSpan.FromMilliseconds(500)));
+        Assert.Single(_postedBodies);
+    }
+
+    [Fact]
+    public void ShowNotFound_WhenTheActivityWasDeletedBeforeTheSave_ForSaveAsync()
+    {
+        _patchStatus = HttpStatusCode.NotFound;
+        _activityGoneAfterAWrite = true;
+        Register();
+        IRenderedComponent<ActivityDetail> cut = RenderPage("Admin");
+        cut.Find("#Name").Input("Canoe Basics II");
+
+        SaveButton(cut).Click();
+
+        cut.WaitForAssertion(() => Assert.Contains("Activity not found", cut.Markup, StringComparison.Ordinal), Patience);
     }
 
     // --- helpers ----------------------------------------------------------------------------------------
@@ -515,6 +572,11 @@ public class ActivityDetailShould : BunitContext
                 return new HttpResponseMessage(_patchStatus);
             }
 
+            if (_activityGoneAfterAWrite && _writes.Count > 0)
+            {
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            }
+
             var resource = new
             {
                 type = "activities", id = _activityId.ToString(),
@@ -526,7 +588,7 @@ public class ActivityDetailShould : BunitContext
                 : new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new { data = new[] { resource }, meta = new { total = 1 } }) };
         })));
 
-        Services.AddSingleton(ApiClientTestFactory.CreatePlacementClient(placementHandler ?? new StubHttpMessageHandler(request =>
+        Services.AddSingleton(ApiClientTestFactory.CreatePlacementClient(placementHandler ?? new HeldHandler(() => _holdWrites?.Task, request =>
         {
             if (request.Method == HttpMethod.Post)
             {
@@ -563,7 +625,6 @@ public class ActivityDetailShould : BunitContext
                 return new HttpResponseMessage(HttpStatusCode.InternalServerError);
             }
 
-            // What Api really does for a Director who has lost the Event: the reads succeed and come back empty.
             bool accessGone = _emptyReadsAfterAForbiddenWrite && _writes.Count > 0;
             return Collection(request.RequestUri!.AbsolutePath, accessGone ? null : tree);
         })));

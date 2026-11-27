@@ -23,6 +23,7 @@ public partial class ActivityEditor
     [Inject]
     private NotificationService NotificationService { get; set; } = default!;
 
+    /// <summary>The Event from the route.</summary>
     [Parameter]
     public Guid EventId { get; set; }
 
@@ -114,7 +115,7 @@ public partial class ActivityEditor
     private async Task CreateAsync()
     {
         (ActivityWriteOutcome outcome, ActivityDto? created, IReadOnlyList<string> pointers) = await ActivityClient.CreateAsync(
-            EventId, model!.Name ?? string.Empty, model.Description ?? string.Empty, CancellationToken.None);
+            EventId, model!.NameOrEmpty, model.DescriptionOrEmpty, CancellationToken.None);
 
         if (outcome == ActivityWriteOutcome.Forbidden)
         {

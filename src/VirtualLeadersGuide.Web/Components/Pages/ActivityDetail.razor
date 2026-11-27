@@ -34,6 +34,7 @@
 
     case PageState.Ready:
         <NavigationLock ConfirmExternalNavigation="HasUnsavedChanges" />
+        <LinkGuard Active="HasUnsavedChanges" />
 
         <RadzenBreadCrumb>
             <RadzenBreadCrumbItem Text="@(isAdmin ? "EVENTS" : "MY EVENTS")" Path="dashboard" />

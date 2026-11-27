@@ -38,6 +38,7 @@ public class ActivityDetailRemovalShould : BunitContext
     private readonly List<string> _deletedActivities = [];
     private HttpStatusCode _deleteStatus = HttpStatusCode.NoContent;
     private HttpStatusCode _postStatus = HttpStatusCode.Created;
+    private HttpStatusCode _patchStatus = HttpStatusCode.NoContent;
     private HttpStatusCode _activityDeleteStatus = HttpStatusCode.NoContent;
 
     public ActivityDetailRemovalShould()
@@ -292,6 +293,20 @@ public class ActivityDetailRemovalShould : BunitContext
         Assert.Single(_posted);
     }
 
+    [Fact]
+    public void ShowThePermissionLostBanner_WhenRestoringTheSortOrderIsForbidden_ForUndoRemovalAsync()
+    {
+        _patchStatus = HttpStatusCode.Forbidden;
+        IRenderedComponent<ActivityDetail> cut = RenderPage();
+        RemoveButton(cut, "Morning").Click();
+        cut.WaitForAssertion(() => Assert.Contains("Undo", cut.Markup, StringComparison.Ordinal), Patience);
+
+        cut.FindAll("button").First(b => b.TextContent.Trim() == "Undo").Click();
+
+        cut.WaitForAssertion(() => Assert.Contains("You no longer have permission", cut.Markup, StringComparison.Ordinal), Patience);
+        Assert.NotEmpty(cut.FindAll("button[aria-label='Remove placement Morning']"));
+    }
+
     // --- helpers ----------------------------------------------------------------------------------------
 
     private static AngleSharp.Dom.IElement RemoveButton(IRenderedComponent<ActivityDetail> cut, string path) =>
@@ -373,7 +388,7 @@ public class ActivityDetailRemovalShould : BunitContext
         if (request.Method == HttpMethod.Patch)
         {
             _patched.Add(request.Content!.ReadAsStringAsync().Result);
-            return new HttpResponseMessage(HttpStatusCode.NoContent);
+            return new HttpResponseMessage(_patchStatus);
         }
 
         if (request.Method == HttpMethod.Post)
