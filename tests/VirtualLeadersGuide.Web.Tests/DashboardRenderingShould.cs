@@ -314,6 +314,48 @@ public class DashboardRenderingShould : BunitContext
         Assert.DoesNotContain("ALL EVENTS", cut.Markup, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("Admin")]
+    [InlineData("Director")]
+    public void PutOpenGuideFirstInTheActionGroup_ForAdminsAndDirectors(string role)
+    {
+        IRenderedComponent<Dashboard> cut = RenderWithOneLiveEvent(role);
+
+        IElement actionGroup = cut.Find("tbody tr td:last-child .rz-stack");
+
+        Assert.Equal("Open guide", actionGroup.Children[0].GetAttribute("aria-label"));
+    }
+
+    [Fact]
+    public void ShowTheDescriptionIconLabelledViewDetails_WhenTheSignedInUserIsADirector()
+    {
+        IRenderedComponent<Dashboard> cut = RenderWithOneLiveEvent("Director");
+
+        IElement details = cut.Find("button[aria-label='View details']");
+
+        Assert.Equal("description", details.TextContent.Trim());
+        Assert.Single(cut.FindAll("tbody i"), icon => icon.TextContent.Trim() == "visibility");
+    }
+
+    [Fact]
+    public void KeepTheEditIcon_WhenTheSignedInUserIsAnAdmin()
+    {
+        IRenderedComponent<Dashboard> cut = RenderWithOneLiveEvent("Admin");
+
+        Assert.Equal("edit", cut.Find("button[aria-label='Edit']").TextContent.Trim());
+    }
+
+    private IRenderedComponent<Dashboard> RenderWithOneLiveEvent(string role)
+    {
+        Services.AddSingleton(ApiClientTestFactory.CreateEventClient(StubHttpMessageHandler.RespondingWithJson(
+            HttpStatusCode.OK, new { data = new[] { EventResource("Fall Camporee", "fall-camporee", "Live") } })));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("user-1");
+        auth.SetRoles(role);
+
+        return Render<Dashboard>();
+    }
+
     private static object EventResource(string name, string slug, string status = "Draft") => new
     {
         type = "events",

@@ -1,3 +1,7 @@
+---
+status: amended by P2-23 (#213)
+---
+
 # Icon-only buttons are the standard for table row actions
 
 P2-9 (#18) shipped the Events grid's action column as a single icon-only `RadzenButton` (`edit`/`visibility`,
@@ -40,3 +44,15 @@ A table row action is rendered as an icon-only `RadzenButton`, not a text button
   from this ADR, not a new default.
 - `aria-label` is the only substitute for the missing visible text — omitting it on a new row action is a
   regression against this ADR, not just a general accessibility nit.
+
+## Amendment (P2-23, #213)
+
+A row action that opens a new tab or leaves the current page is a real `<a>`, not a `RadzenButton`. It is styled
+with Radzen's icon-only button classes so it matches its neighbours, and it keeps the required `aria-label`. The
+anchor is what makes new-tab, middle-click and copy-link work; a `RadzenButton` whose `Click` calls `NavigateTo`
+can do none of those. In-app actions stay `RadzenButton`.
+
+An `<a>` has no `disabled` state, so the disabled form of such an action is a disabled `RadzenButton` inside
+ADR-0052's wrapper `<span>`.
+
+The first one is the Dashboard's Open guide action (`GuideLinkButton`).

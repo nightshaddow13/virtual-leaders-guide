@@ -434,6 +434,48 @@ public class EventManagementScenarios : E2ETestBase
             await Expect(row.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Duplicate" })).Not.ToBeVisibleAsync();
         });
 
+    [Fact(DisplayName = "Given a Live Event, when an Admin opens its guide from the dashboard, then the guide opens unlocked in a new tab")]
+    public async Task GivenALiveEvent_WhenAnAdminOpensItsGuideFromTheDashboard_ThenTheGuideOpensUnlockedInANewTab() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, string name) = await CreateEventAsync("Open Guide");
+            await Page.GotoAsync(EventEditorUrl(eventId));
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Go live" }).ClickAsync();
+            await Expect(Page.GetByText("LIVE", new PageGetByTextOptions { Exact = true })).ToBeVisibleAsync(
+                InteractiveVisible());
+            string slug = await Page.Locator("#Slug").InputValueAsync();
+
+            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
+            ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = name });
+            ILocator openGuide = row.GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = "Open guide" });
+            await Expect(openGuide).ToBeVisibleAsync(InteractiveVisible());
+            await Expect(openGuide).ToHaveAttributeAsync("href", $"e/{slug}");
+            await Expect(openGuide).ToHaveAttributeAsync("target", "_blank");
+
+            IPage guide = await Page.Context.RunAndWaitForPageAsync(() => openGuide.ClickAsync());
+
+            await Expect(guide).ToHaveURLAsync(new Uri(Fixture.WebBaseUrl, $"e/{slug}").ToString());
+            await Expect(guide.GetByText("This guide is unlocked")).ToBeVisibleAsync(InteractiveVisible());
+        });
+
+    [Fact(DisplayName = "Given a Draft Event, when an Admin views the dashboard, then its Open guide button is disabled")]
+    public async Task GivenADraftEvent_WhenAnAdminViewsTheDashboard_ThenItsOpenGuideButtonIsDisabled() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (_, string name) = await CreateEventAsync("Draft Guide");
+
+            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
+            ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = name });
+            ILocator openGuide = row.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Open guide" });
+            await Expect(openGuide).ToBeVisibleAsync(InteractiveVisible());
+
+            await Expect(openGuide).ToBeDisabledAsync();
+            await Expect(row.GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = "Open guide" }))
+                .ToHaveCountAsync(0);
+        });
+
     /// <remarks>
     /// Scoped to the field's own container, not a bare page-wide <c>GetByText</c> - a collision on
     /// <c>Name</c> also collides <c>Slug</c> when it's left blank (Slug then derives from Name), which
