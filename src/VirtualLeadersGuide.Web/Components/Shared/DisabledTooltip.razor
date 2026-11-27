@@ -1,0 +1,6 @@
+@* ADR-0052's wrapper: a disabled control can't take hover or focus itself, so this element does. *@
+<span @ref="anchor" tabindex="0" role="group" aria-describedby="@descriptionId" @attributes="AdditionalAttributes"
+      @onmouseenter="Show" @onfocus="Show" @onblur="Hide">
+    @ChildContent
+    <span id="@descriptionId" hidden>@Text</span>
+</span>

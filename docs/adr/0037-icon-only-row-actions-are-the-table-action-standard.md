@@ -47,12 +47,13 @@ A table row action is rendered as an icon-only `RadzenButton`, not a text button
 
 ## Amendment (P2-23, #213)
 
-A row action that opens a new tab or leaves the current page is a real `<a>`, not a `RadzenButton`. It is styled
-with Radzen's icon-only button classes so it matches its neighbours, and it keeps the required `aria-label`. The
-anchor is what makes new-tab, middle-click and copy-link work; a `RadzenButton` whose `Click` calls `NavigateTo`
-can do none of those. In-app actions stay `RadzenButton`.
+A row action that opens a new tab is a real `<a>`, not a `RadzenButton`. It is styled with Radzen's icon-only
+button classes so it matches its neighbours, and it keeps the required `aria-label`. The anchor is what makes
+new-tab, middle-click and copy-link work; a `RadzenButton` whose `Click` calls `NavigateTo` can do none of those.
+Every other row action stays a `RadzenButton`, including one that navigates within the app in the same tab, such as
+Edit or Duplicate.
 
 An `<a>` has no `disabled` state, so the disabled form of such an action is a disabled `RadzenButton` inside
-ADR-0052's wrapper `<span>`.
+ADR-0052's wrapper (`DisabledTooltip`).
 
 The first one is the Dashboard's Open guide action (`GuideLinkButton`).

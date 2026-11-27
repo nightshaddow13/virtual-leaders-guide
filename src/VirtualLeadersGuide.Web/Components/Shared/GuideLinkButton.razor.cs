@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Components;
-using Radzen;
 using VirtualLeadersGuide.Web.Events;
 
 namespace VirtualLeadersGuide.Web.Components.Shared;
@@ -9,22 +8,21 @@ namespace VirtualLeadersGuide.Web.Components.Shared;
 /// Event is a Draft.
 /// </summary>
 /// <remarks>
-/// A real anchor rather than a <c>RadzenButton</c>, per ADR-0037's amendment. The disabled form needs ADR-0052's
-/// wrapper element to own the hover; one component per row means each owns its own reference to it. Draft stays
-/// disabled until staff can preview a Draft Event's guide (#196).
+/// A real anchor rather than a <c>RadzenButton</c>, per ADR-0037's amendment. Draft stays disabled until staff can
+/// preview a Draft Event's guide (#196).
 /// </remarks>
 public partial class GuideLinkButton
 {
+    /// <summary>The tooltip an Admin sees on a Draft Event.</summary>
     internal const string AdminDraftTooltipText =
         "Draft guides can't be previewed yet. Go live to open this guide.";
 
+    /// <summary>The tooltip a Director sees on a Draft Event; only an Admin can take it live (ADR-0031).</summary>
     internal const string DirectorDraftTooltipText =
         "Draft guides can't be previewed yet. It opens once an Admin takes it live.";
 
-    private ElementReference anchor;
-
-    [Inject]
-    private TooltipService TooltipService { get; set; } = default!;
+    private const string IconName = "visibility";
+    private const string Label = "Open guide";
 
     /// <summary>The Event's address, as in <c>/e/{slug}</c>.</summary>
     [Parameter, EditorRequired]
@@ -38,6 +36,5 @@ public partial class GuideLinkButton
     [Parameter, EditorRequired]
     public bool IsAdmin { get; set; }
 
-    private void ShowDraftTooltip() =>
-        TooltipService.Open(anchor, IsAdmin ? AdminDraftTooltipText : DirectorDraftTooltipText);
+    private string DraftTooltipText => IsAdmin ? AdminDraftTooltipText : DirectorDraftTooltipText;
 }

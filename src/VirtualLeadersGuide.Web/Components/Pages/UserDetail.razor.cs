@@ -25,9 +25,6 @@ public partial class UserDetail
     [Inject]
     private DialogService DialogService { get; set; } = default!;
 
-    [Inject]
-    private TooltipService TooltipService { get; set; } = default!;
-
     /// <remarks>
     /// "LINK EXPIRES" (frame 3c) is deliberately omitted - it needs an invited-at timestamp this ticket
     /// doesn't store (deferred to #101); every other field on the wireframe's card is derivable today.
@@ -47,7 +44,6 @@ public partial class UserDetail
     private string? errorMessage;
     private bool isBusy;
     private bool isDeleting;
-    private ElementReference deleteGuardAnchor;
 
     /// <remarks>
     /// The signed-in Admin's own detail page, and a User holding Admin, are both guarded (ADR-0045) - only

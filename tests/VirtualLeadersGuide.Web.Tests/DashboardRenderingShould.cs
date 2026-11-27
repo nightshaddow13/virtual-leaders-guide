@@ -317,7 +317,7 @@ public class DashboardRenderingShould : BunitContext
     [Theory]
     [InlineData("Admin")]
     [InlineData("Director")]
-    public void PutOpenGuideFirstInTheActionGroup_ForAdminsAndDirectors(string role)
+    public void PutOpenGuideFirstInTheActionGroup_WhenTheViewerIsStaff_ForLoadDataAsync(string role)
     {
         IRenderedComponent<Dashboard> cut = RenderWithOneLiveEvent(role);
 
@@ -327,7 +327,7 @@ public class DashboardRenderingShould : BunitContext
     }
 
     [Fact]
-    public void ShowTheDescriptionIconLabelledViewDetails_WhenTheSignedInUserIsADirector()
+    public void ShowTheDescriptionIconLabelledViewDetails_WhenTheSignedInUserIsADirector_ForLoadDataAsync()
     {
         IRenderedComponent<Dashboard> cut = RenderWithOneLiveEvent("Director");
 
@@ -338,7 +338,7 @@ public class DashboardRenderingShould : BunitContext
     }
 
     [Fact]
-    public void KeepTheEditIcon_WhenTheSignedInUserIsAnAdmin()
+    public void KeepTheEditIcon_WhenTheSignedInUserIsAnAdmin_ForLoadDataAsync()
     {
         IRenderedComponent<Dashboard> cut = RenderWithOneLiveEvent("Admin");
 

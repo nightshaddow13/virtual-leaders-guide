@@ -71,10 +71,9 @@
                 }
                 else
                 {
-                    <span @ref="deleteGuardAnchor" style="align-self: flex-start;"
-                          @onmouseenter="@(() => TooltipService.Open(deleteGuardAnchor, DeleteGuardTooltipText))">
+                    <DisabledTooltip Text="@DeleteGuardTooltipText" style="align-self: flex-start;">
                         <RadzenButton Text="Delete user" ButtonStyle="ButtonStyle.Danger" Disabled="true" />
-                    </span>
+                    </DisabledTooltip>
                 }
             </RadzenStack>
         }

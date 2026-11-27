@@ -3,6 +3,7 @@ using Bunit;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Radzen;
+using Radzen.Blazor;
 using VirtualLeadersGuide.Web.Components.Shared;
 using VirtualLeadersGuide.Web.Events;
 
@@ -20,7 +21,7 @@ public class GuideLinkButtonShould : BunitContext
     [InlineData(EventStatus.Live)]
     [InlineData(EventStatus.Past)]
     [InlineData(EventStatus.Cancelled)]
-    public void RenderAnAnchorOpeningTheGuideInANewTab_WhenTheEventIsNotADraft(EventStatus status)
+    public void RenderAnAnchorOpeningTheGuideInANewTab_WhenTheEventIsNotADraft_ForBuildRenderTree(EventStatus status)
     {
         IRenderedComponent<GuideLinkButton> cut = RenderButton(status, isAdmin: true);
 
@@ -32,8 +33,25 @@ public class GuideLinkButtonShould : BunitContext
         Assert.Equal("Open guide", link.GetAttribute("aria-label"));
     }
 
+    /// <remarks>
+    /// The anchor hand-copies what <see cref="RadzenButton"/> renders; this is what notices a Radzen upgrade
+    /// changing that and leaving the link looking unlike its neighbours.
+    /// </remarks>
     [Fact]
-    public void RenderADisabledButtonAndNoAnchor_WhenTheEventIsDraft()
+    public void MatchARadzenIconButtonsClassesAndMarkup_WhenTheEventIsNotADraft_ForBuildRenderTree()
+    {
+        IElement button = Render<RadzenButton>(parameters => parameters
+            .Add(b => b.Icon, "visibility")
+            .Add(b => b.ButtonStyle, ButtonStyle.Light)).Find("button");
+
+        IElement link = RenderButton(EventStatus.Live, isAdmin: true).Find("a");
+
+        Assert.Equal(button.ClassName, link.ClassName);
+        Assert.Equal(Describe(button), Describe(link));
+    }
+
+    [Fact]
+    public void RenderADisabledButtonAndNoAnchor_WhenTheEventIsDraft_ForBuildRenderTree()
     {
         IRenderedComponent<GuideLinkButton> cut = RenderButton(EventStatus.Draft, isAdmin: true);
 
@@ -44,16 +62,20 @@ public class GuideLinkButtonShould : BunitContext
     [Theory]
     [InlineData(true, GuideLinkButton.AdminDraftTooltipText)]
     [InlineData(false, GuideLinkButton.DirectorDraftTooltipText)]
-    public void OpenTheViewersOwnDraftTooltip_WhenADraftEventsButtonIsHovered(bool isAdmin, string expected)
+    public void OpenTheViewersOwnDraftTooltip_WhenADraftEventsButtonIsHovered_ForDraftTooltipText(
+        bool isAdmin, string expected)
     {
         string? opened = null;
         Services.GetRequiredService<TooltipService>().OnOpen += (_, _, options) => opened = options.Text;
         IRenderedComponent<GuideLinkButton> cut = RenderButton(EventStatus.Draft, isAdmin);
 
-        cut.Find("span").TriggerEvent("onmouseenter", new MouseEventArgs());
+        cut.Find("[role=group]").TriggerEvent("onmouseenter", new MouseEventArgs());
 
         Assert.Equal(expected, opened);
     }
+
+    private static IEnumerable<string> Describe(IElement element) =>
+        element.QuerySelectorAll("*").Select(child => $"{child.LocalName}.{child.ClassName}:{child.TextContent.Trim()}");
 
     private IRenderedComponent<GuideLinkButton> RenderButton(EventStatus status, bool isAdmin) =>
         Render<GuideLinkButton>(parameters => parameters
