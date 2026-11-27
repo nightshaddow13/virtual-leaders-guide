@@ -47,3 +47,6 @@ isolation would silently break the other consumers) does not apply - `MarkdownFi
 - The pane/preview tests move out of the two editors' test classes into `MarkdownFieldShould`, since they now
   describe the shared component rather than either page.
 - A future change to the markdown editing surface (a toolbar, table support) is made once.
+- Since P5-23 (#206) Activity's Description is edited both on the new-Activity form and on the Activity page
+  (`ActivityDetail`; the `ActivityEditor` edit route above is gone). Both reach `MarkdownField` through
+  `ActivityDetailsFields`, which holds the Name input too.

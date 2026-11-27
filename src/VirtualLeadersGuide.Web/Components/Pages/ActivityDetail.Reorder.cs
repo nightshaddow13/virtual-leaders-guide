@@ -12,9 +12,6 @@ public partial class ActivityDetail
     private PlacementFocusRequest? focusRequest;
     private string? announcement;
 
-    /// <summary>Whether a save, removal or move is in flight - one at a time.</summary>
-    private bool IsBusy => isSaving || isRemoving || isReordering;
-
     /// <remarks>
     /// Writes immediately, like a removal, with no toast or Undo - the opposite arrow is the undo. Focus and
     /// the announcement are set only after the move is redrawn and the controls are enabled again, and only
@@ -22,7 +19,7 @@ public partial class ActivityDetail
     /// </remarks>
     private async Task MoveAsync(PlacementMove move)
     {
-        if (move.Leaf.PlacementId is not { } placementId || IsBusy)
+        if (move.Leaf.PlacementId is not { } placementId || WriteBlocked)
         {
             return;
         }
@@ -36,7 +33,7 @@ public partial class ActivityDetail
             switch (await PlacementClient.MoveAsync(placementId, move.Leaf.Position + move.Delta, CancellationToken.None))
             {
                 case PlacementWriteOutcome.Forbidden:
-                    state = PageState.Denied;
+                    permissionLost = true;
                     return;
                 case PlacementWriteOutcome.Success:
                     moved = true;
@@ -46,7 +43,7 @@ public partial class ActivityDetail
                     break;
             }
 
-            await RefreshTreeAsync();
+            await RefreshOrReportAsync();
         }
         catch (ActivityDataUnavailableException)
         {

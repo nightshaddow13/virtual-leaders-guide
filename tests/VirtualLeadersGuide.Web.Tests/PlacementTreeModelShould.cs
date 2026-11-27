@@ -457,6 +457,24 @@ public class PlacementTreeModelShould
         Assert.Equal((position, 3, up, down), (leaf.Position, leaf.SavedCount, leaf.CanMoveUp, leaf.CanMoveDown));
     }
 
+    /// <remarks>Api appends a new Placement to its path, so a row the page couldn't re-read belongs at the end.</remarks>
+    [Fact]
+    public void PutARowSavedSinceTheLoadLast_WhenItSharesAPath_ForLeaves()
+    {
+        var added = Guid.NewGuid();
+        var model = new PlacementTreeModel(
+            new PlacementTreeDto
+            {
+                Tabs = [new TabDto { Id = _morning, Name = "Morning", SortOrder = 0 }],
+                Placements = [new PlacementDto { Id = Guid.NewGuid(), ActivityId = OtherActivity, TabId = _morning, SortOrder = 5 }]
+            },
+            ThisActivity, "Canoe Basics", new Dictionary<Guid, string> { [OtherActivity] = "Swim Check" }, [],
+            [(added, new PlacementPath("Morning"))]);
+
+        Assert.Equal(["Swim Check", "Canoe Basics"], model.Roots[0].Leaves.Select(l => l.ActivityName));
+        Assert.Equal(1, model.FindLeaf(added)!.Position);
+    }
+
     [Fact]
     public void KeepGhostsLastAndNotCountThemAsNeighbours_WhenOneSharesThePath_ForLeaves()
     {

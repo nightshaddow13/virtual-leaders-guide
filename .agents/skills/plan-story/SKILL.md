@@ -120,7 +120,8 @@ existing test infra (`RadzenTestServices`, `ApiClientTestFactory`, `FakeUserMana
 `IdentityTestServices`) where the story touches Blazor. Verification names real commands — `dotnet
 build`, `dotnet test <project>`, an `ef migrations has-pending-model-changes` check where the schema
 changes, `/run` under Aspire — and always ends on running `/code-review` against `main` before
-opening the PR.
+opening the PR. It opens by stating that the tests must be run, and pass, before the story is reported done
+(step 8).
 
 Completion: every section above is present, and every file path is real or explicitly marked `(new)`.
 
@@ -169,5 +170,9 @@ git fetch origin
 git worktree add -b uow/<issue>-<slug> ../vlg-<story-id> origin/main
 ```
 
-All implementation, builds and test runs for the story then happen inside that worktree. Run tests as
-`docs/agents/testing.md` describes, and name its per-project commands in the plan's `## Verification`.
+All implementation, builds and test runs for the story then happen inside that worktree.
+
+**Run the tests before reporting the story done** — compiling them is not running them. Run them as
+`docs/agents/testing.md` describes. The implementer reads the plan, not this skill, so the plan's
+`## Verification` carries both: that doc's per-project commands, and the rule that they pass before the story
+is reported done.

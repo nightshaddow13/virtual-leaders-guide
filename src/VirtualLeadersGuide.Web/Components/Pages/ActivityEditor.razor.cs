@@ -1,5 +1,3 @@
-using System.ComponentModel.DataAnnotations;
-using System.Security.Claims;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Radzen;
@@ -10,6 +8,7 @@ using VirtualLeadersGuide.Web.Events;
 
 namespace VirtualLeadersGuide.Web.Components.Pages;
 
+/// <summary>The new-Activity form (P5-6, #87). An existing Activity is edited on <c>ActivityDetail</c> (P5-23, #206).</summary>
 public partial class ActivityEditor
 {
     [Inject]
@@ -24,13 +23,9 @@ public partial class ActivityEditor
     [Inject]
     private NotificationService NotificationService { get; set; } = default!;
 
+    /// <summary>The Event from the route.</summary>
     [Parameter]
     public Guid EventId { get; set; }
-
-    /// <summary>The Activity being edited, or <see langword="null"/> when creating a new one.</summary>
-    /// <remarks><see langword="null"/> on <c>.../activities/new</c>; set on <c>.../activities/{ActivityId:guid}/edit</c> - same shape as <c>InfoPageEditor.InfoPageId</c>, but at <c>/edit</c> because <c>/{ActivityId}</c> is the detail page.</remarks>
-    [Parameter]
-    public Guid? ActivityId { get; set; }
 
     [CascadingParameter]
     private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
@@ -42,19 +37,9 @@ public partial class ActivityEditor
     private bool isAdmin;
     private ActivityFormModel? model;
     private string? saveErrorMessage;
-    private string? permissionLostMessage;
     private bool isSaving;
 
-    /// <remarks>
-    /// Gates on <see cref="ApiEventClient.GetEventAsync"/> first, exactly like <c>InfoPageEditor.razor.cs</c>.
-    /// On <c>/new</c> that Event check is the entire access check, since the route carries only an
-    /// <see cref="EventId"/>. When editing it isn't enough on its own - it doesn't confirm this specific
-    /// Activity exists or belongs to this Event - so the Activity is read too, and one whose
-    /// <see cref="ActivityDto.EventId"/> doesn't match the route's <see cref="EventId"/> (a stale or
-    /// hand-edited URL) falls into <see cref="PageState.Denied"/> rather than a new state. The Denied copy
-    /// still says "Event" for both routes: on <c>/new</c> the denial genuinely is about the Event, and when
-    /// editing the Event gate fires first in the common case.
-    /// </remarks>
+    /// <remarks>Gates on <see cref="ApiEventClient.GetEventAsync"/>, exactly like <c>InfoPageEditor.razor.cs</c> - the route carries only an <see cref="EventId"/>, so that is the entire access check.</remarks>
     protected override async Task OnParametersSetAsync()
     {
         if (AuthenticationStateTask is null)
@@ -63,7 +48,7 @@ public partial class ActivityEditor
         }
 
         AuthenticationState authState = await AuthenticationStateTask;
-        if (!authState.User.Claims.Any(c => c.Type == ClaimTypes.Role))
+        if (!authState.User.IsStaff())
         {
             NavigationManager.NavigateTo("Account/NoAccess");
             return;
@@ -90,39 +75,13 @@ public partial class ActivityEditor
         }
 
         eventName = eventDto.Name;
-
-        if (ActivityId is null)
-        {
-            model = new ActivityFormModel();
-            state = PageState.Ready;
-            return;
-        }
-
-        ActivityReadOutcome activityOutcome;
-        ActivityDto? activityDto;
-        try
-        {
-            (activityOutcome, activityDto) = await ActivityClient.GetActivityAsync(ActivityId.Value, CancellationToken.None);
-        }
-        catch (ActivityDataUnavailableException)
-        {
-            state = PageState.Unavailable;
-            return;
-        }
-
-        if (activityOutcome != ActivityReadOutcome.Success || activityDto is null || activityDto.EventId != EventId)
-        {
-            state = PageState.Denied;
-            return;
-        }
-
-        model = new ActivityFormModel { Name = activityDto.Name, Description = activityDto.Description };
+        model = new ActivityFormModel();
         state = PageState.Ready;
     }
 
     /// <remarks>
     /// Wired to <c>EditForm</c>'s <c>OnValidSubmit</c>, matching <c>InfoPageEditor.razor.cs</c>'s pattern -
-    /// <see cref="ActivityFormModel.Name"/>'s <see cref="StringLengthAttribute"/> exists specifically to stop
+    /// <see cref="ActivityFormModel.Name"/>'s <see cref="System.ComponentModel.DataAnnotations.StringLengthAttribute"/> exists specifically to stop
     /// an over-length Name from ever reaching Api (which would 500, not 422, on this one field), so submission
     /// has to actually be gated on it, not just display a message beside an unblocked Save.
     /// </remarks>
@@ -133,14 +92,7 @@ public partial class ActivityEditor
 
         try
         {
-            if (ActivityId is null)
-            {
-                await CreateAsync();
-            }
-            else
-            {
-                await UpdateAsync(ActivityId.Value);
-            }
+            await CreateAsync();
         }
         catch (ActivityDataUnavailableException)
         {
@@ -163,7 +115,7 @@ public partial class ActivityEditor
     private async Task CreateAsync()
     {
         (ActivityWriteOutcome outcome, ActivityDto? created, IReadOnlyList<string> pointers) = await ActivityClient.CreateAsync(
-            EventId, model!.Name ?? string.Empty, model.Description ?? string.Empty, CancellationToken.None);
+            EventId, model!.NameOrEmpty, model.DescriptionOrEmpty, CancellationToken.None);
 
         if (outcome == ActivityWriteOutcome.Forbidden)
         {
@@ -183,41 +135,6 @@ public partial class ActivityEditor
         NavigationManager.NavigateTo($"dashboard/events/{EventId}/activities/{created!.Id}");
     }
 
-    /// <remarks>
-    /// <see cref="ActivityWriteOutcome.Forbidden"/> here is claim-lag - a Director removed from the Event
-    /// mid-session - not an out-of-scope navigation, matching <c>InfoPageEditor.razor.cs</c>'s
-    /// <c>UpdateAsync</c>/<c>permissionLostMessage</c> distinction from <see cref="PageState.Denied"/>.
-    /// </remarks>
-    private async Task UpdateAsync(Guid id)
-    {
-        ActivityWriteOutcome outcome = await ActivityClient.UpdateAsync(
-            id, model!.Name ?? string.Empty, model.Description ?? string.Empty, CancellationToken.None);
-
-        if (outcome == ActivityWriteOutcome.Forbidden)
-        {
-            permissionLostMessage = "You no longer have permission to edit this Activity.";
-            return;
-        }
-
-        NotificationService.Notify(NotificationSeverity.Success, "Changes saved");
-        NavigateToList();
-    }
-
     /// <remarks><c>forceLoad: true</c> - same reasoning as <c>InfoPageEditor.razor.cs</c>'s <c>NavigateToList</c>: crossing from this <c>prerender: false</c> page to another needs a real browser navigation, not an in-circuit one.</remarks>
     private void NavigateToList() => NavigationManager.NavigateTo($"dashboard/events/{EventId}/activities", forceLoad: true);
-
-    private sealed class ActivityFormModel
-    {
-        [Required(ErrorMessage = "Enter a name.")]
-        [StringLength(200, ErrorMessage = "Name can't be longer than 200 characters.")]
-        public string? Name { get; set; }
-
-        /// <remarks>
-        /// No <see cref="RequiredAttribute"/> - empty content is legal at the Api layer (an Activity is real
-        /// and listable before it has a Description, CONTEXT.md's Activity entry). Bound in
-        /// <c>ActivityEditor.razor</c> through <c>MarkdownField</c>, whose <c>Value</c> remarks explain why the
-        /// editing surface is a native <c>&lt;textarea&gt;</c> rather than <c>InputTextArea</c>.
-        /// </remarks>
-        public string? Description { get; set; }
-    }
 }

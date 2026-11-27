@@ -9,7 +9,8 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// <see cref="LoginPageScenarios"/>, which is scoped to the Login form's own behavior (ADR-0029 narrows
 /// ADR-0012). See <see cref="LoginPageScenarios"/>'s remarks for the split rationale. The no-role case signs
 /// in as the fixture <see cref="AspireE2EFixture.NoRoleEmail"/> account rather than a throwaway one - nothing
-/// here mutates account state, so there's nothing to isolate (ADR-0039).
+/// here mutates account state, so there's nothing to isolate (ADR-0039). Also covers P2-22 (#212): Staff
+/// reaching the Dashboard by default, from sign-in and from <c>/</c>, and signing back out of it.
 /// </remarks>
 public class DashboardAuthorizationScenarios : E2ETestBase
 {
@@ -50,8 +51,43 @@ public class DashboardAuthorizationScenarios : E2ETestBase
 
             await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
 
-            await Expect(Page).ToHaveURLAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
+            await ExpectDashboardAsync();
             await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = "Events", Exact = true }))
+                .ToBeVisibleAsync();
+        });
+
+    [Fact(DisplayName = "Given an allowlisted Admin, when signing in with no returnUrl, then the browser lands on /dashboard")]
+    public async Task GivenAnAllowlistedAdmin_WhenSigningInWithNoReturnUrl_ThenItLandsOnDashboard() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+
+            await ExpectDashboardAsync();
+        });
+
+    [Fact(DisplayName = "Given a signed-in allowlisted Admin, when navigating to /, then the browser redirects to /dashboard")]
+    public async Task GivenASignedInAdmin_WhenNavigatingToHome_ThenItRedirectsToDashboard() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            await ExpectDashboardAsync();
+
+            await Page.GotoAsync(Fixture.WebBaseUrl.ToString());
+
+            await ExpectDashboardAsync();
+        });
+
+    [Fact(DisplayName = "Given a signed-in allowlisted Admin on /dashboard, when signing out, then the browser lands on Account/Login without looping")]
+    public async Task GivenASignedInAdminOnDashboard_WhenSigningOut_ThenItLandsOnLogin() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            await ExpectDashboardAsync();
+
+            await HeaderSignOutButton.ClickAsync();
+
+            await Expect(Page).ToHaveURLAsync(RedirectToLoginWithReturnUrl());
+            await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = "Log in", Exact = true }))
                 .ToBeVisibleAsync();
         });
 }

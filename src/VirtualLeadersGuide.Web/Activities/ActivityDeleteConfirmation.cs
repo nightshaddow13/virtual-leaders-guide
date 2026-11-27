@@ -27,14 +27,14 @@ internal static class ActivityDeleteConfirmation
     public static Dictionary<string, object?> ForList(string activityName, ActivityDeletionImpact? impact) => new()
     {
         [nameof(ConfirmDialog.Message)] = $"Delete {activityName}?",
-        [nameof(ConfirmDialog.Consequences)] = Consequences(impact, pendingGhosts: 0)
+        [nameof(ConfirmDialog.Consequences)] = Consequences(impact)
     };
 
     /// <summary>Builds the consequence bullets shared by every Activity-deletion dialog.</summary>
     /// <param name="impact">What the deletion does, or <see langword="null"/> if the tree couldn't be loaded.</param>
-    /// <param name="pendingGhosts">How many unsaved placement rows the Activity page holds - they're discarded with it.</param>
+    /// <param name="unsaved">What the Activity page holds unsaved - it's discarded with the Activity.</param>
     /// <returns>The bullets, in the order they're shown.</returns>
-    public static IReadOnlyList<string> Consequences(ActivityDeletionImpact? impact, int pendingGhosts)
+    public static IReadOnlyList<string> Consequences(ActivityDeletionImpact? impact, UnsavedWork unsaved = default)
     {
         var consequences = new List<string>();
 
@@ -57,11 +57,16 @@ internal static class ActivityDeleteConfirmation
             }
         }
 
-        if (pendingGhosts > 0)
+        if (unsaved.Placements > 0)
         {
-            consequences.Add(pendingGhosts == 1
+            consequences.Add(unsaved.Placements == 1
                 ? "Your unsaved placement is discarded."
-                : $"Your {pendingGhosts} unsaved placements are discarded.");
+                : $"Your {unsaved.Placements} unsaved placements are discarded.");
+        }
+
+        if (unsaved.Details)
+        {
+            consequences.Add("Your unsaved Name and Description changes are discarded.");
         }
 
         consequences.Add("This can't be undone.");

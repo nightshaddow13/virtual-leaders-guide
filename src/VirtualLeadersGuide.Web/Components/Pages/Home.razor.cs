@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
 using VirtualLeadersGuide.Identity.Contracts;
+using VirtualLeadersGuide.Web.Authorization;
 using VirtualLeadersGuide.Web.Events;
 using VirtualLeadersGuide.Web.PublicGuide;
 
@@ -20,6 +21,12 @@ namespace VirtualLeadersGuide.Web.Components.Pages;
 /// panes per breakpoint" the way this layout needs (form first in DOM for a11y/tab order, visually right on
 /// desktop, visually first again once stacked on mobile) - see ADR-0040 for why custom CSS is warranted
 /// once that's been asked.
+/// <para>
+/// Staff are redirected to the Dashboard instead of seeing this page (P2-22, #212) - that's where their
+/// Events are. A signed-in User holding no Role is deliberately left here, since the Dashboard would only
+/// bounce them on to <c>NoAccess</c>. <c>EventGuide</c>'s links back to <c>/</c> therefore take Staff to the
+/// Dashboard too, which is accepted rather than offering them a way around the redirect.
+/// </para>
 /// </remarks>
 public partial class Home
 {
@@ -40,9 +47,19 @@ public partial class Home
 
     private string? errorMessage;
 
+    /// <remarks>
+    /// <see cref="Input"/> is set before the Staff redirect, not skipped by it: this app sets
+    /// <c>BlazorDisableThrowNavigationException</c>, so <see cref="NavigationManager.NavigateTo(string, bool, bool)"/>
+    /// doesn't abort the render, and the <c>EditForm</c> would still be handed a null model.
+    /// </remarks>
     protected override void OnInitialized()
     {
         Input ??= new();
+
+        if (HttpContext.User.IsStaff())
+        {
+            NavigationManager.NavigateTo("dashboard");
+        }
     }
 
     /// <remarks>

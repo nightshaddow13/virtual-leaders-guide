@@ -22,17 +22,29 @@ internal sealed class IdentityRedirectManager(NavigationManager navigationManage
         MaxAge = TimeSpan.FromSeconds(5),
     };
 
-    /// <remarks>Guards against open redirects.</remarks>
-    public void RedirectTo(string? uri)
-    {
-        uri ??= "";
+    /// <remarks>
+    /// Guards against open redirects - <paramref name="uri"/> can come straight from a query string. Anything
+    /// that doesn't resolve to a URL under this site's base address goes to the site root instead.
+    /// </remarks>
+    public void RedirectTo(string? uri) => navigationManager.NavigateTo(ToLocalPath(uri));
 
-        if (!Uri.IsWellFormedUriString(uri, UriKind.Relative))
+    /// <remarks>
+    /// Judges <paramref name="uri"/> by what it resolves to against the base address, not by how it's spelled:
+    /// a scheme-relative <c>//host</c> or <c>/\host</c> parses as a relative reference but leaves the site. The
+    /// result is rebuilt with exactly one leading slash, so a path that itself begins <c>//</c> or
+    /// <c>https:</c> can't be read as another host on the way out.
+    /// </remarks>
+    private string ToLocalPath(string? uri)
+    {
+        var baseUri = new Uri(navigationManager.BaseUri);
+
+        if (!Uri.TryCreate(baseUri, uri ?? "", out Uri? target)
+            || !target.AbsoluteUri.StartsWith(baseUri.AbsoluteUri, StringComparison.OrdinalIgnoreCase))
         {
-            uri = navigationManager.ToBaseRelativePath(uri);
+            return baseUri.AbsolutePath;
         }
 
-        navigationManager.NavigateTo(uri);
+        return "/" + (target.PathAndQuery + target.Fragment).TrimStart('/');
     }
 
     public void RedirectTo(string uri, Dictionary<string, object?> queryParameters)

@@ -20,6 +20,7 @@ internal sealed class FakeAuthorizationApiHandler : HttpMessageHandler
 
     private readonly List<RoleGrantDto> _grants = [];
     private readonly bool _userNotFound;
+    private bool _loseNextCreate;
 
     public FakeAuthorizationApiHandler()
         : this(userNotFound: false)
@@ -30,6 +31,12 @@ internal sealed class FakeAuthorizationApiHandler : HttpMessageHandler
 
     /// <summary>A handler whose every request 404s, simulating a user row Api no longer has.</summary>
     public static FakeAuthorizationApiHandler WithUserNotFound() => new(userNotFound: true);
+
+    /// <summary>
+    /// A handler whose first create loses a race: another sign-in's identical grant lands first, so the POST
+    /// answers 409 and the grant is there on the next read.
+    /// </summary>
+    public static FakeAuthorizationApiHandler WithConcurrentCreate() => new() { _loseNextCreate = true };
 
     /// <summary>Seeds a platform-wide (EventId null) Admin grant for <paramref name="userId"/>.</summary>
     public RoleGrantDto SeedAdminGrant(string userId) =>
@@ -45,6 +52,13 @@ internal sealed class FakeAuthorizationApiHandler : HttpMessageHandler
         _grants.Add(grant);
         return grant;
     }
+
+    private RoleGrantDto Seed(string escapedUserId, CreateRoleGrantRequest request) =>
+        Seed(
+            Uri.UnescapeDataString(escapedUserId),
+            request.RoleId,
+            request.RoleId == RoleIds.Admin ? RoleNames.Admin : RoleNames.Director,
+            request.EventId);
 
     protected override Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
@@ -72,17 +86,19 @@ internal sealed class FakeAuthorizationApiHandler : HttpMessageHandler
             var body = request.Content!.ReadFromJsonAsync<CreateRoleGrantRequest>(cancellationToken)
                 .GetAwaiter().GetResult()!;
 
+            if (_loseNextCreate)
+            {
+                _loseNextCreate = false;
+                Seed(userId, body);
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Conflict));
+            }
+
             if (_grants.Any(g => g.RoleId == body.RoleId && g.EventId == body.EventId))
             {
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Conflict));
             }
 
-            RoleGrantDto created = Seed(
-                Uri.UnescapeDataString(userId),
-                body.RoleId,
-                body.RoleId == RoleIds.Admin ? RoleNames.Admin : RoleNames.Director,
-                body.EventId);
-            return Task.FromResult(JsonResponse(HttpStatusCode.Created, created));
+            return Task.FromResult(JsonResponse(HttpStatusCode.Created, Seed(userId, body)));
         }
 
         if (request.Method == HttpMethod.Delete && segments is [_, "grants", var grantIdSegment])

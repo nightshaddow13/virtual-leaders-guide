@@ -1,11 +1,8 @@
 @page "/dashboard/events/{EventId:guid}/activities/new"
-@page "/dashboard/events/{EventId:guid}/activities/{ActivityId:guid}/edit"
 @attribute [Authorize]
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 
-@using VirtualLeadersGuide.Web.Activities
-
-<PageTitle>@(ActivityId is null ? "New activity" : "Activity")</PageTitle>
+<PageTitle>New activity</PageTitle>
 
 <RadzenComponents @rendermode="InteractiveServer" />
 
@@ -32,7 +29,7 @@
             <RadzenBreadCrumbItem Text="@(isAdmin ? "EVENTS" : "MY EVENTS")" Path="dashboard" />
             <RadzenBreadCrumbItem Text="@eventName?.ToUpperInvariant()" Path="@($"dashboard/events/{EventId}")" />
             <RadzenBreadCrumbItem Text="ACTIVITIES" Path="@($"dashboard/events/{EventId}/activities")" />
-            <RadzenBreadCrumbItem Text="@(ActivityId is null ? "NEW" : model!.Name?.ToUpperInvariant())" />
+            <RadzenBreadCrumbItem Text="NEW" />
         </RadzenBreadCrumb>
 
         <EditForm Model="model" OnValidSubmit="SaveAsync">
@@ -40,33 +37,20 @@
 
             <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween"
                          AlignItems="AlignItems.End" Gap="1rem" Style="margin-block-end: 1rem;">
-                <h1>@(ActivityId is null ? "New activity" : "Edit activity")</h1>
+                <h1>New activity</h1>
                 <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
                     <RadzenButton Text="Cancel" ButtonStyle="ButtonStyle.Light" ButtonType="ButtonType.Button"
                                   Disabled="@isSaving" Click="NavigateToList" />
-                    <RadzenButton Text="@(ActivityId is null ? "Create activity" : "Save changes")"
-                                  ButtonType="ButtonType.Submit" Disabled="@(isSaving || permissionLostMessage is not null)" />
+                    <RadzenButton Text="Create activity" ButtonType="ButtonType.Submit" Disabled="@isSaving" />
                 </RadzenStack>
             </RadzenStack>
 
-            @if (permissionLostMessage is not null)
-            {
-                <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" AllowClose="false" Text="@permissionLostMessage" />
-            }
             @if (saveErrorMessage is not null)
             {
                 <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" AllowClose="false" Text="@saveErrorMessage" />
             }
 
-            <fieldset disabled="@(permissionLostMessage is not null)">
-                <div class="vlg-field">
-                    <label for="Name">Name</label>
-                    <InputText id="Name" @bind-Value="model!.Name" class="rz-textbox rz-input-md" />
-                    <ValidationMessage For="() => model!.Name" class="rz-messages-error" />
-                </div>
-
-                <MarkdownField Label="Description" FieldId="Description" @bind-Value="model!.Description" />
-            </fieldset>
+            <ActivityDetailsFields Model="model!" />
         </EditForm>
         break;
 }

@@ -45,6 +45,18 @@ public class AdminAllowlistSynchronizerShould
     }
 
     [Fact]
+    public async Task ReturnTheAdminGrant_WhenAConcurrentSignInCreatedItFirst_ForSyncAsync()
+    {
+        FakeAuthorizationApiHandler handler = FakeAuthorizationApiHandler.WithConcurrentCreate();
+        AdminAllowlistSynchronizer synchronizer = CreateSynchronizer(handler, allowlist: Email);
+
+        IReadOnlyList<RoleGrantDto>? grants = await synchronizer.SyncAsync(CreateUser(Email), CancellationToken.None);
+
+        RoleGrantDto grant = Assert.Single(grants!);
+        Assert.Equal(RoleIds.Admin, grant.RoleId);
+    }
+
+    [Fact]
     public async Task DeleteThePlatformWideAdminGrant_WhenTheEmailIsNoLongerAllowlisted_ForSyncAsync()
     {
         var handler = new FakeAuthorizationApiHandler();

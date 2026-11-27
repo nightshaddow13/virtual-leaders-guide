@@ -142,9 +142,11 @@ public sealed class PlacementTreeModel
     /// <param name="activityName">That Activity's name, shown on its ghost rows.</param>
     /// <param name="activityNames">Every Activity on the Event by id, for the other rows in the tree.</param>
     /// <param name="ghosts">This session's not-yet-saved Placements for <paramref name="activityId"/>, oldest first.</param>
+    /// <param name="savedSinceLoad">Placements of this Activity written after <paramref name="server"/> was read - drawn as saved rows, since the page can't always read it again.</param>
     public PlacementTreeModel(
         PlacementTreeDto server, Guid activityId, string activityName,
-        IReadOnlyDictionary<Guid, string> activityNames, IReadOnlyList<PlacementPath> ghosts)
+        IReadOnlyDictionary<Guid, string> activityNames, IReadOnlyList<PlacementPath> ghosts,
+        IReadOnlyList<(Guid Id, PlacementPath Path)>? savedSinceLoad = null)
     {
         _server = server;
         var tabs = server.Tabs.ToDictionary(t => t.Id);
@@ -176,6 +178,15 @@ public sealed class PlacementTreeModel
             {
                 _thisActivitysPaths.Add(path);
             }
+        }
+
+        foreach ((Guid id, PlacementPath saved) in savedSinceLoad ?? [])
+        {
+            PlacementPath path = Canonicalize(saved);
+            TierNode deepest = Insert(path, pending: false, PendingSortOrder, PendingSortOrder, PendingSortOrder, PendingSortOrder);
+            deepest.LeafList.Add(new PlacementLeaf(
+                activityId, activityName, IsThisActivity: true, id, path, SortOrder: PendingSortOrder));
+            _thisActivitysPaths.Add(path);
         }
 
         foreach (PlacementPath ghost in ghosts)

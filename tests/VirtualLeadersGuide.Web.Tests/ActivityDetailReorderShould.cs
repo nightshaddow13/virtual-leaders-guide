@@ -4,6 +4,7 @@ using System.Text.Json;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using VirtualLeadersGuide.Web.Components.Pages;
+using VirtualLeadersGuide.Web.Markdown;
 
 namespace VirtualLeadersGuide.Web.Tests;
 
@@ -30,6 +31,7 @@ public class ActivityDetailReorderShould : BunitContext
     public ActivityDetailReorderShould()
     {
         JSInterop.Mode = JSRuntimeMode.Loose;
+        Services.AddSingleton<MarkdownRenderer>();
         _bucket.AddRange([(Guid.NewGuid(), _archeryId), (_thisPlacement, _activityId), (Guid.NewGuid(), _swimId)]);
     }
 
@@ -49,14 +51,16 @@ public class ActivityDetailReorderShould : BunitContext
     }
 
     [Fact]
-    public void ShowDenied_WhenTheMoveIsForbidden_ForMoveAsync()
+    public void ShowThePermissionLostBannerAndDisableTheArrows_WhenTheMoveIsForbidden_ForMoveAsync()
     {
         _patchStatus = HttpStatusCode.Forbidden;
         IRenderedComponent<ActivityDetail> cut = RenderPage();
 
         Arrow(cut, "down").Click();
 
-        cut.WaitForAssertion(() => Assert.Contains("You don't have access to this Activity", cut.Markup, StringComparison.Ordinal), Patience);
+        cut.WaitForAssertion(() => Assert.Contains("You no longer have permission", cut.Markup, StringComparison.Ordinal), Patience);
+        Assert.True(Arrow(cut, "up").HasAttribute("disabled"));
+        Assert.True(Arrow(cut, "down").HasAttribute("disabled"));
     }
 
     [Theory]
