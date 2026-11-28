@@ -409,6 +409,60 @@ public class ApiFacilityClientShould
             () => client.UpdateAsync(Guid.NewGuid(), "Renamed", Guid.NewGuid(), CancellationToken.None));
     }
 
+    [Fact]
+    public async Task SendADeleteToTheFacilitysUrlWithTheBearerToken_WhenDeleting_ForDeleteAsync()
+    {
+        var facilityId = Guid.NewGuid();
+        HttpRequestMessage? capturedRequest = null;
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            capturedRequest = request;
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
+        });
+        ApiFacilityClient client = CreateClient(handler);
+
+        await client.DeleteAsync(facilityId, CancellationToken.None);
+
+        Assert.Equal(HttpMethod.Delete, capturedRequest!.Method);
+        Assert.Equal($"/api/facilities/{facilityId}", capturedRequest.RequestUri!.AbsolutePath);
+        Assert.NotNull(capturedRequest.Headers.Authorization);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.NoContent, FacilityWriteOutcome.Success)]
+    [InlineData(HttpStatusCode.Forbidden, FacilityWriteOutcome.Forbidden)]
+    [InlineData(HttpStatusCode.NotFound, FacilityWriteOutcome.NotFound)]
+    public async Task ReturnTheMatchingOutcome_WhenApiRespondsWithAnExpectedStatus_ForDeleteAsync(
+        HttpStatusCode status, FacilityWriteOutcome expected)
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(status));
+        ApiFacilityClient client = CreateClient(handler);
+
+        FacilityWriteOutcome outcome = await client.DeleteAsync(Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal(expected, outcome);
+    }
+
+    [Fact]
+    public async Task ThrowFacilityDataUnavailableException_WhenTheHttpCallFails_ForDeleteAsync()
+    {
+        var handler = StubHttpMessageHandler.ThrowingOn(() => new HttpRequestException("simulated Api outage"));
+        ApiFacilityClient client = CreateClient(handler);
+
+        await Assert.ThrowsAsync<FacilityDataUnavailableException>(
+            () => client.DeleteAsync(Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ThrowFacilityDataUnavailableException_WhenApiRespondsWithAnUnexpectedStatus_ForDeleteAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        ApiFacilityClient client = CreateClient(handler);
+
+        await Assert.ThrowsAsync<FacilityDataUnavailableException>(
+            () => client.DeleteAsync(Guid.NewGuid(), CancellationToken.None));
+    }
+
     private static ApiFacilityClient CreateClient(HttpMessageHandler apiHandler) =>
         ApiClientTestFactory.CreateFacilityClient(apiHandler);
 

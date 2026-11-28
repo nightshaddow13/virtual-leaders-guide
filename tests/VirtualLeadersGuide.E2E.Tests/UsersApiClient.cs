@@ -13,7 +13,7 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// Unlike <see cref="IdentityApiClient"/>, <c>/api/users</c> sits behind
 /// <see cref="InternalJwtDefaults.PolicyName"/> and is Admin-only (<c>ApplicationUserAccessPolicy.CanRead</c>)
 /// - see <see cref="EventsApiClient"/>'s own remarks for the same shape; this class shares its
-/// <see cref="AdminJsonApiClientBase"/> request plumbing and <see cref="InternalAdminJwt"/> minting recipe.
+/// <see cref="AdminJsonApiClientBase"/> request plumbing and <see cref="InternalJwt"/> minting recipe.
 /// </remarks>
 public sealed class UsersApiClient(HttpClient httpClient, string internalJwtSigningKey)
     : AdminJsonApiClientBase(httpClient, internalJwtSigningKey)

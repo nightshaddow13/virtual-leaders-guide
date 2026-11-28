@@ -10,9 +10,9 @@ namespace VirtualLeadersGuide.Web.Facilities;
 /// rather than exceptions, <see cref="FacilityDataUnavailableException"/> for everything else. Requests go
 /// through <see cref="InternalApiClient"/>, not a bare <c>IHttpClientFactory.CreateClient("Api")</c>,
 /// because <c>/api/*</c> requires the internal JWT that only <see cref="InternalApiClient"/> attaches. The
-/// read/update/delete methods <c>FacilityResourceDefinition</c> already authorizes on the Api side arrive as
-/// their own UI needs them - P8-3 (#167) adds the list read, P8-4 (#168) the single read and update; P8-5
-/// (#169) still owes delete.
+/// read/update/delete methods <c>FacilityResourceDefinition</c> already authorizes on the Api side arrived as
+/// their own UI needed them - P8-3 (#167) added the list read, P8-4 (#168) the single read and update, and
+/// P8-5 (#169) delete.
 /// Request plumbing shared with <see cref="ApiFacilityTypeClient"/> lives in
 /// <see cref="FacilityApiClientBase"/>.
 /// </remarks>
@@ -164,6 +164,33 @@ public sealed class ApiFacilityClient(InternalApiClient apiClient) : FacilityApi
 
         EnsureExpectedStatus(response, HttpStatusCode.NoContent);
         return (FacilityWriteOutcome.Success, []);
+    }
+
+    /// <summary>Deletes a Facility permanently - hard delete, no recovery path (ADR-0045).</summary>
+    /// <param name="id">The Facility to delete.</param>
+    /// <param name="cancellationToken">Propagated to the underlying HTTP call.</param>
+    /// <returns>
+    /// <see cref="FacilityWriteOutcome.Success"/> (Api returns 204); <see cref="FacilityWriteOutcome.Forbidden"/>
+    /// if the caller isn't an Admin (ADR-0070); or <see cref="FacilityWriteOutcome.NotFound"/> if it was already
+    /// gone.
+    /// </returns>
+    public async Task<FacilityWriteOutcome> DeleteAsync(Guid id, CancellationToken cancellationToken)
+    {
+        using var request = NewRequest(HttpMethod.Delete, $"{FacilitiesPath}/{id}");
+        using HttpResponseMessage response = await SendAsync(request, cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            return FacilityWriteOutcome.Forbidden;
+        }
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return FacilityWriteOutcome.NotFound;
+        }
+
+        EnsureExpectedStatus(response, HttpStatusCode.NoContent);
+        return FacilityWriteOutcome.Success;
     }
 
     private static async Task<IReadOnlyList<string>> ReadErrorPointersAsync(

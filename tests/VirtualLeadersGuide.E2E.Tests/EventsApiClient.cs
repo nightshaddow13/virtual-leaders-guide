@@ -15,7 +15,7 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// <remarks>
 /// Unlike <see cref="IdentityApiClient"/>, <c>/api/*</c> sits behind
 /// <see cref="InternalJwtDefaults.PolicyName"/> (<c>Program.cs</c>), so every request here also carries a
-/// bearer token minted with an Admin role claim (<see cref="InternalAdminJwt"/>, via
+/// bearer token minted with an Admin role claim (<see cref="InternalJwt"/>, via
 /// <see cref="AdminJsonApiClientBase"/>) - <c>EventAccessPolicy.CanDelete</c>/<c>CanCreate</c> are Admin-only
 /// (ADR-0031).
 /// </remarks>

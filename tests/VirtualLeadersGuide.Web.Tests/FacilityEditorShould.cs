@@ -4,6 +4,7 @@ using AngleSharp.Dom;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
+using Radzen;
 using VirtualLeadersGuide.Web.Components.Pages;
 
 namespace VirtualLeadersGuide.Web.Tests;
@@ -11,7 +12,8 @@ namespace VirtualLeadersGuide.Web.Tests;
 /// <remarks>
 /// Covers <c>FacilityEditor.razor.cs</c>'s <c>PageState</c> transitions and the Facility Type
 /// resolve-or-create flow (P8-2, #166), plus the edit mode P8-4 (#168) adds: rendering with the <c>Id</c>
-/// route parameter set loads the Facility first, and submitting PATCHes instead of POSTing. The create-mode
+/// route parameter set loads the Facility first, and submitting PATCHes instead of POSTing. P8-5 (#169) adds
+/// the edit mode's Danger zone delete. The create-mode
 /// cases mirror <see cref="ActivityEditorShould"/>'s create-path subset; the Admin-only gate runs in
 /// <c>OnParametersSetAsync</c> alongside the edit-mode load, like <c>InfoPageEditor</c>.
 /// <c>RadzenAutoComplete</c> needs <c>JSInterop</c> set to <see cref="JSRuntimeMode.Loose"/> for its popup
@@ -505,6 +507,192 @@ public class FacilityEditorShould : BunitContext
         Assert.Contains("Something went wrong saving this Facility.", cut.Markup, StringComparison.Ordinal);
         Assert.DoesNotContain("Facility Type no longer exists", cut.Markup, StringComparison.Ordinal);
         Assert.Equal(1, typeListReads);
+    }
+
+    [Fact]
+    public void OfferDelete_WhenEditingAnExistingFacility_ForDeleteAsync()
+    {
+        IRenderedComponent<FacilityEditor> cut = RenderForDeletion(Guid.NewGuid(), []);
+
+        Assert.Contains("Danger zone", cut.Markup, StringComparison.Ordinal);
+        Assert.Contains(cut.FindAll("button"), button => button.TextContent.Contains("Delete facility", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void NotOfferDelete_WhenCreatingANewFacility_ForDeleteAsync()
+    {
+        RegisterClients(
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, EmptyFacilityTypeCollection()),
+            StubHttpMessageHandler.RespondingWith(HttpStatusCode.NotFound));
+        SignInAsAdmin();
+
+        IRenderedComponent<FacilityEditor> cut = Render<FacilityEditor>();
+
+        Assert.DoesNotContain("Danger zone", cut.Markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("Delete facility", cut.Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void NameTheStoredFacilityNotTheTypedName_WhenAskingToConfirm_ForDeleteAsync()
+    {
+        IRenderedComponent<FacilityEditor> cut = RenderForDeletion(Guid.NewGuid(), []);
+        cut.Find("#Name").Change("Half-typed rename");
+
+        ClickSubmit(cut, "Delete facility");
+
+        cut.WaitForAssertion(() => Assert.Contains("Delete Camp Blackhawk?", cut.Markup, StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.NoContent)]
+    [InlineData(HttpStatusCode.NotFound)]
+    public void DeleteNotifyAndNavigateToTheFacilityList_WhenTheUserConfirms_ForDeleteAsync(HttpStatusCode status)
+    {
+        var facilityId = Guid.NewGuid();
+        var deleted = new List<string>();
+        IRenderedComponent<FacilityEditor> cut = RenderForDeletion(facilityId, deleted, status);
+        OpenDeleteDialog(cut);
+        Assert.Empty(deleted);
+
+        Services.GetRequiredService<DialogService>().Close(true);
+
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        cut.WaitForAssertion(() => Assert.EndsWith("dashboard/facilities", navigation.Uri, StringComparison.Ordinal));
+        Assert.Equal([$"/api/facilities/{facilityId}"], deleted);
+        var notifications = Services.GetRequiredService<NotificationService>();
+        Assert.Contains(notifications.Messages, message => message.Summary == "Facility deleted");
+    }
+
+    [Fact]
+    public void SendNothingAndStay_WhenTheUserCancelsTheConfirmation_ForDeleteAsync()
+    {
+        var deleted = new List<string>();
+        IRenderedComponent<FacilityEditor> cut = RenderForDeletion(Guid.NewGuid(), deleted);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        string before = navigation.Uri;
+        OpenDeleteDialog(cut);
+
+        Services.GetRequiredService<DialogService>().Close(false);
+
+        cut.WaitForAssertion(() => Assert.DoesNotContain("Delete Camp Blackhawk?", cut.Markup, StringComparison.Ordinal));
+        Assert.Empty(deleted);
+        Assert.Equal(before, navigation.Uri);
+    }
+
+    [Fact]
+    public void ShowDenied_WhenApiRespondsWithForbiddenOnFacilityDelete_ForDeleteAsync()
+    {
+        IRenderedComponent<FacilityEditor> cut = RenderForDeletion(Guid.NewGuid(), [], HttpStatusCode.Forbidden);
+        OpenDeleteDialog(cut);
+
+        Services.GetRequiredService<DialogService>().Close(true);
+
+        cut.WaitForAssertion(() => Assert.Contains("Only Admins can manage Facilities.", cut.Markup, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ShowAnInlineErrorAndStay_WhenTheFacilityStoreFailsTheDelete_ForDeleteAsync()
+    {
+        IRenderedComponent<FacilityEditor> cut = RenderForDeletion(Guid.NewGuid(), [], HttpStatusCode.InternalServerError);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        string before = navigation.Uri;
+        OpenDeleteDialog(cut);
+
+        Services.GetRequiredService<DialogService>().Close(true);
+
+        cut.WaitForAssertion(() => Assert.Contains(
+            "Something went wrong deleting this Facility. Try again.", cut.Markup, StringComparison.Ordinal));
+        Assert.Equal(before, navigation.Uri);
+        cut.WaitForAssertion(() => Assert.False(cut.FindAll("button")
+            .Single(button => button.TextContent.Contains("Delete facility", StringComparison.Ordinal))
+            .HasAttribute("disabled")));
+    }
+
+    [Fact]
+    public void DisableSaveCancelAndDelete_WhileTheDeleteIsInProgress_ForDeleteAsync()
+    {
+        IRenderedComponent<FacilityEditor> cut = RenderForDeletion(Guid.NewGuid(), []);
+
+        OpenDeleteDialog(cut);
+
+        Assert.All(["Save changes", "Cancel", "Delete facility"], text => Assert.True(IsDisabled(cut, text), text));
+    }
+
+    [Fact]
+    public void KeepTheButtonsDisabled_OnceTheDeleteHasSucceeded_ForDeleteAsync()
+    {
+        IRenderedComponent<FacilityEditor> cut = RenderForDeletion(Guid.NewGuid(), []);
+        OpenDeleteDialog(cut);
+
+        Services.GetRequiredService<DialogService>().Close(true);
+
+        var notifications = Services.GetRequiredService<NotificationService>();
+        cut.WaitForAssertion(() => Assert.NotEmpty(notifications.Messages));
+        Assert.All(["Save changes", "Delete facility"], text => Assert.True(IsDisabled(cut, text), text));
+    }
+
+    [Fact]
+    public void ReEnableTheButtons_WhenTheUserCancelsTheConfirmation_ForDeleteAsync()
+    {
+        IRenderedComponent<FacilityEditor> cut = RenderForDeletion(Guid.NewGuid(), []);
+        OpenDeleteDialog(cut);
+
+        Services.GetRequiredService<DialogService>().Close(false);
+
+        cut.WaitForAssertion(() => Assert.False(IsDisabled(cut, "Delete facility")));
+        Assert.False(IsDisabled(cut, "Save changes"));
+    }
+
+    [Fact]
+    public void SendNoPatch_WhenTheFormIsSubmittedWhileADeleteIsInProgress_ForSaveAsync()
+    {
+        var facilityId = Guid.NewGuid();
+        var facilityTypeId = Guid.NewGuid();
+        var requests = new List<string>();
+        RegisterClients(
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = new[] { FacilityTypeResource(facilityTypeId, "Camp") } }),
+            EditFacilityHandler(facilityId, facilityTypeId, "Camp Blackhawk", HttpStatusCode.NoContent, requests));
+        SignInAsAdmin();
+        IRenderedComponent<FacilityEditor> cut = RenderForEdit(facilityId);
+        OpenDeleteDialog(cut);
+
+        cut.Find("form").Submit();
+
+        Assert.Equal(["facilities GET"], requests);
+    }
+
+    /// <remarks>Looks only outside the confirm dialog, which has a Cancel button of its own.</remarks>
+    private static bool IsDisabled(IRenderedComponent<FacilityEditor> cut, string buttonText) =>
+        cut.FindAll("button")
+            .Single(button => button.TextContent.Trim() == buttonText && button.Closest(".rz-dialog") is null)
+            .HasAttribute("disabled");
+
+    private static void OpenDeleteDialog(IRenderedComponent<FacilityEditor> cut)
+    {
+        ClickSubmit(cut, "Delete facility");
+        cut.WaitForAssertion(() => Assert.Contains("Delete Camp Blackhawk?", cut.Markup, StringComparison.Ordinal));
+    }
+
+    /// <summary>The edit page for "Camp Blackhawk", recording each DELETE's path and answering it with <paramref name="deleteStatus"/>.</summary>
+    private IRenderedComponent<FacilityEditor> RenderForDeletion(
+        Guid facilityId, List<string> deleted, HttpStatusCode deleteStatus = HttpStatusCode.NoContent)
+    {
+        var facilityTypeId = Guid.NewGuid();
+        RegisterClients(
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = new[] { FacilityTypeResource(facilityTypeId, "Camp") } }),
+            new StubHttpMessageHandler(request =>
+            {
+                if (request.Method == HttpMethod.Delete)
+                {
+                    deleted.Add(request.RequestUri!.AbsolutePath);
+                    return new HttpResponseMessage(deleteStatus);
+                }
+
+                return JsonResponse(HttpStatusCode.OK, new { data = FacilityResource(facilityId, facilityTypeId, "Camp Blackhawk") });
+            }));
+        SignInAsAdmin();
+
+        return RenderForEdit(facilityId);
     }
 
     private static StubHttpMessageHandler UpdateRejectedHandler(Guid facilityId, Guid facilityTypeId, string pointer) =>

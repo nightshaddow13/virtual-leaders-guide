@@ -16,8 +16,9 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// <c>FacilityEditor</c> form and torn down together, so splitting them would only duplicate this class's
 /// request plumbing for no benefit. <c>/api/facilities</c>/<c>/api/facilityTypes</c> sit behind
 /// <see cref="InternalJwtDefaults.PolicyName"/>, same as every other <c>/api/*</c> resource - see
-/// <see cref="EventsApiClient"/>'s own remarks for why every request here carries an Admin bearer token via
-/// <see cref="AdminJsonApiClientBase"/>.
+/// <see cref="EventsApiClient"/>'s own remarks for why every request here carries a bearer token via
+/// <see cref="AdminJsonApiClientBase"/>. That token is an Admin's everywhere except
+/// <see cref="DeleteFacilityAsDirectorAsync"/>.
 /// </remarks>
 public sealed class FacilitiesApiClient(HttpClient httpClient, string internalJwtSigningKey)
     : AdminJsonApiClientBase(httpClient, internalJwtSigningKey)
@@ -62,6 +63,20 @@ public sealed class FacilitiesApiClient(HttpClient httpClient, string internalJw
         {
             await ThrowForFailureAsync("delete", id.ToString(), response, cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// Attempts the same delete as a Director, returning whatever <c>Api</c> answered rather than throwing -
+    /// the refusal is what the caller is asserting (P8-5, #169).
+    /// </summary>
+    /// <param name="id">The Facility to try to delete.</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
+    /// <returns>The response's status code.</returns>
+    public async Task<HttpStatusCode> DeleteFacilityAsDirectorAsync(Guid id, CancellationToken cancellationToken)
+    {
+        using HttpRequestMessage request = NewDirectorRequest(HttpMethod.Delete, $"{FacilitiesPath}/{id}");
+        using HttpResponseMessage response = await SendAsync(request, cancellationToken);
+        return response.StatusCode;
     }
 
     /// <summary>Every Facility Type whose <c>Name</c> starts with <c>e2e-</c> (ADR-0039's discriminator).</summary>
