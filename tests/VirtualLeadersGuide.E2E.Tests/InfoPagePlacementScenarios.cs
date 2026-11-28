@@ -5,8 +5,8 @@ using VirtualLeadersGuide.Identity.Contracts;
 namespace VirtualLeadersGuide.E2E.Tests;
 
 /// <remarks>
-/// Covers P5-24 (#208, place an InfoPage), one scenario per acceptance criterion plus removal. Everything is
-/// created through the real UI, and Tiers and Placements need no tracked teardown: deleting the Event removes
+/// Covers P5-24 (#208, place an InfoPage), one scenario per acceptance criterion plus removal, and what P5-25
+/// (#209) shows on the Info pages list. Everything is created through the real UI, and Tiers and Placements need no tracked teardown: deleting the Event removes
 /// them (<see cref="E2ETestBase.TrackEvent"/>). Tier names are Guid-suffixed, and <c>RadzenAutoComplete</c> is
 /// filled then committed with Tab, as in <see cref="PlacementManagementScenarios"/>.
 /// </remarks>
@@ -151,6 +151,90 @@ public class InfoPagePlacementScenarios : E2ETestBase
             await Expect(Page.Locator("#PlacementTab")).ToBeVisibleAsync(InteractiveVisible());
         });
 
+    [Fact(DisplayName = "Given a placed and an unplaced InfoPage, when the Admin opens the Info pages list, then each row shows its Tab › Sub Tab or Not placed")]
+    public async Task GivenAPlacedAndAnUnplacedInfoPage_WhenTheAdminOpensTheList_ThenEachRowShowsWhereItIs() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, _) = await CreateEventAsync("InfoPage List Host");
+            string placedTitle = Unique("Packing");
+            string unplacedTitle = Unique("Draft");
+            Guid placed = await CreateInfoPageAsync(eventId, placedTitle);
+            await CreateInfoPageAsync(eventId, unplacedTitle);
+            string tab = Unique("Logistics");
+            string subTab = Unique("Arrival");
+
+            await PlaceInfoPageAsync(eventId, placed, tab, subTab);
+
+            await Expect(Row(placedTitle)).ToContainTextAsync($"{tab} › {subTab}", InteractiveContainText());
+            await Expect(Row(unplacedTitle)).ToContainTextAsync("Not placed", InteractiveContainText());
+        });
+
+    [Fact(DisplayName = "Given a placed InfoPage, when the Admin moves it, then the list shows the new Tab › Sub Tab")]
+    public async Task GivenAPlacedInfoPage_WhenTheAdminMovesIt_ThenTheListShowsTheNewPlace() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, _) = await CreateEventAsync("InfoPage List Move Host");
+            string title = Unique("Page");
+            Guid infoPageId = await CreateInfoPageAsync(eventId, title);
+            await PlaceInfoPageAsync(eventId, infoPageId, Unique("Before"));
+            string tab = Unique("After");
+            string subTab = Unique("Below");
+
+            await OpenEditorAsync(eventId, infoPageId);
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Change", Exact = true }).ClickAsync();
+            await FillTierAsync("#PlacementTab", tab);
+            await FillTierAsync("#PlacementSubTab", subTab);
+            await SaveToListAsync(eventId);
+
+            await Expect(Row(title)).ToContainTextAsync($"{tab} › {subTab}", InteractiveContainText());
+        });
+
+    [Fact(DisplayName = "Given a placed InfoPage, when the Admin removes its Placement, then the list shows Not placed")]
+    public async Task GivenAPlacedInfoPage_WhenTheAdminRemovesItsPlacement_ThenTheListShowsNotPlaced() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, _) = await CreateEventAsync("InfoPage List Remove Host");
+            string title = Unique("Page");
+            Guid infoPageId = await CreateInfoPageAsync(eventId, title);
+            await PlaceInfoPageAsync(eventId, infoPageId, Unique("Temporary"));
+
+            await OpenEditorAsync(eventId, infoPageId);
+            await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Remove", Exact = true }).ClickAsync();
+            await Page.Locator(".rz-dialog")
+                .GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Remove", Exact = true }).ClickAsync();
+            await Expect(Page.Locator("#PlacementTab")).ToBeVisibleAsync(InteractiveVisible());
+            await Page.GotoAsync(ListUrl(eventId));
+
+            await Expect(Row(title)).ToContainTextAsync("Not placed", InteractiveContainText());
+        });
+
+    [Fact(DisplayName = "Given a placed InfoPage alone on its Tab, when the Admin deletes it from the list, then the confirmation says the tab disappears too")]
+    public async Task GivenAPlacedInfoPageAloneOnItsTab_WhenTheAdminDeletesItFromTheList_ThenTheConfirmationNamesTheTab() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (Guid eventId, _) = await CreateEventAsync("InfoPage List Delete Host");
+            string title = Unique("Page");
+            Guid infoPageId = await CreateInfoPageAsync(eventId, title);
+            string tab = Unique("Solo");
+            await PlaceInfoPageAsync(eventId, infoPageId, tab);
+
+            await Row(title).GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Delete" }).ClickAsync();
+            ILocator dialog = Page.Locator(".rz-dialog");
+            await Expect(dialog).ToContainTextAsync($"It's removed from {tab}.", InteractiveContainText());
+            await Expect(dialog).ToContainTextAsync($"The {tab} tab disappears from the guide too.", InteractiveContainText());
+            await dialog.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Delete", Exact = true }).ClickAsync();
+
+            await Expect(Row(title)).ToHaveCountAsync(0, InteractiveCount());
+        });
+
+    private ILocator Row(string title) => Page.Locator("tr", new PageLocatorOptions { HasText = title });
+
+    private string ListUrl(Guid eventId) => new Uri(Fixture.WebBaseUrl, $"dashboard/events/{eventId}/info-pages").ToString();
+
     private static string Unique(string label) => $"e2e-{label} {Guid.NewGuid():n}";
 
     private async Task FillTierAsync(string selector, string value)
@@ -207,10 +291,10 @@ public class InfoPagePlacementScenarios : E2ETestBase
         return LastSegment(Page.Url);
     }
 
-    private async Task<Guid> CreateInfoPageAsync(Guid eventId)
+    private async Task<Guid> CreateInfoPageAsync(Guid eventId, string? title = null)
     {
         await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, $"dashboard/events/{eventId}/info-pages/new").ToString());
-        await Page.Locator("#Title").FillAsync(Unique("Page"));
+        await Page.Locator("#Title").FillAsync(title ?? Unique("Page"));
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create page" }).ClickAsync();
         await Expect(Page).ToHaveURLAsync(new Regex(@"info-pages/[0-9a-f-]{36}$"), InteractiveUrl());
         return LastSegment(Page.Url);

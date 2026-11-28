@@ -137,4 +137,22 @@ public sealed class PlacementTreeDto
                         p.SubSectionId is { } subSectionId ? subSections.GetValueOrDefault(subSectionId)?.Name : null))
                     .OrderBy(path => path.Display, StringComparer.OrdinalIgnoreCase)]);
     }
+
+    /// <summary>Each placed InfoPage's Placement as a name path - the Info pages list's "Placed on" chips (P5-25, #209).</summary>
+    /// <returns>A lookup by InfoPage id; an unplaced InfoPage has no entry. One path each, since an InfoPage has at most one Placement (ADR-0047).</returns>
+    public IReadOnlyDictionary<Guid, PlacementPath> PathsByInfoPage()
+    {
+        var tabs = Tabs.ToDictionary(t => t.Id);
+        var subTabs = SubTabs.ToDictionary(t => t.Id);
+
+        return InfoPagePlacements
+            .Where(p => tabs.ContainsKey(p.TabId))
+            .ToDictionary(
+                p => p.InfoPageId,
+                p => new PlacementPath(
+                    tabs[p.TabId].Name,
+                    p.SubTabId is { } subTabId ? subTabs.GetValueOrDefault(subTabId)?.Name : null,
+                    null,
+                    null));
+    }
 }

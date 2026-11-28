@@ -256,12 +256,46 @@ public class InfoPageEditorShould : BunitContext
         Assert.Contains("<strong>jacket</strong>", cut.Markup, StringComparison.Ordinal);
     }
 
-    private void RegisterClients(HttpMessageHandler eventHandler, HttpMessageHandler infoPageHandler)
+    [Fact]
+    public void NameTheReapedTabInTheDialog_WhenDeletingAPlacedInfoPage_ForDeleteAsync()
+    {
+        Guid eventId = Guid.NewGuid();
+        Guid infoPageId = Guid.NewGuid();
+        Guid tab = Guid.NewGuid();
+        var placementHandler = new StubHttpMessageHandler(request => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = JsonContent.Create(new
+            {
+                data = request.RequestUri!.AbsolutePath switch
+                {
+                    "/api/tabs" => new object[] { new { type = "tabs", id = tab.ToString(), attributes = new { eventId, name = "Logistics", sortOrder = 0 } } },
+                    "/api/infoPagePlacements" => [new { type = "infoPagePlacements", id = Guid.NewGuid().ToString(), attributes = new { eventId, infoPageId, tabId = tab } }],
+                    _ => []
+                }
+            })
+        });
+        RegisterClients(
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = EventResource(eventId) }),
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = InfoPageResource(infoPageId, eventId, "Packing List") }),
+            placementHandler);
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("admin-1");
+        auth.SetRoles("Admin");
+
+        IRenderedComponent<InfoPageEditor> cut = Render<InfoPageEditor>(parameters => parameters
+            .Add(component => component.EventId, eventId)
+            .Add(component => component.InfoPageId, infoPageId));
+        cut.FindAll("button").Single(button => button.TextContent.Contains("Delete info page", StringComparison.Ordinal)).Click();
+
+        cut.WaitForAssertion(() => Assert.Contains("The Logistics tab disappears from the guide too.", cut.Markup, StringComparison.Ordinal));
+    }
+
+    private void RegisterClients(HttpMessageHandler eventHandler, HttpMessageHandler infoPageHandler, HttpMessageHandler? placementHandler = null)
     {
         Services.AddSingleton(ApiClientTestFactory.CreateEventClient(eventHandler));
         Services.AddSingleton(ApiClientTestFactory.CreateInfoPageClient(infoPageHandler));
         Services.AddSingleton(ApiClientTestFactory.CreatePlacementClient(
-            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = Array.Empty<object>() })));
+            placementHandler ?? StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = Array.Empty<object>() })));
         Services.AddSingleton(ApiClientTestFactory.CreateInfoPagePlacementClient(
             StubHttpMessageHandler.RespondingWith(HttpStatusCode.NotFound)));
         RadzenTestServices.RegisterRadzenComponentsHost(Services);

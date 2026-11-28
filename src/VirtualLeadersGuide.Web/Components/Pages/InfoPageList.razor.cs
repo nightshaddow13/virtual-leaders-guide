@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Radzen;
 using Radzen.Blazor;
+using VirtualLeadersGuide.Web.Activities;
 using VirtualLeadersGuide.Web.Authorization;
 using VirtualLeadersGuide.Web.Components.Shared;
 using VirtualLeadersGuide.Web.Events;
@@ -9,6 +10,11 @@ using VirtualLeadersGuide.Web.InfoPages;
 
 namespace VirtualLeadersGuide.Web.Components.Pages;
 
+/// <remarks>
+/// The "Placed on" column and "N placed" caption (P5-25, #209) come from the Placement tree. If that
+/// tree can't be read the whole grid fails, as on <c>ActivityList</c>, so no row ever claims "Not placed"
+/// without knowing it.
+/// </remarks>
 public partial class InfoPageList
 {
     [Inject]
@@ -19,6 +25,9 @@ public partial class InfoPageList
 
     [Inject]
     private ApiInfoPageClient InfoPageClient { get; set; } = default!;
+
+    [Inject]
+    private ApiPlacementClient PlacementClient { get; set; } = default!;
 
     [Inject]
     private DialogService DialogService { get; set; } = default!;
@@ -48,6 +57,8 @@ public partial class InfoPageList
     private IEnumerable<InfoPageDto>? infoPages;
 
     private int totalCount;
+    private int placedCount;
+    private IReadOnlyDictionary<Guid, PlacementPath> pathByInfoPage = new Dictionary<Guid, PlacementPath>();
     private bool isLoading;
     private string? loadErrorMessage;
     private string? deleteErrorMessage;
@@ -115,24 +126,32 @@ public partial class InfoPageList
             (IReadOnlyList<InfoPageDto> pageInfoPages, int total) =
                 await InfoPageClient.GetInfoPagesForEventAsync(EventId, pageNumber, pageSize, CancellationToken.None);
 
+            PlacementTreeDto tree = await PlacementClient.GetTreeForEventAsync(EventId, CancellationToken.None);
+            pathByInfoPage = tree.PathsByInfoPage();
+            placedCount = pathByInfoPage.Count;
+
             infoPages = pageInfoPages;
             totalCount = total;
         }
-        catch (InfoPageDataUnavailableException)
+        catch (Exception ex) when (ex is InfoPageDataUnavailableException or ActivityDataUnavailableException)
         {
             infoPages = [];
             totalCount = 0;
+            placedCount = 0;
             loadErrorMessage = "Something went wrong loading Info pages. Try refreshing the page.";
         }
 
         isLoading = false;
     }
 
+    private PlacementPath? PathFor(Guid infoPageId) => pathByInfoPage.GetValueOrDefault(infoPageId);
+
     private async Task DeleteAsync(InfoPageDto item)
     {
         deleteErrorMessage = null;
 
-        var parameters = InfoPageDeleteConfirmation.BuildDialogParameters(item.Title);
+        InfoPageDeletionImpact? impact = await InfoPageDeleteConfirmation.LoadImpactAsync(PlacementClient, EventId, item.Id);
+        var parameters = InfoPageDeleteConfirmation.BuildDialogParameters(item.Title, impact);
         bool? confirmed = await DialogService.OpenAsync<ConfirmDialog>("Delete info page?", parameters);
         if (confirmed is not true)
         {

@@ -1,3 +1,4 @@
+using VirtualLeadersGuide.Web.Activities;
 using VirtualLeadersGuide.Web.Components.Shared;
 using VirtualLeadersGuide.Web.InfoPages;
 
@@ -8,21 +9,44 @@ namespace VirtualLeadersGuide.Web.Tests;
 /// </remarks>
 public class InfoPageDeleteConfirmationShould
 {
+    private static readonly PlacementPath Packing = new("Logistics", "Packing", null, null);
+
     [Fact]
     public void SetTheMessageToDeleteTheInfoPagesTitle_WhenBuilt_ForBuildDialogParameters()
     {
-        Dictionary<string, object?> parameters = InfoPageDeleteConfirmation.BuildDialogParameters("Packing List");
+        Dictionary<string, object?> parameters =
+            InfoPageDeleteConfirmation.BuildDialogParameters("Packing List", new InfoPageDeletionImpact(null, []));
 
         Assert.Equal("Delete Packing List?", parameters[nameof(ConfirmDialog.Message)]);
     }
 
-    /// <remarks>Grilled decision (P5-17, #22): no Placement-related bullet - P5-18/19/20 haven't shipped, so nothing is placed yet to warn about losing.</remarks>
     [Fact]
-    public void IncludeOnlyTheIrreversibilityBullet_ForBuildDialogParameters()
-    {
-        Dictionary<string, object?> parameters = InfoPageDeleteConfirmation.BuildDialogParameters("Packing List");
+    public void IncludeOnlyTheIrreversibilityBullet_WhenTheInfoPageIsNotPlaced_ForBuildDialogParameters() =>
+        Assert.Equal(["This can't be undone."], Consequences(new InfoPageDeletionImpact(null, [])));
 
-        var consequences = (IReadOnlyList<string>)parameters[nameof(ConfirmDialog.Consequences)]!;
-        Assert.Equal(["This can't be undone"], consequences);
-    }
+    [Fact]
+    public void SayWhereItIsRemovedFrom_WhenPlacedAndNothingIsReaped_ForBuildDialogParameters() =>
+        Assert.Equal(
+            ["It's removed from Logistics › Packing.", "This can't be undone."],
+            Consequences(new InfoPageDeletionImpact(Packing, [])));
+
+    [Fact]
+    public void NameTheReapedTiersShallowestFirst_WhenTheDeletionEmptiesThem_ForBuildDialogParameters() =>
+        Assert.Equal(
+            [
+                "It's removed from Logistics › Packing.",
+                "The Logistics tab and Packing sub tab disappear from the guide too.",
+                "This can't be undone."
+            ],
+            Consequences(new InfoPageDeletionImpact(
+                Packing, [new TierRef(TierKind.SubTab, "Packing"), new TierRef(TierKind.Tab, "Logistics")])));
+
+    [Fact]
+    public void DegradeThePlacementBullets_WhenTheImpactCouldNotBeLoaded_ForBuildDialogParameters() =>
+        Assert.Equal(
+            ["Its placement couldn't be loaded, so this can't say what else disappears.", "This can't be undone."],
+            Consequences(null));
+
+    private static IReadOnlyList<string> Consequences(InfoPageDeletionImpact? impact) =>
+        (IReadOnlyList<string>)InfoPageDeleteConfirmation.BuildDialogParameters("Packing List", impact)[nameof(ConfirmDialog.Consequences)]!;
 }
