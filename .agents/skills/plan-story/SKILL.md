@@ -119,8 +119,10 @@ component-scoped `.razor.css`, never global CSS (ADR-0034/0038/0040); bUnit test
 existing test infra (`RadzenTestServices`, `ApiClientTestFactory`, `FakeUserManagerFactory`,
 `IdentityTestServices`) where the story touches Blazor. Verification names real commands — `dotnet
 build`, `dotnet test <project>`, an `ef migrations has-pending-model-changes` check where the schema
-changes, `/run` under Aspire — and always ends on running `/code-review` against `main` before
-opening the PR. It opens by stating that the tests must be run, and pass, before the story is reported done
+changes, `/run` under Aspire. It always ends on this sequence: run `/code-review` against `main` before
+opening the PR, resolve the review findings and any PR comments, merge `origin/main` into the branch,
+run the app and test it in Chrome, then, once the user is happy with the results, clean up the app and open
+the PR if there isn't one (step 8). It opens by stating that the tests must be run, and pass, before the story is reported done
 (step 8).
 
 Completion: every section above is present, and every file path is real or explicitly marked `(new)`.
@@ -176,3 +178,18 @@ All implementation, builds and test runs for the story then happen inside that w
 `docs/agents/testing.md` describes. The implementer reads the plan, not this skill, so the plan's
 `## Verification` carries both: that doc's per-project commands, and the rule that they pass before the story
 is reported done.
+
+**Resolving review comments is always followed by merging main and testing in Chrome** — once `/code-review`
+findings or PR comments are resolved:
+
+1. Merge `origin/main` into the story branch (`git fetch origin`, then `git merge origin/main`). If it brought
+   changes in, rerun the tests.
+2. Run the app and exercise the change in the browser, as `docs/agents/testing.md`'s exploratory testing section
+   describes.
+
+3. Report the results and leave the app running so the user can look. Wait for them to say they're happy.
+4. Once they are, clean up the app (stop the AppHost, close the browser tabs opened for testing, remove any
+   containers that run left behind), then commit, push and create the PR if it isn't already created.
+
+This applies to every story, test-only and backend-only ones included: drive the flow the change touches. The
+plan's `## Verification` carries these steps too.

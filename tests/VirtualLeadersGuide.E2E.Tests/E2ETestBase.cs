@@ -422,10 +422,22 @@ public abstract class E2ETestBase : PageTest
     /// <summary>The top bar's account menu button - present exactly when someone is signed in.</summary>
     protected ILocator AccountMenuButton => Page.Locator("header summary[aria-label='Account menu']");
 
-    /// <summary>Opens the account menu and clicks its "Sign out" button.</summary>
+    /// <summary>The top bar's "Sign in" link - present exactly when no one is signed in.</summary>
+    protected ILocator SignInLink => Page.Locator("header")
+        .GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = "Sign in", Exact = true });
+
+    /// <summary>
+    /// Opens the account menu, clicks its "Sign out" button and waits for the signed-out page to render.
+    /// </summary>
     /// <remarks>
     /// Scoped to the menu's Account nav because <c>Account/NoAccess</c> has a second "Sign out" button of its
     /// own - and that's where signing in with no returnUrl now leaves a User holding no Role (P2-22, #212).
+    /// <para>
+    /// Waiting matters because a caller that navigates straight away could otherwise cancel the logout POST
+    /// (P2.1-9, #222). The wait is on <see cref="SignInLink"/> rather than a URL because where the browser lands
+    /// depends on the page the form posted from: back on that page, or on <c>Account/Login</c> if it requires a
+    /// signed-in User. The header shows the link either way.
+    /// </para>
     /// </remarks>
     protected async Task ClickHeaderSignOutAsync()
     {
@@ -433,6 +445,7 @@ public abstract class E2ETestBase : PageTest
         await Page.GetByRole(AriaRole.Navigation, new PageGetByRoleOptions { Name = "Account" })
             .GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Sign out" })
             .ClickAsync();
+        await Expect(SignInLink).ToBeVisibleAsync(InteractiveVisible());
     }
 
     /// <summary>Signs the current session out via the site header's real sign-out form.</summary>
@@ -441,7 +454,8 @@ public abstract class E2ETestBase : PageTest
     /// (<c>SignOutForm.razor</c>) - clicking it, rather than clearing cookies directly, exercises the same
     /// path a real session change goes through and keeps this class's tests from assuming cookie storage
     /// details. For a Staff session the opening <c>/</c> visit redirects to <c>/dashboard</c> (P2-22, #212),
-    /// whose header carries the same form.
+    /// whose header carries the same form. Returns only once signed out - see
+    /// <see cref="ClickHeaderSignOutAsync"/>.
     /// </remarks>
     protected async Task SignOutAsync()
     {
