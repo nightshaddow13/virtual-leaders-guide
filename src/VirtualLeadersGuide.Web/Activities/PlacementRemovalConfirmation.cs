@@ -90,6 +90,16 @@ internal static class PlacementRemovalConfirmation
         return $"the {JoinNames(nouns)} {Disappear(nouns.Length)}";
     }
 
+    /// <summary>The "disappears from the guide too" bullet both delete dialogs (Activity and InfoPage) use, naming each reaped Tier.</summary>
+    /// <param name="reaped">The Tiers the deletion empties; at least one.</param>
+    /// <returns>One sentence naming every reaped Tier.</returns>
+    /// <remarks>Shallowest level first, so it reads "the Morning tab and Waterfront section" rather than inside-out.</remarks>
+    internal static string DescribeReaped(IReadOnlyList<TierRef> reaped)
+    {
+        string[] named = [.. reaped.OrderBy(tier => tier.Kind).Select(tier => $"{tier.Name} {Noun(tier.Kind)}")];
+        return $"The {JoinNames(named)} {Disappear(named.Length)} from the guide too.";
+    }
+
     /// <summary>Joins names as prose - "A", "A and B", "A, B and C" - the one list shape both removal dialogs' copy uses.</summary>
     /// <param name="names">The names to join; at least one.</param>
     internal static string JoinNames(IReadOnlyList<string> names) =>

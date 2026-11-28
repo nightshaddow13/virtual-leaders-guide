@@ -37,7 +37,7 @@
                      AlignItems="AlignItems.End" Gap="1rem" Style="margin-block-end: 1rem;">
             <div>
                 <h1>Info pages</h1>
-                <RadzenText TextStyle="TextStyle.Caption">@totalCount info pages</RadzenText>
+                <RadzenText TextStyle="TextStyle.Caption">@totalCount info pages · @placedCount placed</RadzenText>
             </div>
             <RadzenButton Text="+ New page" Click="@(() => NavigationManager.NavigateTo($"dashboard/events/{EventId}/info-pages/new"))" />
         </RadzenStack>
@@ -46,6 +46,18 @@
                          AllowPaging="true" PageSize="10" IsLoading="@isLoading" EmptyText="No Info pages yet.">
             <Columns>
                 <RadzenDataGridColumn TItem="InfoPageDto" Property="@nameof(InfoPageDto.Title)" Title="Title" Filterable="false" Sortable="false" />
+                <RadzenDataGridColumn TItem="InfoPageDto" Title="Placed on" Sortable="false" Filterable="false">
+                    <Template Context="row">
+                        @if (PathFor(row.Id) is { } path)
+                        {
+                            <RadzenBadge Text="@path.Display" BadgeStyle="BadgeStyle.Light" IsPill="true" class="ipl-chip" />
+                        }
+                        else
+                        {
+                            <span class="ipl-unplaced">Not placed</span>
+                        }
+                    </Template>
+                </RadzenDataGridColumn>
                 <RadzenDataGridColumn TItem="InfoPageDto" Sortable="false" Filterable="false" Width="@ActionColumnWidth" TextAlign="TextAlign.Center">
                     <Template Context="item">
                         <RadzenStack Orientation="Orientation.Horizontal" Gap="0.25rem" JustifyContent="JustifyContent.Center">

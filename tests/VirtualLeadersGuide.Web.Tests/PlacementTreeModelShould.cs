@@ -803,4 +803,62 @@ public class PlacementTreeModelShould
 
         Assert.Equal(expected, impact.SurvivorHeldByInfoPageOnly);
     }
+
+    [Fact]
+    public void SkipTheRowWithAMissingTab_WhenMappingPlacedInfoPages_ForPathsByInfoPage()
+    {
+        Guid tab = Guid.NewGuid();
+        Guid bare = Guid.NewGuid(), nested = Guid.NewGuid(), orphan = Guid.NewGuid();
+        var server = new PlacementTreeDto
+        {
+            Tabs = [new TabDto { Id = tab, Name = "Logistics", SortOrder = 0 }],
+            SubTabs = [new SubTabDto { Id = _roundRobin, TabId = tab, Name = "Arrival", SortOrder = 0 }],
+            InfoPagePlacements =
+            [
+                new InfoPagePlacementDto { Id = Guid.NewGuid(), InfoPageId = bare, TabId = tab },
+                new InfoPagePlacementDto { Id = Guid.NewGuid(), InfoPageId = nested, TabId = tab, SubTabId = _roundRobin },
+                new InfoPagePlacementDto { Id = Guid.NewGuid(), InfoPageId = orphan, TabId = Guid.NewGuid() }
+            ]
+        };
+
+        IReadOnlyDictionary<Guid, PlacementPath> paths = server.PathsByInfoPage();
+
+        Assert.Equal(2, paths.Count);
+        Assert.Equal("Logistics", paths[bare].Display);
+        Assert.Equal("Logistics › Arrival", paths[nested].Display);
+    }
+
+    [Fact]
+    public void ReportNoPathAndNothingReaped_WhenTheInfoPageIsNotPlaced_ForDescribeInfoPageDeletion()
+    {
+        InfoPageDeletionImpact impact = PlacementTreeModel.DescribeInfoPageDeletion(new PlacementTreeDto(), Guid.NewGuid());
+
+        Assert.Null(impact.Path);
+        Assert.Empty(impact.Reaped);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ReapOnlyWhatNothingElseUses_WhenThePlacedInfoPageIsDeleted_ForDescribeInfoPageDeletion(bool activityOnSubTab)
+    {
+        Guid tab = Guid.NewGuid();
+        Guid infoPage = Guid.NewGuid();
+        var server = new PlacementTreeDto
+        {
+            Tabs = [new TabDto { Id = tab, Name = "Logistics", SortOrder = 0 }],
+            SubTabs = [new SubTabDto { Id = _roundRobin, TabId = tab, Name = "Arrival", SortOrder = 0 }],
+            Placements = activityOnSubTab
+                ? [new PlacementDto { Id = Guid.NewGuid(), ActivityId = ThisActivity, TabId = tab, SubTabId = _roundRobin, SortOrder = 0 }]
+                : [],
+            InfoPagePlacements = [new InfoPagePlacementDto { Id = Guid.NewGuid(), InfoPageId = infoPage, TabId = tab, SubTabId = _roundRobin }]
+        };
+
+        InfoPageDeletionImpact impact = PlacementTreeModel.DescribeInfoPageDeletion(server, infoPage);
+
+        Assert.Equal("Logistics › Arrival", impact.Path!.Display);
+        Assert.Equal(
+            activityOnSubTab ? [] : [new TierRef(TierKind.SubTab, "Arrival"), new TierRef(TierKind.Tab, "Logistics")],
+            impact.Reaped);
+    }
 }

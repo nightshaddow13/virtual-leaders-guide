@@ -1,0 +1,5 @@
+/* The Info pages list's "Placed on" column (P5-25, #209; ADR-0040). */
+
+.ipl-unplaced {
+    color: var(--vlg-ink-muted);
+}

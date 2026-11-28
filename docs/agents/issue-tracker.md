@@ -13,6 +13,17 @@ Issues and PRDs for this repo live as GitHub issues. Use the `gh` CLI for all op
 
 Infer the repo from `git remote -v` — `gh` does this automatically when run inside a clone.
 
+## Known issues
+
+Misc issues — small glitches, gaps accepted when a story shipped, cleanup left over from a review — are filed as
+native sub-issues of #230 "Known issues". Planned feature work goes in the normal backlog instead.
+
+- Check #230's sub-issues for a duplicate first, and confirm the problem is still true in the code.
+- Plain title, no `P#-##` prefix. Label `needs-triage`, plus `bug` or `enhancement` when one fits.
+- Say what happens, where it was found, and whether it was reproduced.
+- Link it with `gh api --method POST repos/<owner>/<repo>/issues/230/sub_issues -F sub_issue_id=<child-db-id>`,
+  where `<child-db-id>` is the new issue's database id (see **Blocking** below).
+
 ## Pull requests as a triage surface
 
 **PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_
