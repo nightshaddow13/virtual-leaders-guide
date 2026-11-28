@@ -57,6 +57,6 @@ public class PersonalDataScenarios : E2ETestBase
             Assert.False(await Fixture.IdentityApi.ExistsAsync(email, CancellationToken.None));
 
             await Page.GotoAsync(Fixture.WebBaseUrl.ToString());
-            await Expect(Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = "Sign in" })).ToBeVisibleAsync();
+            await Expect(SignInLink).ToBeVisibleAsync();
         });
 }
