@@ -1,0 +1,10 @@
+.vlg-search-box {
+    width: min(22rem, 100%);
+    margin-block-end: 1rem;
+}
+
+/* ::deep because the input is RadzenTextBox's own markup, out of this stylesheet's isolation scope. */
+.vlg-search-box ::deep input {
+    flex: 1;
+    min-width: 0;
+}

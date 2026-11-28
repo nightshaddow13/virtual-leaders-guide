@@ -1,0 +1,10 @@
+<div class="vlg-search-box">
+    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.25rem">
+        <RadzenTextBox Value="@text" ValueChanged="OnInputAsync" Immediate="true" Placeholder="@Placeholder"
+                       aria-label="@AriaLabel" />
+        @if (!string.IsNullOrEmpty(text))
+        {
+            <RadzenButton Icon="close" ButtonStyle="ButtonStyle.Light" aria-label="Clear search" Click="ClearAsync" />
+        }
+    </RadzenStack>
+</div>

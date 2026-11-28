@@ -56,7 +56,7 @@ public class ApiEventClientShould
         ApiEventClient client = CreateClient(handler);
 
         (IReadOnlyList<EventDto> events, int total) =
-            await client.GetEventsAsync(1, 10, null, EventStatusFilter.Current, CancellationToken.None);
+            await client.GetEventsAsync(1, 10, null, EventStatusFilter.Current, null, CancellationToken.None);
 
         Assert.Single(events);
         Assert.Equal(eventId, events[0].Id);
@@ -74,7 +74,7 @@ public class ApiEventClientShould
         ApiEventClient client = CreateClient(handler);
 
         (IReadOnlyList<EventDto> events, int total) =
-            await client.GetEventsAsync(1, 10, null, EventStatusFilter.Current, CancellationToken.None);
+            await client.GetEventsAsync(1, 10, null, EventStatusFilter.Current, null, CancellationToken.None);
 
         Assert.Equal(2, events.Count);
         Assert.Equal(2, total);
@@ -91,7 +91,7 @@ public class ApiEventClientShould
         });
         ApiEventClient client = CreateClient(handler);
 
-        await client.GetEventsAsync(2, 25, "-name", EventStatusFilter.Current, CancellationToken.None);
+        await client.GetEventsAsync(2, 25, "-name", EventStatusFilter.Current, null, CancellationToken.None);
 
         Assert.NotNull(capturedRequest);
         string query = capturedRequest!.RequestUri!.Query;
@@ -111,7 +111,7 @@ public class ApiEventClientShould
         });
         ApiEventClient client = CreateClient(handler);
 
-        await client.GetEventsAsync(1, 10, null, EventStatusFilter.Current, CancellationToken.None);
+        await client.GetEventsAsync(1, 10, null, EventStatusFilter.Current, null, CancellationToken.None);
 
         Assert.DoesNotContain("filter=", capturedRequest!.RequestUri!.Query, StringComparison.Ordinal);
     }
@@ -133,10 +133,49 @@ public class ApiEventClientShould
         });
         ApiEventClient client = CreateClient(handler);
 
-        await client.GetEventsAsync(1, 10, null, status, CancellationToken.None);
+        await client.GetEventsAsync(1, 10, null, status, null, CancellationToken.None);
 
         string decodedQuery = Uri.UnescapeDataString(capturedRequest!.RequestUri!.Query);
         Assert.Contains($"filter={expectedFilter}", decodedQuery, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(EventStatusFilter.Current, "camp", "contains(name,'camp')")]
+    [InlineData(EventStatusFilter.Current, "  camp  ", "contains(name,'camp')")]
+    [InlineData(EventStatusFilter.Current, "Pack 42's", "contains(name,'Pack 42''s')")]
+    [InlineData(EventStatusFilter.Live, "camp", "and(equals(status,'Live'),contains(name,'camp'))")]
+    public async Task SendOneFilterNamingTheSearchText_WhenANameIsSupplied_ForGetEventsAsync(
+        EventStatusFilter status, string name, string expectedFilter)
+    {
+        string query = await CapturedEventsQueryAsync(status, name);
+
+        Assert.EndsWith($"&filter={expectedFilter}", query, StringComparison.Ordinal);
+        Assert.Equal(2, query.Split("filter=").Length);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task OmitTheNameFilter_WhenTheNameIsBlank_ForGetEventsAsync(string? name)
+    {
+        string query = await CapturedEventsQueryAsync(EventStatusFilter.Current, name);
+
+        Assert.DoesNotContain("filter=", query, StringComparison.Ordinal);
+    }
+
+    private static async Task<string> CapturedEventsQueryAsync(EventStatusFilter status, string? name)
+    {
+        HttpRequestMessage? capturedRequest = null;
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            capturedRequest = request;
+            return JsonApiResponse(HttpStatusCode.OK, new { data = Array.Empty<object>() });
+        });
+
+        await CreateClient(handler).GetEventsAsync(1, 10, null, status, name, CancellationToken.None);
+
+        return Uri.UnescapeDataString(capturedRequest!.RequestUri!.Query);
     }
 
     [Fact]
@@ -596,7 +635,7 @@ public class ApiEventClientShould
         ApiEventClient client = CreateClient(handler);
 
         await Assert.ThrowsAsync<EventDataUnavailableException>(
-            () => client.GetEventsAsync(1, 10, null, EventStatusFilter.Current, CancellationToken.None));
+            () => client.GetEventsAsync(1, 10, null, EventStatusFilter.Current, null, CancellationToken.None));
     }
 
     [Fact]
@@ -606,7 +645,7 @@ public class ApiEventClientShould
         ApiEventClient client = CreateClient(handler);
 
         await Assert.ThrowsAsync<EventDataUnavailableException>(
-            () => client.GetEventsAsync(1, 10, null, EventStatusFilter.Current, CancellationToken.None));
+            () => client.GetEventsAsync(1, 10, null, EventStatusFilter.Current, null, CancellationToken.None));
     }
 
     private static ApiEventClient CreateClient(HttpMessageHandler apiHandler) =>

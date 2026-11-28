@@ -42,6 +42,11 @@ public sealed class ApiEventClient(InternalApiClient apiClient)
     /// Which Statuses to include - defaults to <see cref="EventStatusFilter.Current"/> (Draft plus
     /// not-yet-elapsed Live), matching the Dashboard's default view.
     /// </param>
+    /// <param name="nameContains">
+    /// Narrows to Events whose Name contains this text, or <see langword="null"/>/blank for no name filter.
+    /// ANDs with <paramref name="status"/>. Matching ignores case only because of SQL Server's collation
+    /// (ADR-0053's amendment, P2.1-8, #205).
+    /// </param>
     /// <param name="cancellationToken">Propagated to the underlying HTTP call.</param>
     /// <returns>
     /// The page of Events, and the total count of Events visible to the caller across all pages - never
@@ -49,9 +54,11 @@ public sealed class ApiEventClient(InternalApiClient apiClient)
     /// Events (possibly empty) rather than denied (ADR-0031).
     /// </returns>
     public async Task<(IReadOnlyList<EventDto> Events, int Total)> GetEventsAsync(
-        int pageNumber, int pageSize, string? sort, EventStatusFilter status, CancellationToken cancellationToken)
+        int pageNumber, int pageSize, string? sort, EventStatusFilter status, string? nameContains,
+        CancellationToken cancellationToken)
     {
-        using var request = NewRequest(HttpMethod.Get, BuildCollectionUri(pageNumber, pageSize, sort, status));
+        using var request = NewRequest(
+            HttpMethod.Get, BuildCollectionUri(pageNumber, pageSize, sort, status, nameContains));
         using HttpResponseMessage response = await SendAsync(request, cancellationToken);
 
         EnsureExpectedStatus(response, HttpStatusCode.OK);
@@ -344,8 +351,13 @@ public sealed class ApiEventClient(InternalApiClient apiClient)
     /// nothing to ask for. <see cref="EventStatusFilter.All"/> asks for every Status explicitly, since
     /// omitting the filter would ask for Current instead, not everything. Every value is PascalCase on the
     /// wire - Api's filter parser is case-sensitive (ADR-0053).
+    ///
+    /// A name search and a Status choice go into one <c>and(...)</c>, never two <c>filter=</c> parameters -
+    /// JsonApiDotNetCore ORs repeated parameters at the same scope. A quote in the search text is doubled, the
+    /// filter syntax's own escape.
     /// </remarks>
-    private static string BuildCollectionUri(int pageNumber, int pageSize, string? sort, EventStatusFilter status)
+    private static string BuildCollectionUri(
+        int pageNumber, int pageSize, string? sort, EventStatusFilter status, string? nameContains)
     {
         string uri = $"{EventsPath}?page[number]={pageNumber}&page[size]={pageSize}";
 
@@ -364,6 +376,12 @@ public sealed class ApiEventClient(InternalApiClient apiClient)
             EventStatusFilter.Cancelled => "equals(status,'Cancelled')",
             _ => throw new ArgumentOutOfRangeException(nameof(status), status, null)
         };
+
+        if (!string.IsNullOrWhiteSpace(nameContains))
+        {
+            string nameFilter = $"contains(name,'{nameContains.Trim().Replace("'", "''")}')";
+            filter = filter is null ? nameFilter : $"and({filter},{nameFilter})";
+        }
 
         if (filter is not null)
         {

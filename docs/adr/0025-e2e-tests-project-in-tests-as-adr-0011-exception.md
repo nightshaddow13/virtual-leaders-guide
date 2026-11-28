@@ -53,7 +53,7 @@ test framework now owns that stack (see [ADR-0075](0075-e2e-stack-lifetime-is-ow
 so no class joins a collection to share it - each class is its own collection and the classes run in parallel.
 
 - `AspireE2ECollection` is gone, replaced by a fixture-less `NonParallelE2ECollection` that only disables
-  parallelization (used by `EventManagementScenarios` until P2.1-8, #205).
+  parallelization (used by `EventManagementScenarios` until P2.1-8, #205, which deleted it).
 - "A reviewer has to catch a second stack" is no longer true: `AspireE2EFixture`'s constructor is `internal`,
   so declaring it as a class or collection fixture fails at run start.
 - The remaining rule is the original one, restated: never boot a second Aspire stack, because of the fixed

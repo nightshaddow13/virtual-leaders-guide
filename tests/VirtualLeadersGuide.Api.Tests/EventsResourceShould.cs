@@ -43,6 +43,12 @@ namespace VirtualLeadersGuide.Api.Tests;
 /// <c>LeavePasscodeVersionUnchanged_WhenAPatchResendsTheSamePasscode_ForPatch</c> is the regression test for
 /// exactly that; an ordinary Save that never names Passcode at all is the separate, simpler case right after it.
 /// </remarks>
+/// <remarks>
+/// Name filtering (P2.1-8, #205): every fragment matches the stored case on purpose, since EF Core's SQLite
+/// provider translates <c>contains</c> case-sensitively - ignoring case is proven in
+/// <c>VirtualLeadersGuide.E2E.Tests</c> (ADR-0053). The repeated-<c>filter=</c> test is why <c>ApiEventClient</c> composes
+/// one <c>and(...)</c>: JsonApiDotNetCore ORs repeated parameters.
+/// </remarks>
 public class EventsResourceShould : IAsyncLifetime
 {
     private const string JsonApiMediaType = "application/vnd.api+json";
@@ -876,6 +882,88 @@ public class EventsResourceShould : IAsyncLifetime
         string[] ids = document.RootElement.GetProperty("data").EnumerateArray()
             .Select(e => e.GetProperty("id").GetString()!).ToArray();
         Assert.Contains(live.Id.ToString(), ids);
+    }
+
+    [Fact]
+    public async Task ReturnOnlyMatchingEvents_WhenFilteringOnNameContains_ForGetCollection()
+    {
+        Event match = await _factory.CreateEventAsync(name: $"Camporee {Guid.NewGuid()}");
+        Event other = await _factory.CreateEventAsync(name: $"Klondike {Guid.NewGuid()}");
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(
+            client, HttpMethod.Get, "/api/events?filter=contains(name,'Camporee')&page[size]=100");
+
+        string[] ids = await IdsOfAsync(response);
+        Assert.Contains(match.Id.ToString(), ids);
+        Assert.DoesNotContain(other.Id.ToString(), ids);
+    }
+
+    [Fact]
+    public async Task ReturnOnlyTheAssignedMatch_WhenADirectorFiltersOnNameContains_ForGetCollection()
+    {
+        string shared = $"Shared {Guid.NewGuid():n}";
+        Event assigned = await _factory.CreateEventAsync(name: $"{shared} A");
+        await _factory.CreateEventAsync(name: $"{shared} B");
+        using HttpClient client = DirectorClient(assigned.Id);
+
+        HttpResponseMessage response = await SendAsync(
+            client, HttpMethod.Get, $"/api/events?filter=contains(name,'{shared}')");
+
+        Assert.Equal([assigned.Id.ToString()], await IdsOfAsync(response));
+    }
+
+    [Fact]
+    public async Task HideACancelledMatch_WhenFilteringOnNameContainsWithNoStatusFilter_ForGetCollection()
+    {
+        string shared = $"Shared {Guid.NewGuid():n}";
+        Event draft = await _factory.CreateEventAsync(name: $"{shared} A");
+        await _factory.CreateEventAsync(name: $"{shared} B", status: EventStatus.Cancelled);
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(
+            client, HttpMethod.Get, $"/api/events?filter=contains(name,'{shared}')");
+
+        Assert.Equal([draft.Id.ToString()], await IdsOfAsync(response));
+    }
+
+    [Fact]
+    public async Task ApplyBothTerms_WhenAStatusAndANameAreComposedWithAnd_ForGetCollection()
+    {
+        string shared = $"Shared {Guid.NewGuid():n}";
+        await _factory.CreateEventAsync(name: $"{shared} A");
+        Event cancelled = await _factory.CreateEventAsync(name: $"{shared} B", status: EventStatus.Cancelled);
+        await _factory.CreateEventAsync(status: EventStatus.Cancelled);
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(
+            client, HttpMethod.Get, $"/api/events?filter=and(equals(status,'Cancelled'),contains(name,'{shared}'))");
+
+        Assert.Equal([cancelled.Id.ToString()], await IdsOfAsync(response));
+    }
+
+    [Fact]
+    public async Task MatchEitherTerm_WhenTheFilterParameterIsRepeated_ForGetCollection()
+    {
+        string shared = $"Shared {Guid.NewGuid():n}";
+        Event named = await _factory.CreateEventAsync(name: $"{shared} A");
+        Event cancelled = await _factory.CreateEventAsync(status: EventStatus.Cancelled);
+        using HttpClient client = AdminClient();
+
+        HttpResponseMessage response = await SendAsync(
+            client, HttpMethod.Get, $"/api/events?filter=equals(status,'Cancelled')&filter=contains(name,'{shared}')");
+
+        string[] ids = await IdsOfAsync(response);
+        Assert.Contains(named.Id.ToString(), ids);
+        Assert.Contains(cancelled.Id.ToString(), ids);
+    }
+
+    private static async Task<string[]> IdsOfAsync(HttpResponseMessage response)
+    {
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using JsonDocument document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return document.RootElement.GetProperty("data").EnumerateArray()
+            .Select(e => e.GetProperty("id").GetString()!).ToArray();
     }
 
     [Fact]

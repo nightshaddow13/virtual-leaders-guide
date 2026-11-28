@@ -22,10 +22,12 @@
         }
     </RadzenStack>
 
+    <SearchBox Placeholder="Search by name..." AriaLabel="Search by name" SearchChanged="OnNameSearchChangedAsync" />
+
     <RadzenDataGrid @ref="grid" TItem="EventDto" Data="@events" Count="@totalCount" LoadData="@LoadDataAsync"
                      AllowPaging="true" PageSize="10" AllowSorting="true" AllowFiltering="true"
                      FilterMode="FilterMode.Simple" IsLoading="@isLoading"
-                     EmptyText="@(accessView.IsAdmin ? "No Events yet." : "No Events are assigned to you yet.")">
+                     EmptyText="@EmptyText()">
         <Columns>
             <RadzenDataGridColumn TItem="EventDto" Property="@nameof(EventDto.Name)" Title="Name" Filterable="false" />
             <RadzenDataGridColumn TItem="EventDto" Property="@nameof(EventDto.Slug)" Title="Event address" Filterable="false">
