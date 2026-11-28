@@ -93,6 +93,9 @@ public partial class Dashboard
     private bool isLoading;
     private string? loadErrorMessage;
     private string? deleteErrorMessage;
+    private string nameSearch = "";
+    private string shownSearch = "";
+    private int loadSequence;
 
     /// <remarks>
     /// Starts UTC and is replaced once <see cref="OnAfterRenderAsync"/> resolves the real one - grid rows
@@ -145,9 +148,14 @@ public partial class Dashboard
     /// callback crashes the whole Blazor Server circuit (there's no per-request failure page to fall back
     /// to under <c>InteractiveServer</c>) - a transient Api outage should show an inline message, not take
     /// the page down.
+    ///
+    /// Latest wins (P2.1-8, #205): loads can overlap while a name is being typed, and responses needn't come
+    /// back in order, so a result - or a failure - that a newer load has overtaken is dropped.
     /// </remarks>
     private async Task LoadDataAsync(LoadDataArgs args)
     {
+        int sequence = ++loadSequence;
+        string search = nameSearch;
         isLoading = true;
         loadErrorMessage = null;
 
@@ -157,20 +165,52 @@ public partial class Dashboard
 
         try
         {
-            (IReadOnlyList<EventDto> pageEvents, int total) =
-                await EventClient.GetEventsAsync(pageNumber, pageSize, sort, statusFilter, CancellationToken.None);
+            (IReadOnlyList<EventDto> pageEvents, int total) = await EventClient.GetEventsAsync(
+                pageNumber, pageSize, sort, statusFilter, search, CancellationToken.None);
+
+            if (sequence != loadSequence)
+            {
+                return;
+            }
 
             events = pageEvents;
+            shownSearch = search;
             totalCount = total;
         }
         catch (EventDataUnavailableException)
         {
+            if (sequence != loadSequence)
+            {
+                return;
+            }
+
             events = [];
             totalCount = 0;
+            shownSearch = "";
             loadErrorMessage = "Something went wrong loading Events. Try refreshing the page.";
         }
 
         isLoading = false;
+    }
+
+    private async Task OnNameSearchChangedAsync(string text)
+    {
+        nameSearch = text;
+        await grid!.FirstPage(forceReload: true);
+    }
+
+    /// <remarks>
+    /// Quotes the search the shown rows answer, not the one being typed, so "no match" is never claimed before
+    /// Api has answered, or when it failed to.
+    /// </remarks>
+    private string EmptyText()
+    {
+        if (shownSearch.Length > 0)
+        {
+            return $"No Events match “{shownSearch}”.";
+        }
+
+        return accessView!.IsAdmin ? "No Events yet." : "No Events are assigned to you yet.";
     }
 
     /// <remarks>

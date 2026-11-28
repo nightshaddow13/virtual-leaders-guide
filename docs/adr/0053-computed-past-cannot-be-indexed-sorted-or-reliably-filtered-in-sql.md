@@ -1,3 +1,7 @@
+---
+status: amended by P2.1-8 (#205) — adds name filtering's own SQLite/SQL Server split; see the amendment below
+---
+
 # Computed `Past` can't be indexed, sorted by, or reliably filtered at the SQL level
 
 ADR-0044 designed `Event.Status` around `Past` being computed at read time rather than stored, and left two
@@ -132,3 +136,14 @@ lowercase example is informal, not literal.
   (`Draft`/`Live`/`Past`/`Cancelled`). A future enum added to this Api that also needs JSON:API filtering
   inherits the same PascalCase constraint from the same framework version, not something specific to
   `Event.Status`.
+
+## Amendment (P2.1-8, #205)
+
+The Events dashboard filters by name with `contains(name,'…')`. It ignores case only because of SQL Server's
+default (case-insensitive) collation - nothing in the app asks for it. EF Core's SQLite provider translates
+`Contains` case-sensitively, so the SQLite-backed Api suite uses same-case fragments and the case-insensitive
+behaviour is proven in `VirtualLeadersGuide.E2E.Tests` against the real engine - the same split this ADR already
+makes for `Past`.
+
+The name term is composed with a Status term inside one `and(...)`: JsonApiDotNetCore ORs repeated `filter=`
+parameters at the same scope.

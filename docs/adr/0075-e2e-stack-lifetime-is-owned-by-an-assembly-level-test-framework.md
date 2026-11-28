@@ -1,3 +1,7 @@
+---
+status: amended by P2.1-8 (#205) — no class runs outside the parallel phase any more; see the amendment below
+---
+
 # The E2E stack's lifetime is owned by an assembly-level xUnit test framework
 
 `VirtualLeadersGuide.E2E.Tests` used to share one Aspire stack by putting every test class in a single xUnit
@@ -32,10 +36,7 @@ The decisions that are easy to get wrong:
   through a public constructor, so re-adding `ICollectionFixture<AspireE2EFixture>` or
   `IClassFixture<AspireE2EFixture>` fails at run start instead of quietly booting a second stack. This turns
   ADR-0025's "a reviewer has to catch it" into an enforced rule.
-- **`EventManagementScenarios` runs alone, after the parallel phase**, through a fixture-less
-  `NonParallelE2ECollection` (`DisableParallelization = true`): its Admin-grid row lookups assume the Event it
-  just made is on page 1, which other classes creating Events concurrently can break. P2.1-8 (#205) removes
-  that dependence and the collection with it.
+- **`EventManagementScenarios` no longer runs alone** - see "Amendment (P2.1-8, #205)" below.
 - **Parallel is opt-in; the default cap is 1.** The ticket asked for four parallel classes to be measurably
   faster than serial. On the development machine (8 logical cores, 16 GB) they were not: with tracing off, serial
   took 1m52s and 1m45s and the `0.5x` cap (4 threads) took 2m12s and 1m49s, all 77 tests passing; and before
@@ -56,8 +57,8 @@ The decisions that are easy to get wrong:
   failure, in two different tests (a 30s timeout waiting for `#Name`, and a table row that did not appear within
   15s); 0 of 9 at cap 4 did (a tenth run was discarded because the laptop entered standby). 4 was chosen as the
   cautious option for about 2s per run. **The evidence is thin:** that difference could easily be chance, so if
-  either test fails at 4, suspect the test, not the cap. The remaining speed levers are the serial
-  `EventManagementScenarios` tail (#205) and the stack boot. This machine is the only one the suite is expected to
+  either test fails at 4, suspect the test, not the cap. The remaining speed levers at the time were the serial
+  `EventManagementScenarios` tail (since removed, #205) and the stack boot. This machine is the only one the suite is expected to
   run on; on a smaller one, pass `-- xUnit.MaxParallelThreads=1` to go back to serial.
 - **Appends to the shared artifact logs go through one lock** (`E2EArtifactLog`). Concurrent tests can write
   `CAPTURE_ERRORS.txt` / `TOO_LONG.txt` at the same moment, and an `IOException` there would escape
@@ -85,10 +86,19 @@ The decisions that are easy to get wrong:
 - The runner overrides `Aspire*` types from `xunit.execution`, which `xunit` brings in transitively. It is
   xUnit v2 API and will need rewriting if ADR-0060's hold-back on `xunit` is ever lifted.
 - A new E2E test class needs no collection attribute and no constructor: derive from `E2ETestBase` and it runs
-  in parallel with the others. A class that cannot run alongside others joins `NonParallelE2ECollection`.
+  in parallel with the others.
 - Per-test data must stay isolated from other concurrently running classes (ADR-0039's "always create your
   own"); the `emails/` copy in a failed test's artifacts can include other tests' emails, which is noisy but
   harmless.
 - The same framework wraps every test case so a failed one is rerun once for evidence, which is also how a
   trace and video are produced without recording every test - see
   [ADR-0076](0076-a-failed-e2e-test-is-rerun-once-with-a-trace-and-video-for-evidence.md).
+
+## Amendment (P2.1-8, #205)
+
+`EventManagementScenarios` used to run alone, after the parallel phase, through a fixture-less
+`NonParallelE2ECollection` (`DisableParallelization = true`): its Admin-grid row lookups assumed the Event it
+had just made was on page 1, which other classes creating Events concurrently could break. The dashboard now
+has a name filter, the class narrows to its own guid-suffixed Event before asserting on rows, and it runs in the
+parallel phase. The collection is deleted. A class that cannot run alongside others should first narrow what it
+looks at; if that is impossible, it needs its own non-parallel collection and a stated reason.

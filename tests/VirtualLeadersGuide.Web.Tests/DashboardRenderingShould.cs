@@ -1,9 +1,12 @@
 using System.Net;
+using System.Net.Http.Json;
 using AngleSharp.Dom;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
+using Radzen.Blazor;
 using VirtualLeadersGuide.Web.Components.Pages;
+using VirtualLeadersGuide.Web.Components.Shared;
 using VirtualLeadersGuide.Web.Events;
 using VirtualLeadersGuide.Web.Time;
 
@@ -27,6 +30,10 @@ namespace VirtualLeadersGuide.Web.Tests;
 /// expected escaped query values independently from <see cref="EventResource"/>'s own fixture dates, rather
 /// than calling <c>BuildDuplicateUrl</c> itself - that's deliberate, not an oversight to simplify later:
 /// calling the same production helper the assertion is checking would make the test tautological.
+/// </remarks>
+/// <remarks>
+/// Name search (P2.1-8, #205): the older-answers-last test holds the "sp" response back until "spl" has been
+/// answered, the order a slow first request produces.
 /// </remarks>
 public class DashboardRenderingShould : BunitContext
 {
@@ -343,6 +350,146 @@ public class DashboardRenderingShould : BunitContext
         IRenderedComponent<Dashboard> cut = RenderWithOneLiveEvent("Admin");
 
         Assert.Equal("edit", cut.Find("button[aria-label='Edit']").TextContent.Trim());
+    }
+
+    [Theory]
+    [InlineData("Admin")]
+    [InlineData("Director")]
+    public void OfferTheNameSearch_WhenTheViewerIsStaff_ForRender(string role)
+    {
+        IRenderedComponent<Dashboard> cut = RenderWithOneLiveEvent(role);
+
+        Assert.NotNull(cut.Find("input[aria-label='Search by name']"));
+    }
+
+    [Fact]
+    public async Task ReloadTheFirstPageWithTheNameFilter_WhenTheSearchChanges_ForOnNameSearchChangedAsync()
+    {
+        var queries = new List<string>();
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            queries.Add(Uri.UnescapeDataString(request.RequestUri!.Query));
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new
+                {
+                    data = new[] { EventResource("Fall Camporee", "fall-camporee") },
+                    meta = new { total = 25 }
+                })
+            };
+        });
+        IRenderedComponent<Dashboard> cut = RenderAsAdmin(handler);
+        await cut.InvokeAsync(() => cut.FindComponent<RadzenDataGrid<EventDto>>().Instance.GoToPage(1, true));
+        Assert.Contains("page[number]=2", queries[^1], StringComparison.Ordinal);
+
+        await SearchAsync(cut, "camp");
+
+        Assert.Contains("page[number]=1&", queries[^1], StringComparison.Ordinal);
+        Assert.Contains("filter=contains(name,'camp')", queries[^1], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task NameTheSearchTextInTheEmptyGrid_WhenNothingMatches_ForEmptyText()
+    {
+        IRenderedComponent<Dashboard> cut = RenderAsAdmin(
+            StubHttpMessageHandler.RespondingWithJson(HttpStatusCode.OK, new { data = Array.Empty<object>() }));
+        Assert.Contains("No Events yet.", cut.Markup, StringComparison.Ordinal);
+
+        await SearchAsync(cut, "zzz");
+
+        Assert.Contains("No Events match “zzz”.", cut.Find("tbody").TextContent, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task KeepTheNewestResults_WhenAnOlderSearchAnswersLast_ForLoadDataAsync()
+    {
+        var older = new TaskCompletionSource<HttpResponseMessage>();
+        IRenderedComponent<Dashboard> cut = RenderAsAdmin(new DeferringHandler(request =>
+        {
+            string query = Uri.UnescapeDataString(request.RequestUri!.Query);
+            if (query.Contains("'sp')", StringComparison.Ordinal))
+            {
+                return older.Task;
+            }
+
+            return Task.FromResult(EventsResponse(
+                query.Contains("'spl')", StringComparison.Ordinal) ? "Splashoree" : "Fall Camporee"));
+        }));
+
+        Task olderSearch = SearchAsync(cut, "sp");
+        await SearchAsync(cut, "spl");
+        older.SetResult(EventsResponse("Spring Fling"));
+        await olderSearch;
+
+        Assert.Contains("Splashoree", cut.Markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("Spring Fling", cut.Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ReloadWithoutTheNameFilter_WhenTheSearchIsCleared_ForOnNameSearchChangedAsync()
+    {
+        var queries = new List<string>();
+        IRenderedComponent<Dashboard> cut = RenderAsAdmin(new StubHttpMessageHandler(request =>
+        {
+            string query = Uri.UnescapeDataString(request.RequestUri!.Query);
+            queries.Add(query);
+            return EventsResponse(query.Contains("filter=", StringComparison.Ordinal) ? "Splashoree" : "Fall Camporee");
+        }));
+        await SearchAsync(cut, "spl");
+
+        await SearchAsync(cut, "");
+
+        Assert.DoesNotContain("filter=", queries[^1], StringComparison.Ordinal);
+        Assert.Contains("Fall Camporee", cut.Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task NotClaimNoMatch_WhileTheSearchIsStillUnanswered_ForEmptyText()
+    {
+        var answer = new TaskCompletionSource<HttpResponseMessage>();
+        IRenderedComponent<Dashboard> cut = RenderAsAdmin(new DeferringHandler(request =>
+            request.RequestUri!.Query.Contains("filter=", StringComparison.Ordinal)
+                ? answer.Task
+                : Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new { data = Array.Empty<object>() })
+                })));
+
+        Task search = SearchAsync(cut, "zzz");
+        cut.Render();
+
+        Assert.DoesNotContain("No Events match", cut.Markup, StringComparison.Ordinal);
+        answer.SetResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = JsonContent.Create(new { data = Array.Empty<object>() })
+        });
+        await search;
+        Assert.Contains("No Events match “zzz”.", cut.Markup, StringComparison.Ordinal);
+    }
+
+    private static HttpResponseMessage EventsResponse(string name) => new(HttpStatusCode.OK)
+    {
+        Content = JsonContent.Create(new { data = new[] { EventResource(name, "slug") } })
+    };
+
+    private static Task SearchAsync(IRenderedComponent<Dashboard> cut, string text) =>
+        cut.InvokeAsync(() => cut.FindComponent<SearchBox>().Instance.SearchChanged.InvokeAsync(text));
+
+    private IRenderedComponent<Dashboard> RenderAsAdmin(HttpMessageHandler handler)
+    {
+        Services.AddSingleton(ApiClientTestFactory.CreateEventClient(handler));
+        Bunit.TestDoubles.BunitAuthorizationContext auth = this.AddAuthorization();
+        auth.SetAuthorized("admin-1");
+        auth.SetRoles("Admin");
+
+        return Render<Dashboard>();
+    }
+
+    private sealed class DeferringHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> responder)
+        : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken) => responder(request);
     }
 
     private IRenderedComponent<Dashboard> RenderWithOneLiveEvent(string role)

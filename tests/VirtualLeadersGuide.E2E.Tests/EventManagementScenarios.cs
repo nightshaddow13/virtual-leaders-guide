@@ -41,8 +41,12 @@ namespace VirtualLeadersGuide.E2E.Tests;
 /// read directly off the source's own edit form rather than re-derived, so the "never the source's" comparison
 /// is against what the source actually has, not an assumption about what it should be.
 /// </remarks>
-/// <remarks>Runs alone, after the parallel classes - see <see cref="NonParallelE2ECollection"/> for why, and for when this attribute goes.</remarks>
-[Collection(nameof(NonParallelE2ECollection))]
+/// <remarks>
+/// Every dashboard row lookup narrows the grid by the Event's own guid-suffixed name first (P2.1-8, #205):
+/// other classes create Events concurrently and can push a row off the first page. The upper-cased search
+/// scenario is also the only proof the name filter ignores case - the SQLite-backed Api suite can't give it
+/// (ADR-0053).
+/// </remarks>
 public class EventManagementScenarios : E2ETestBase
 {
     [Fact(DisplayName = "Given a signed-in Admin, when creating an Event with only a name, then it appears in the Events list")]
@@ -52,8 +56,8 @@ public class EventManagementScenarios : E2ETestBase
             await SignInAsAdminAsync();
             (_, string name) = await CreateEventAsync("Summer Camporee");
 
-            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
-            await Expect(Page.GetByText(name)).ToBeVisibleAsync(
+            await GoToDashboardFilteredByNameAsync(name);
+            await Expect(EventRow(name)).ToBeVisibleAsync(
                 InteractiveVisible());
         });
 
@@ -100,7 +104,8 @@ public class EventManagementScenarios : E2ETestBase
                 new Uri(Fixture.WebBaseUrl, "dashboard").ToString(),
                 InteractiveUrl());
 
-            ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = name });
+            await FilterDashboardByNameAsync(name);
+            ILocator row = EventRow(name);
             await Expect(row.GetByText("JUN 12")).ToBeVisibleAsync(
                 InteractiveVisible());
         });
@@ -146,8 +151,8 @@ public class EventManagementScenarios : E2ETestBase
             await SignInAsAdminAsync();
             (_, string name) = await CreateEventAsync("To Delete");
 
-            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
-            ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = name });
+            await GoToDashboardFilteredByNameAsync(name);
+            ILocator row = EventRow(name);
             await row.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Delete" }).ClickAsync();
 
             ILocator dialog = Page.Locator(".rz-dialog-content");
@@ -165,8 +170,8 @@ public class EventManagementScenarios : E2ETestBase
             await SignInAsAdminAsync();
             (_, string name) = await CreateEventAsync("Not Deleted");
 
-            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
-            ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = name });
+            await GoToDashboardFilteredByNameAsync(name);
+            ILocator row = EventRow(name);
             await row.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Delete" }).ClickAsync();
 
             ILocator dialog = Page.Locator(".rz-dialog-content");
@@ -174,7 +179,7 @@ public class EventManagementScenarios : E2ETestBase
             await dialog.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Cancel" }).ClickAsync();
 
             await Expect(dialog).Not.ToBeVisibleAsync();
-            await Expect(Page.GetByText(name)).ToBeVisibleAsync(
+            await Expect(EventRow(name)).ToBeVisibleAsync(
                 InteractiveVisible());
         });
 
@@ -189,13 +194,14 @@ public class EventManagementScenarios : E2ETestBase
 
             await CreateAndSignInDirectorAsync(assignedEventId);
 
-            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
+            await GoToDashboardFilteredByNameAsync(assignedName);
 
             await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = "My events", Exact = true }))
                 .ToBeVisibleAsync(InteractiveVisible());
-            await Expect(Page.GetByText(assignedName)).ToBeVisibleAsync(
+            await Expect(EventRow(assignedName)).ToBeVisibleAsync(
                 InteractiveVisible());
-            await Expect(Page.GetByText(unassignedName)).Not.ToBeVisibleAsync();
+            await FilterDashboardByNameAsync(unassignedName);
+            await Expect(NoMatchMessage()).ToBeVisibleAsync(InteractiveVisible());
             await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "+ New event" })).Not.ToBeVisibleAsync();
 
             await Page.GotoAsync(EventEditorUrl(assignedEventId));
@@ -215,8 +221,8 @@ public class EventManagementScenarios : E2ETestBase
 
             await CreateAndSignInDirectorAsync(assignedEventId);
 
-            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
-            ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = assignedName });
+            await GoToDashboardFilteredByNameAsync(assignedName);
+            ILocator row = EventRow(assignedName);
             await Expect(row).ToBeVisibleAsync(InteractiveVisible());
             await Expect(row.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Delete" })).Not.ToBeVisibleAsync();
 
@@ -272,8 +278,8 @@ public class EventManagementScenarios : E2ETestBase
             await Expect(Page.GetByText("LIVE", new PageGetByTextOptions { Exact = true })).ToBeVisibleAsync(
                 InteractiveVisible());
 
-            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
-            ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = name });
+            await GoToDashboardFilteredByNameAsync(name);
+            ILocator row = EventRow(name);
             await Expect(row.GetByText("LIVE", new LocatorGetByTextOptions { Exact = true })).ToBeVisibleAsync(
                 InteractiveVisible());
         });
@@ -297,12 +303,12 @@ public class EventManagementScenarios : E2ETestBase
             await Expect(Page.GetByText("CANCELLED", new PageGetByTextOptions { Exact = true })).ToBeVisibleAsync(
                 InteractiveVisible());
 
-            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
-            await Expect(Page.GetByText(name)).Not.ToBeVisibleAsync();
+            await GoToDashboardFilteredByNameAsync(name);
+            await Expect(NoMatchMessage()).ToBeVisibleAsync(InteractiveVisible());
 
             await FilterDashboardByStatusAsync("Cancelled");
 
-            ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = name });
+            ILocator row = EventRow(name);
             await Expect(row).ToBeVisibleAsync(InteractiveVisible());
             await Expect(row.GetByText("CANCELLED", new LocatorGetByTextOptions { Exact = true })).ToBeVisibleAsync();
         });
@@ -353,8 +359,8 @@ public class EventManagementScenarios : E2ETestBase
             await Expect(Page.GetByText("PAST", new PageGetByTextOptions { Exact = true })).ToBeVisibleAsync(
                 InteractiveVisible());
 
-            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
-            await Expect(Page.GetByText(name)).Not.ToBeVisibleAsync();
+            await GoToDashboardFilteredByNameAsync(name);
+            await Expect(NoMatchMessage()).ToBeVisibleAsync(InteractiveVisible());
         });
 
     [Fact(DisplayName = "Given a Live Event with dates set, when an Admin duplicates it, then the new Event pre-fills the dates, needs its own Name, and lands Draft with a fresh Slug and Passcode")]
@@ -379,8 +385,8 @@ public class EventManagementScenarios : E2ETestBase
             string sourceSlug = await Page.Locator("#Slug").InputValueAsync();
             string sourcePasscode = await Page.Locator("#Passcode").InputValueAsync();
 
-            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
-            ILocator sourceRow = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = sourceName });
+            await GoToDashboardFilteredByNameAsync(sourceName);
+            ILocator sourceRow = EventRow(sourceName);
             await sourceRow.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Duplicate" }).ClickAsync();
 
             await Expect(Page).ToHaveURLAsync(
@@ -420,8 +426,8 @@ public class EventManagementScenarios : E2ETestBase
 
             await CreateAndSignInDirectorAsync(assignedEventId);
 
-            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
-            ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = assignedName });
+            await GoToDashboardFilteredByNameAsync(assignedName);
+            ILocator row = EventRow(assignedName);
             await Expect(row).ToBeVisibleAsync(InteractiveVisible());
             await Expect(row.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Duplicate" })).Not.ToBeVisibleAsync();
         });
@@ -434,7 +440,7 @@ public class EventManagementScenarios : E2ETestBase
             (Guid eventId, string name) = await CreateEventAsync("Open Guide");
             string slug = await GoLiveAsync(eventId);
 
-            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
+            await GoToDashboardFilteredByNameAsync(name);
 
             await ExpectOpenGuideToShowAsync(name, slug, "haven't been added yet");
         });
@@ -452,7 +458,7 @@ public class EventManagementScenarios : E2ETestBase
             await Expect(Page).ToHaveURLAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString(), InteractiveUrl());
             string slug = await GoLiveAsync(eventId);
 
-            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
+            await GoToDashboardFilteredByNameAsync(name);
             await FilterDashboardByStatusAsync("Past");
 
             await ExpectOpenGuideToShowAsync(name, slug, "haven't been added yet");
@@ -472,7 +478,7 @@ public class EventManagementScenarios : E2ETestBase
             await Expect(Page.GetByText("CANCELLED", new PageGetByTextOptions { Exact = true })).ToBeVisibleAsync(
                 InteractiveVisible());
 
-            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
+            await GoToDashboardFilteredByNameAsync(name);
             await FilterDashboardByStatusAsync("Cancelled");
 
             await ExpectOpenGuideToShowAsync(name, slug, "This event was cancelled");
@@ -488,7 +494,7 @@ public class EventManagementScenarios : E2ETestBase
             await SignOutAsync();
 
             await CreateAndSignInDirectorAsync(eventId);
-            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
+            await GoToDashboardFilteredByNameAsync(name);
 
             await ExpectOpenGuideToShowAsync(name, slug, "haven't been added yet");
         });
@@ -500,8 +506,8 @@ public class EventManagementScenarios : E2ETestBase
             await SignInAsAdminAsync();
             (_, string name) = await CreateEventAsync("Draft Guide");
 
-            await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
-            ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = name });
+            await GoToDashboardFilteredByNameAsync(name);
+            ILocator row = EventRow(name);
             ILocator openGuide = row.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Open guide" });
             await Expect(openGuide).ToBeVisibleAsync(InteractiveVisible());
 
@@ -528,6 +534,80 @@ public class EventManagementScenarios : E2ETestBase
                 .ToBeVisibleAsync();
         });
 
+    [Fact(DisplayName = "Given an existing Event, when an Admin searches part of its name in a different case, then only it is listed until the search is cleared")]
+    public async Task GivenAnExistingEvent_WhenAnAdminSearchesPartOfItsNameInADifferentCase_ThenOnlyItIsListedUntilTheSearchIsCleared() =>
+        await RunAsync(async () =>
+        {
+            await SignInAsAdminAsync();
+            (_, string name) = await CreateEventAsync("Name Search");
+            await CreateEventAsync("Name Search Other");
+
+            string guidSuffix = name.Split(' ')[^1];
+            await GoToDashboardFilteredByNameAsync(guidSuffix.ToUpperInvariant());
+
+            await Expect(EventRow(name)).ToBeVisibleAsync(InteractiveVisible());
+            await Expect(Page.Locator("tbody tr")).ToHaveCountAsync(1, InteractiveCount());
+
+            ILocator clear = ClearSearchButton();
+            await clear.ClickAsync();
+
+            await Expect(clear).ToHaveCountAsync(0, InteractiveCount());
+            await Expect(NameSearchBox()).ToHaveValueAsync(string.Empty);
+            await Expect(Page.Locator("tbody tr").Nth(1)).ToBeVisibleAsync(InteractiveVisible());
+        });
+
+    private ILocator ClearSearchButton() =>
+        Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Clear search" });
+
+    private ILocator NameSearchBox() =>
+        Page.GetByRole(AriaRole.Textbox, new PageGetByRoleOptions { Name = "Search by name" });
+
+    /// <remarks>
+    /// By the Name cell's exact text, never a bare "has text" row match - the grid's no-match message quotes
+    /// the search, so a loose match on an Event's name would be satisfied by the Event not being there.
+    /// </remarks>
+    private ILocator EventRow(string name) => Page.Locator("tbody tr")
+        .Filter(new LocatorFilterOptions { Has = Page.GetByText(name, new PageGetByTextOptions { Exact = true }) });
+
+    private ILocator NoMatchMessage() => Page.GetByText("No Events match");
+
+    private async Task GoToDashboardFilteredByNameAsync(string text)
+    {
+        await Page.GotoAsync(new Uri(Fixture.WebBaseUrl, "dashboard").ToString());
+        await FilterDashboardByNameAsync(text);
+    }
+
+    /// <remarks>
+    /// The dashboard is prerendered, so text typed before its circuit connects is silently ignored; the clear
+    /// button, which only an interactive component renders, is the proof the search landed, and the fill is
+    /// repeated until it shows. Then waits for every row to contain the text - matching Events, or the no-match
+    /// message that quotes it - so a caller never asserts against the unfiltered rows.
+    /// </remarks>
+    private async Task FilterDashboardByNameAsync(string text)
+    {
+        ILocator search = NameSearchBox();
+        ILocator clear = ClearSearchButton();
+        await Expect(search).ToBeVisibleAsync(InteractiveVisible());
+
+        DateTime deadline = DateTime.UtcNow.AddMilliseconds(InteractiveTimeoutMs);
+        while (true)
+        {
+            await search.FillAsync(text);
+
+            try
+            {
+                await Expect(clear).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 1_000 });
+                break;
+            }
+            catch (PlaywrightException) when (DateTime.UtcNow < deadline)
+            {
+            }
+        }
+
+        await Expect(Page.Locator("tbody tr").Filter(new LocatorFilterOptions { HasNotText = text }))
+            .ToHaveCountAsync(0, InteractiveCount());
+    }
+
     private async Task<string> GoLiveAsync(Guid eventId)
     {
         await Page.GotoAsync(EventEditorUrl(eventId));
@@ -550,7 +630,7 @@ public class EventManagementScenarios : E2ETestBase
 
     private async Task ExpectOpenGuideToShowAsync(string eventName, string slug, string guideText)
     {
-        ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = eventName });
+        ILocator row = EventRow(eventName);
         ILocator openGuide = row.GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = "Open guide" });
         await Expect(openGuide).ToBeVisibleAsync(InteractiveVisible());
         await Expect(openGuide).ToHaveAttributeAsync("href", $"e/{slug}");

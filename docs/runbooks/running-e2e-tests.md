@@ -91,9 +91,6 @@ class always stay serial. Override the cap for one run, e.g. back to serial:
 dotnet test tests/VirtualLeadersGuide.E2E.Tests -- xUnit.MaxParallelThreads=1
 ```
 
-`EventManagementScenarios` always runs alone, after the parallel classes have finished (until P2.1-8, #205,
-makes its grid lookups independent of paging).
-
 **Why 4.** Measured on the current 24-core, 31 GB laptop: a full run took 1:31 serial, 1:04 at cap 2, 0:58 at
 cap 4 and 0:54 at cap 8. Caps 8 and 12 were within a second of each other, so there is nothing to gain past 8.
 Cap 8 is only about 2s faster than 4, and 2 of 11 later runs at 8 had a single failed test against 0 of 9 at 4.
