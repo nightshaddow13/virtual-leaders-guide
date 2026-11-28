@@ -44,9 +44,10 @@ public class ChangePasswordScenarios : E2ETestBase
     /// Deliberately not named/shaped like <see cref="E2ETestBase.SignOutAsync"/> - that one navigates home
     /// first, which isn't safe here. Load-bearing, not cleanup: <c>ChangePassword.razor</c> calls
     /// <c>RefreshSignInAsync</c> on success, so the pre-change session survives the change. Without signing
-    /// out here first, re-signing-in with the rotated password would find "Sign out" visible off that
+    /// out here first, re-signing-in with the rotated password would find <see cref="E2ETestBase.AccountMenuButton"/> visible off that
     /// *pre-existing* cookie even if the change had silently failed - a false pass.
-    /// <see cref="PasswordResetScenarios"/> doesn't need this because it starts signed out.
+    /// <see cref="PasswordResetScenarios"/> doesn't need this because it starts signed out. The shared helper
+    /// returns only once the sign-out has landed, so the next sign-in's navigation can't cancel it.
     /// </remarks>
     private async Task ClickSignOutOnCurrentPageAsync() =>
         await ClickHeaderSignOutAsync();

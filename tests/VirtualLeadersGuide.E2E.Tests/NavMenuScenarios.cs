@@ -1,5 +1,3 @@
-using Microsoft.Playwright;
-
 namespace VirtualLeadersGuide.E2E.Tests;
 
 /// <remarks>
@@ -19,6 +17,6 @@ public class NavMenuScenarios : E2ETestBase
 
             await ClickHeaderSignOutAsync();
 
-            await Expect(Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = "Sign in" })).ToBeVisibleAsync();
+            await Expect(SignInLink).ToBeVisibleAsync();
         });
 }
